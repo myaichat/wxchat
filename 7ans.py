@@ -50,6 +50,10 @@ class MainFrame(wx.Frame):
         copy_id = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, self.on_copy, id=copy_id)
         accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('Q'), copy_id)])
+        pause_id = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, self.on_pause, id=pause_id)
+        accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('P'), pause_id)])
+
         self.SetAcceleratorTable(accel_tbl)
         # Setup for output grid
         self.setup_output_grid(panel)
@@ -74,6 +78,7 @@ class MainFrame(wx.Frame):
         self.scrolled=False
         self.previous_scroll_pos=self.answer_output.GetScrollPos(wx.VERTICAL)
         #self.answer_output.GetGridWindow().Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+
     def on_scroll(self, event):
         current_scroll_pos = self.answer_output.GetScrollPos(wx.VERTICAL)
 
@@ -414,6 +419,7 @@ can I help you today?'''
         self.question_input.Bind(wx.EVT_TEXT_ENTER, self.on_ask_wrapper)
     def on_pause(self, event):
         if event.GetEventObject().GetLabel() == 'Pause':
+            print('Pausing')
             self.pause_output = True 
             if self.response_stream :
                 self.response_stream.cancel()
@@ -423,12 +429,15 @@ can I help you today?'''
                 event.GetEventObject().SetLabel('Resume')
 
         else:    
+            print('Resuming')
             self.resume_answer(event.GetEventObject())
     def resume_answer(self, btn):
-        self.pause_output = False
+        
         self.statusbar.SetStatusText('Resumed')
         btn.SetLabel('Pause')
-        if not self.stop_output:
+        print('resume_answer' , self.pause_output )
+        if not self.stop_output and self.pause_output:
+            self.pause_output = False
             asyncio.create_task(self.on_ask())
 if __name__ == "__main__":
     app = wxasync.WxAsyncApp()

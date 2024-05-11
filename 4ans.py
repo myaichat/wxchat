@@ -43,7 +43,7 @@ class MainFrame(wx.Frame):
             self.answer_output.InsertColumn(0, 'Line Num', width=70)
             self.answer_output.InsertColumn(1, 'Elapsed Sec', width=100)
             self.answer_output.InsertColumn(2, 'Model Name', width=100)
-            self.answer_output.InsertColumn(3, 'Text', width=500)
+            self.answer_output.InsertColumn(3, 'Text', width=400)
             self.start_time = time.time()
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(h_sizer, 0, wx.EXPAND | wx.ALL, 1)

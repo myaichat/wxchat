@@ -386,14 +386,14 @@ class MainFrame(wx.Frame):
             self.answer_output.SetColAttr(3, attr)
         #self.answer_output.AutoSizeColumns()  # Optional: auto-size columns based on content
         self.answer_output.SetDefaultEditor(gridlib.GridCellAutoWrapStringEditor())
-        if 0:
+        if 1:
             i=0
             text='''I'm an artificial intelligence designed to help
 you with Apache Spark queries. I do not possess
 emotions but I'm here and ready to assist you. How
 can I help you today?'''
             self.answer_output.AppendRows(1)
-            self.answer_output.SetCellValue(i, 0, str(round(time.time() - self.g_start_time, 2)))
+            self.answer_output.SetCellValue(i, 0, str(0))
             self.answer_output.SetCellValue(i, 1, str(0))  # Convert elapsed_time to string
             self.answer_output.SetCellValue(i, 2, 'test')
             self.answer_output.SetCellValue(i, 3, text)

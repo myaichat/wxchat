@@ -27,6 +27,8 @@ openai.api_key = api_key
 class Grid_Controller(object):
     def __init__(self, parent):
         super().__init__()
+
+
     def on_scroll(self, event):
         print('Scrolling')
         if 0:
@@ -59,12 +61,9 @@ class Grid_Controller(object):
             text = self.GetCellValue(row, col)[start:end]
         else:
             text = self.GetCellValue(row, col)
-        if 0:
-            #print(text)
-            self.question_input.SetValue(text.strip())
+        if 1:
 
-            # Set the focus to the question input
-            self.question_input.SetFocus()
+            pub.sendMessage("set_question_input", text=text.strip())
 
         # Reset the client
         self.client = None
@@ -86,13 +85,16 @@ class Grid_Controller(object):
             # Skip the event
             event.Skip()
 
+
+
+
 class AnswerOutput(wx.grid.Grid, Grid_Controller):
     def __init__(self, parent):
         super().__init__(parent)
         self.Bind(wx.EVT_SCROLLWIN, self.on_scroll)
         #self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
         self.init()
-        pub.subscribe(self.append_message, 'append')
+        
         if 1: 
             q_shortcut = wx.AcceleratorEntry(wx.ACCEL_CTRL, ord('Q'), wx.NewIdRef())
             self.Bind(wx.EVT_MENU, self.on_copy, id=q_shortcut.GetCommand())  
@@ -103,13 +105,105 @@ class AnswerOutput(wx.grid.Grid, Grid_Controller):
             self.Bind(wx.EVT_MENU, self.on_pause, id=p_shortcut.GetCommand())            
         accel_tbl = wx.AcceleratorTable([q_shortcut, p_shortcut])
         self.SetAcceleratorTable(accel_tbl)
+        self.Bind(wx.EVT_SIZE, self.on_resize)
+        pub.subscribe(self.append_text, 'append_text')
+        pub.subscribe(self.add_row, 'add_row')
+    def append_text(self, text):
+        print(555)
+        if '\n' in text:
+            text = re.sub('\n+', '\n', text)
+            lines = text.split('\n')
+            #pp(lines)
+            self.append_to_row(lines[0])
+            #self.add_row('')
+            if 1:
+                for line in lines[1:]:
+                    if line:
+                        self.add_row(line)
+            self.add_row('')
+        else:
+            #row_count = self.answer_output.GetNumberRows()
+            last_index = self.GetNumberRows() - 1
+            if last_index >= 0:
+                self.append_to_row(text)
+            else:
+                self.add_row(text)
+        i = self.answer_output.GetNumberRows()-1
+        #print(111, i)
+        self.SetCellValue(i, 0, str(round(time.time() - self.g_start_time, 2)))
+        self.SetCellValue(i, 1, str(round(time.time() - self.start_time, 2)))  # Convert elapsed_time to string
+    def add_row(self, data):
+        text, is_bold = data
+        #print(123, text)
+        #print('Adding row')
+        self.start_time = time.time()
+        i = self.GetNumberRows()
+        if i:
+            self.AutoSizeRows()
+            #self.answer_output.AutoSizeColumns()
+        elapsed_time = round(time.time() - self.start_time, 2)
+        
+        self.AppendRows(1)
+        print('Adding row', i, text)
+        self.SetCellValue(i, 0, str(round(time.time() - self.g_start_time, 2)))
+        self.SetCellValue(i, 1, str(elapsed_time))  # Convert elapsed_time to string
+        self.SetCellValue(i, 2, self.model_selector.GetValue())
+        self.SetCellValue(i, 3, text)
+        #self.answer_output.AutoSizeColumns()  # Automatically adjust the width of columns to fit content
+        self.AutoSizeRows() 
 
+        if 1:
+            if is_bold:
+
+                font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+            else:
+                font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+            # Create a cell attribute with the bold font
+            attr = wx.grid.GridCellAttr()
+            attr.SetFont(font)
+            #last_index = self.answer_output.GetNumberRows() - 1
+            # Set the row attribute
+            self.SetRowAttr(i, attr)
+        #self.answer_output.MakeCellVisible(i, 0)
+        if self.scrolled:
+            self.MakeCellVisible(i, 0)
+
+        #print(i,last_visible_row)
+    def append_to_row(self, text):
+        # Append the text to the row
+        last_index = self.GetNumberRows() - 1
+        current_text = self.GetCellValue(last_index, 3)
+        new_text = current_text + text
+        #print(last_index, new_text)
+        # Wrap the new text
+        wrapped_text = textwrap.fill(new_text, width=75)  # Adjust the width as needed
+
+        # Set the cell value to the wrapped text
+        self.SetCellValue(last_index, 3, wrapped_text)
+    def on_cell_click(self, event):
+        row, col = event.GetRow(), event.GetCol()
+
+        # Set the renderer of the cell to a GridCellAutoWrapStringRenderer
+        self.SetCellRenderer(row, col, gridlib.GridCellAutoWrapStringRenderer())
+
+        # Force the grid to recalculate the row heights
+        self.AutoSizeRows()
+
+        # Skip the event
+        event.Skip()   
+    def on_resize(self, event):
+        # Resize the last column to take up the remaining space
+        self.AutoSizeColumn(self.GetNumberCols() - 1)
+        self.SetColSize(self.GetNumberCols() - 1, 
+                                    self.GetSize().width - 
+                                    sum([self.GetColSize(i) for i in range(self.GetNumberCols() - 1)]))
+
+        # Skip the event
+        event.Skip()         
     def on_pause(self, event):
         print('on_pause AnswerOutput')
         event.Skip()
-    def append_message(self, event):
-        print('append_message')
-        event.Skip()
+
     def on_scroll(self, event):
         print('Scrolling')
         event.Skip()
@@ -129,27 +223,42 @@ class AnswerOutput(wx.grid.Grid, Grid_Controller):
                 self.answer_output.SetColAttr(3, attr)
             #self.answer_output.AutoSizeColumns()  # Optional: auto-size columns based on content
             self.SetDefaultEditor(gridlib.GridCellAutoWrapStringEditor())
-            for i in range(20):
-                #i=0
-                text=f'''{i} I'm an artificial intelligence designed to help
-    you with Apache Spark queries. I do not possess
-    emotions but I'm here and ready to assist you. How
-    can I help you today?'''
-                self.AppendRows(1)
-                self.SetCellValue(i, 0, str(0))
-                self.SetCellValue(i, 1, str(0))  # Convert elapsed_time to string
-                self.SetCellValue(i, 2, 'test')
-                self.SetCellValue(i, 3, text)
-                self.AutoSizeRows() 
+            
+            if 0:
+                for i in range(20):
+                    #i=0
+                    text=f'''{i} I'm an artificial intelligence designed to help
+        you with Apache Spark queries. I do not possess
+        emotions but I'm here and ready to assist you. How
+        can I help you today?'''
+                    self.AppendRows(1)
+                    self.SetCellValue(i, 0, str(0))
+                    self.SetCellValue(i, 1, str(0))  # Convert elapsed_time to string
+                    self.SetCellValue(i, 2, 'test')
+                    self.SetCellValue(i, 3, text)
+                    self.AutoSizeRows() 
 
 class InputText_Controller(object):
     def __init__(self, parent, *args, **kwargs):
         super().__init__()
 
+        
+    def on_set_question_input(self, text):
+            #print(text)
+            self.SetValue(text.strip())
+
+            # Set the focus to the question input
+            self.SetFocus()
 class InputText(wx.TextCtrl, InputText_Controller):
     def __init__(self, parent, *args, **kwargs):
         wx.TextCtrl.__init__(self, parent, *args, **kwargs)
-        #InputText_Controller.__init__(self, parent, *args, **kwargs)
+        self.SetMaxSize(wx.Size(-1, 200))
+        font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        self.SetFont(font)        
+        self.SetInsertionPoint(0)
+        self.SetSelection(-1, -1)
+        self.SetFocus()
+        pub.subscribe(self.on_set_question_input, 'set_question_input')
 class MainFrame(wx.Frame):
     def __init__(self, size=(1000, 600)):
         super().__init__(None, title="OpenAI Question Asker", size=size)
@@ -161,10 +270,10 @@ class MainFrame(wx.Frame):
 
         # Setup for question input
         question_label = wx.StaticText(panel, label="Question:")
-        self.question_input = InputText(panel, value='Hey, what are new features of Apache Spark?', style=wx.TE_PROCESS_ENTER|wx.TE_MULTILINE)
-        self.question_input.SetMaxSize(wx.Size(-1, 200))
-        font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        self.question_input.SetFont(font)
+        self.question_input = InputText(panel, value='How ru?', #'Hey, what are new features of Apache Spark?',
+                                         style=wx.TE_PROCESS_ENTER|wx.TE_MULTILINE)
+        
+
 
         input_sizer = wx.BoxSizer(wx.HORIZONTAL)
         input_sizer.Add(question_label, 0, wx.ALL | wx.CENTER, 5)
@@ -191,10 +300,8 @@ class MainFrame(wx.Frame):
         #self.Bind(wx.EVT_SIZE, self.on_resize)
         self.Centre()  # Center the frame on screen
         self.Show()
-        self.Bind(wx.EVT_SIZE, self.on_resize)
-        self.question_input.SetInsertionPoint(0)
-        self.question_input.SetSelection(-1, -1)
-        self.question_input.SetFocus()
+        
+        
         self.statusbar = self.CreateStatusBar()
         self.statusbar.SetStatusText('Ready')
         
@@ -218,13 +325,40 @@ class MainFrame(wx.Frame):
         self.conversation_history = [
             {"role": "system", "content": "You are a chatbot that assists with Apache Spark queries."},
         ]
-        #self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
-        #panel.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
+    def setup_buttons(self, panel, sizer):
+        # Create button sizer
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        model_names = ["gpt-3", "gpt-4", 'gpt-4o', "gpt-4-turbo", "gpt-4-turbo-2024-04-09",
+                       'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview',
+                       'gpt-4-32k-0613', 'gpt-4-32k']
+        self.model_selector = wx.ComboBox(panel, choices=model_names, style=wx.CB_READONLY)
+        self.model_selector.SetValue("gpt-4o")
+        ask_button = wx.Button(panel, label="Ask Question")
+        stop_button = wx.Button(panel, label="Stop")
+
+        if 1:
+            self.pause_output = False
+            self.pause_button=pause_button = wx.Button(panel, label="Pause")
+            
+            pause_button.Bind(wx.EVT_BUTTON, self.on_pause)
+
+        button_sizer.Add(self.model_selector, 0, wx.EXPAND | wx.ALL, 5)
+        button_sizer.Add(ask_button, 1, wx.EXPAND | wx.ALL, 5)
+        button_sizer.Add(pause_button, 0, wx.ALL, 5)
+        button_sizer.Add(stop_button, 0, wx.ALL, 5)
+        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 5)
+
+        # Bind button events
+        ask_button.Bind(wx.EVT_BUTTON, self.on_ask_wrapper)
+        stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
+        self.question_input.Bind(wx.EVT_TEXT_ENTER, self.on_ask_wrapper)
 
     def on_copy(self, event):
         print('on_copy frame')
-        event.Skip()                
-    def on_key_down(self, event):
+        event.Skip()  
+
+
+    def _on_key_down(self, event):
         if event.GetKeyCode() in [ wx.WXK_PAGEDOWN]:
             self.scrolled = True
         if event.GetKeyCode() in [wx.WXK_PAGEUP]:
@@ -238,60 +372,8 @@ class MainFrame(wx.Frame):
                 print('Paused')    
                 self.statusbar.SetStatusText('Paused')            
         event.Skip()
-    def on_cell_click(self, event):
-        row, col = event.GetRow(), event.GetCol()
 
-        # Set the renderer of the cell to a GridCellAutoWrapStringRenderer
-        self.answer_output.SetCellRenderer(row, col, gridlib.GridCellAutoWrapStringRenderer())
-
-        # Force the grid to recalculate the row heights
-        self.answer_output.AutoSizeRows()
-
-        # Skip the event
-        event.Skip()   
-
-
-
-            
-    def _on_copy(self, event):
-        # Get the selected cells
-        selected_cells = self.answer_output.GetSelectedCells()
-        pp(selected_cells)
-        top_lefts = self.answer_output.GetSelectionBlockTopLeft()
-        pp(top_lefts)
-        # Initialize an empty string to hold the selected text
-        selected_text = ''
-
-        # Loop through the selected cells
-        for cell in selected_cells:
-            # Get the row and column of the cell
-            row = cell[0]
-            col = cell[1]
-
-            # Get the value of the cell and append it to the selected text
-            value = self.answer_output.GetCellValue(row, col)
-            selected_text += value + '\n'
-
-        # Set the selected text to the question input
-        self.question_input.SetValue(selected_text.strip())
-
-        # Set the focus to the question input
-        self.question_input.SetFocus()
-
-        # Reset the client
-        self.client = None
-
-        # Skip the event
-        event.Skip()
-    def on_resize(self, event):
-        # Resize the last column to take up the remaining space
-        self.answer_output.AutoSizeColumn(self.answer_output.GetNumberCols() - 1)
-        self.answer_output.SetColSize(self.answer_output.GetNumberCols() - 1, 
-                                    self.answer_output.GetSize().width - 
-                                    sum([self.answer_output.GetColSize(i) for i in range(self.answer_output.GetNumberCols() - 1)]))
-
-        # Skip the event
-        event.Skip()       
+    
     async def get_chat_completion_client(self, prompt):
         if not self.client:
             # Add the user's message to the conversation history
@@ -302,77 +384,15 @@ class MainFrame(wx.Frame):
                 messages=self.conversation_history,
                 stream=True
             )
-        return self.client        
-    def add_row(self, text, is_bold=False):
-        #print(123, text)
-        #print('Adding row')
-        self.start_time = time.time()
-        i = self.answer_output.GetNumberRows()
-        if i:
-            self.answer_output.AutoSizeRows()
-            #self.answer_output.AutoSizeColumns()
-        elapsed_time = round(time.time() - self.start_time, 2)
-        
-        self.answer_output.AppendRows(1)
-        print('Adding row', i, text)
-        self.answer_output.SetCellValue(i, 0, str(round(time.time() - self.g_start_time, 2)))
-        self.answer_output.SetCellValue(i, 1, str(elapsed_time))  # Convert elapsed_time to string
-        self.answer_output.SetCellValue(i, 2, self.model_selector.GetValue())
-        self.answer_output.SetCellValue(i, 3, text)
-        #self.answer_output.AutoSizeColumns()  # Automatically adjust the width of columns to fit content
-        self.answer_output.AutoSizeRows() 
-
-        if 1:
-            if is_bold:
-
-                font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-            else:
-                font = wx.Font(12, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-            # Create a cell attribute with the bold font
-            attr = wx.grid.GridCellAttr()
-            attr.SetFont(font)
-            #last_index = self.answer_output.GetNumberRows() - 1
-            # Set the row attribute
-            self.answer_output.SetRowAttr(i, attr)
-        #self.answer_output.MakeCellVisible(i, 0)
-        if self.scrolled:
-            self.answer_output.MakeCellVisible(i, 0)
-
-        #print(i,last_visible_row)
+        return self.client   
     def append_text(self, text):
-        if '\n' in text:
-            text = re.sub('\n+', '\n', text)
-            lines = text.split('\n')
-            #pp(lines)
-            self.append_to_row(lines[0])
-            #self.add_row('')
-            if 1:
-                for line in lines[1:]:
-                    if line:
-                        self.add_row(line)
-            self.add_row('')
-        else:
-            #row_count = self.answer_output.GetNumberRows()
-            last_index = self.answer_output.GetNumberRows() - 1
-            if last_index >= 0:
-                self.append_to_row(text)
-            else:
-                self.add_row(text)
-        i = self.answer_output.GetNumberRows()-1
-        #print(111, i)
-        self.answer_output.SetCellValue(i, 0, str(round(time.time() - self.g_start_time, 2)))
-        self.answer_output.SetCellValue(i, 1, str(round(time.time() - self.start_time, 2)))  # Convert elapsed_time to string
-    def append_to_row(self, text):
-        # Append the text to the row
-        last_index = self.answer_output.GetNumberRows() - 1
-        current_text = self.answer_output.GetCellValue(last_index, 3)
-        new_text = current_text + text
-        #print(last_index, new_text)
-        # Wrap the new text
-        wrapped_text = textwrap.fill(new_text, width=75)  # Adjust the width as needed
+        print('Frame append_text')
+        pub.sendMessage("append_text", text=text)
 
-        # Set the cell value to the wrapped text
-        self.answer_output.SetCellValue(last_index, 3, wrapped_text)
+    def add_row(self, text, is_bold=False):
+        pub.sendMessage("add_row", data=(text, is_bold))
+         
+
 
     async def stream_response(self, prompt, output_ctrl, frame):
         # Create a chat completion request with streaming enabled
@@ -454,35 +474,6 @@ class MainFrame(wx.Frame):
     def on_ask_wrapper(self, event):
         asyncio.create_task(self.on_ask())
     
-
-            
-    def setup_buttons(self, panel, sizer):
-        # Create button sizer
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        model_names = ["gpt-3", "gpt-4", "gpt-4-turbo", "gpt-4-turbo-2024-04-09",
-                       'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview',
-                       'gpt-4-32k-0613', 'gpt-4-32k']
-        self.model_selector = wx.ComboBox(panel, choices=model_names, style=wx.CB_READONLY)
-        self.model_selector.SetValue("gpt-4")
-        ask_button = wx.Button(panel, label="Ask Question")
-        stop_button = wx.Button(panel, label="Stop")
-
-        if 1:
-            self.pause_output = False
-            self.pause_button=pause_button = wx.Button(panel, label="Pause")
-            
-            pause_button.Bind(wx.EVT_BUTTON, self.on_pause)
-
-        button_sizer.Add(self.model_selector, 0, wx.EXPAND | wx.ALL, 5)
-        button_sizer.Add(ask_button, 1, wx.EXPAND | wx.ALL, 5)
-        button_sizer.Add(pause_button, 0, wx.ALL, 5)
-        button_sizer.Add(stop_button, 0, wx.ALL, 5)
-        sizer.Add(button_sizer, 0, wx.EXPAND | wx.ALL, 5)
-
-        # Bind button events
-        ask_button.Bind(wx.EVT_BUTTON, self.on_ask_wrapper)
-        stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
-        self.question_input.Bind(wx.EVT_TEXT_ENTER, self.on_ask_wrapper)
     def on_pause(self, event):
         print('on_pause frame')
         if self.response_stream:

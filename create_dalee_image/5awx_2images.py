@@ -225,7 +225,7 @@ class MainFrame(wx.Frame):
 
     def display_image(self, image, pos):
         width, height = image.size
-        if 1:
+        if 1
             from datetime import datetime
             # Get current date and time
             now = datetime.now()

@@ -66,7 +66,7 @@ class MainFrame(wx.Frame):
 
         self.popup = wx.PopupWindow(self)
         self.rows=rows = 1
-        self.cols=cols = 2
+        self.cols=cols = 1
         self.num_of_images=rows*cols
         self.panels=panels={}
         self.bitmaps=bitmaps={}
@@ -197,13 +197,13 @@ class MainFrame(wx.Frame):
         #self.SetSize(cols*450, 300+rows*450)
         width, height = wx.DisplaySize()
         print(f"Screen width: {width}, Screen height: {height}")
-        if self.num_of_im>2:
+        if self.num_of_im>1:
             if self.GetSize().GetHeight()>height:
                 self.SetSize(cols*450, height-100)
             if self.GetSize().GetWidth()>width:
                 self.SetSize(width, 300+rows*450)
         else:
-            self.SetSize(cols*1024, 300+1024)                
+            self.SetSize(1024, 300+1024)                
         print(f"Frame width: {self.GetSize().GetWidth()}, Frame height: {self.GetSize().GetHeight()}")
         self.Layout()
     def on_ctrl_enter(self, event):
@@ -387,7 +387,7 @@ class MainFrame(wx.Frame):
             row,col=pos
             filename = join('generated',f"{self.num_of_im_to_generate}.{row}_{col}.{width}_{height}.{timestamp_str}.png")
             image.save(filename)
-        if self.num_of_im>2:
+        if self.num_of_im>1:
             if self.image_size.GetValue() not in ["256x256", "512x512"]:
                 if self.image_size.GetValue()  in ["1024x1024"]:
 

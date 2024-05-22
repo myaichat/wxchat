@@ -74,7 +74,7 @@ def stream_response(prompt):
             time.sleep(0.1) 
             if exit_loop:
                 print(f"{Style.RESET_ALL}")
-                pause_stream=False
+                #pause_stream=False
                 print("\nExiting loop")
                 break                   
         if hasattr(chunk.choices[0].delta, 'content'):
@@ -133,12 +133,12 @@ def listen():
     return transcript_result
 
 def conversation():
-    global exit_loop
+    global exit_loop, pause_stream
     #prompt="Hey,  what is the fastest way to sort in python?"
     user_input = ""
     
     while True:
-        print('listen...')
+        print('listening...')
         user_input = listen()
         #print('User input:', user_input)
         if user_input is None:
@@ -157,9 +157,11 @@ def conversation():
             pfmt([[ user_input]], ['User Input'])          
             model_response, tell_me_more =stream_response(user_input)
             if not tell_me_more:
+                print()
                 inp = input('Continue?')
             else:
                 exit_loop=False
+                pause_stream=False
             #print('Memory:')
             #print(memory)
             

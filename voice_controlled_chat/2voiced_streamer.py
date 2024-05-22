@@ -25,22 +25,30 @@ transcriber = Transcribe()
 
 # Initialize a flag for pausing the stream
 pause_stream = False
-
+exit_loop = False
 # Define a function to toggle the pause flag when the space key is hit
 def toggle_pause(e):
     global pause_stream
     pause_stream = not pause_stream
-
+def ctrl_set_exit_flag():
+    global exit_loop
+    exit_loop = True
+def set_exit_flag(e):
+    global exit_loop
+    exit_loop = True    
 # Register the space key to call the toggle_pause function
 keyboard.on_press_key('space', toggle_pause)
-
+keyboard.on_press_key('e', set_exit_flag, suppress=True)
+#keyboard.add_hotkey('ctrl+e', set_exit_flag)
 from colorama import Fore, Style
 
 conversation_history = [
-    {"role": "system", "content": "You are a chatbot that assists with Python interview ."}
+    {"role": "system", "content": """You are a chatbot that assists with Python interview . 
+     numerate answert options globally with one sequence across all python versions """}
 ]
 
 def stream_response(prompt):
+    global exit_loop, pause_stream, conversation_history
     conversation_history.append({"role": "user", "content": prompt})
     # Create a chat completion request with streaming enabled
     #pp(conversation_history)
@@ -57,8 +65,18 @@ def stream_response(prompt):
     inside_backticks = False
     inside_hash = False
     for chunk in response:
+        if exit_loop:
+            print(f"{Style.RESET_ALL}")
+            print("\nExiting loop")
+            
+            break        
         while pause_stream:
-            time.sleep(0.1)        
+            time.sleep(0.1) 
+            if exit_loop:
+                print(f"{Style.RESET_ALL}")
+                pause_stream=False
+                print("\nExiting loop")
+                break                   
         if hasattr(chunk.choices[0].delta, 'content'):
             content = chunk.choices[0].delta.content
             new_content = ''
@@ -98,10 +116,11 @@ def stream_response(prompt):
             print(new_content, end='', flush=True)
             if new_content:
                 out.append(new_content)
+    
     if inside_backticks:  # If we're still inside a code block, add the reset code
         out.append(Style.RESET_ALL)
     conversation_history.append({"role": "assistant", "content": ''.join(out)})
-    return ''.join(out)
+    return ''.join(out), exit_loop
 
 def listen():
     
@@ -114,6 +133,7 @@ def listen():
     return transcript_result
 
 def conversation():
+    global exit_loop
     #prompt="Hey,  what is the fastest way to sort in python?"
     user_input = ""
     
@@ -135,13 +155,15 @@ def conversation():
             assert user_input
             
             pfmt([[ user_input]], ['User Input'])          
-            model_response =stream_response(user_input)
-
-            inp = input('Continue?')
+            model_response, tell_me_more =stream_response(user_input)
+            if not tell_me_more:
+                inp = input('Continue?')
+            else:
+                exit_loop=False
             #print('Memory:')
             #print(memory)
             
-            print(prompt)
+            #print(prompt)
             #respond(model_response)
 
 

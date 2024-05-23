@@ -65,8 +65,8 @@ class MainFrame(wx.Frame):
         
 
         self.popup = wx.PopupWindow(self)
-        self.rows=rows = 2
-        self.cols=cols = 4
+        self.rows=rows = 1
+        self.cols=cols = 2
         self.num_of_images=rows*cols
         self.panels=panels={}
         self.bitmaps=bitmaps={}
@@ -194,10 +194,10 @@ class MainFrame(wx.Frame):
             "response_format": "b64_json"
         } 
         self.prompt_ctrl.SetFocus()  
-        self.SetSize(cols*450, 300+rows*450)
+        #self.SetSize(cols*450, 300+rows*450)
         width, height = wx.DisplaySize()
         print(f"Screen width: {width}, Screen height: {height}")
-        if self.rows*self.cols>2:
+        if self.num_of_im>2:
             if self.GetSize().GetHeight()>height:
                 self.SetSize(cols*450, height-100)
             if self.GetSize().GetWidth()>width:
@@ -387,7 +387,7 @@ class MainFrame(wx.Frame):
             row,col=pos
             filename = join('generated',f"{self.num_of_im_to_generate}.{row}_{col}.{width}_{height}.{timestamp_str}.png")
             image.save(filename)
-        if self.rows*self.cols>2:
+        if self.num_of_im>2:
             if self.image_size.GetValue() not in ["256x256", "512x512"]:
                 if self.image_size.GetValue()  in ["1024x1024"]:
 
@@ -497,3 +497,6 @@ app = wx.App(False)
 frame = MainFrame()
 frame.Show(True)
 app.MainLoop()
+
+"""a simple clean minimal  3d sculpture "Ukraine", artistic and surreal composition with various abstract elements and symbols. One prominent symbol resembles a trident or tryzub, which is a Ukrainian national emblem. This, along with the fiery shapes resembling the colors of the Ukrainian flag, suggests that the artwork may be related to Ukrainian culture or national symbolism.The overall scene has a fantastic, otherworldly quality,  organic, 
+"""

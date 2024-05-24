@@ -1,3 +1,6 @@
+'''
+Script purpose: imitate a Windows terminal in a wxPython GUI
+'''
 import wx
 import subprocess
 import wx.richtext as rt

@@ -5,7 +5,7 @@ from pubsub import pub
 from pprint import pprint as pp
 from include.fmt import fmt
 import threading
-
+from os.path import join
 import openai
 import os
 from dotenv import load_dotenv
@@ -470,20 +470,6 @@ class MyChatPanel(wx.Panel,NewChat):
             self.chatInput.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
         self.chatInput.SetFocus()
 
-
-    def _OnNewChat(self, event):
-        # Code to execute when the "New" item is selected
-        dialog = wx.TextEntryDialog(self, "Enter new chat name", "New Chat")
-
-        # Show the dialog and get the result
-        if dialog.ShowModal() == wx.ID_OK:
-            chatName = dialog.GetValue()
-            print(f"New chat name: {chatName}")
-            pub.sendMessage('log', message=f'New chat name: {chatName}')
-            pub.sendMessage('add_chat', message=chatName)
-
-        # Destroy the dialog
-        dialog.Destroy()
     def SetInputFocus(self):
         self.chatInput.SetFocus()
 class MyFrame(wx.Frame, NewChat):
@@ -556,25 +542,96 @@ class MyFrame(wx.Frame, NewChat):
 
         # Add the menu to the menu bar
         menuBar.Append(chatMenu, "Chat")
-
+        art_item = chatMenu.Append(wx.ID_ANY, 'Art', 'Open Art')
         # Set the menu bar on the parent window
         self.SetMenuBar(menuBar)
 
 
-    def _OnNewChat(self, event):
-        # Code to execute when the "New" item is selected
-        dialog = wx.TextEntryDialog(self, "Enter new chat name", "New Chat")
+        self.Bind(wx.EVT_MENU, self.OnOpenArt, art_item)
 
-        # Show the dialog and get the result
-        if dialog.ShowModal() == wx.ID_OK:
-            chatName = dialog.GetValue()
-            print(f"New chat name: {chatName}")
-            pub.sendMessage('log', message=f'New chat name: {chatName}')
-            pub.sendMessage('add_chat', message=chatName)
+    # Step 2: Bind a method to the wx.EVT_MENU event for the "Art" item
+    def OnOpenArt(self, event):
+        # Create a new dialog
+        dialog = wx.Dialog(self, title="Art", style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        dialog.SetSize((800, 600))  # Set a size for the dialog
 
-        # Destroy the dialog
+        # Create a static bitmap widget to display the image
+        static_bitmap = wx.StaticBitmap(dialog)
+
+        # Create buttons
+        button1 = wx.Button(dialog, label="1")
+        button1.Bind(wx.EVT_BUTTON, lambda event: self.OnButton1(static_bitmap))
+        button2 = wx.Button(dialog, label="2")
+        button2.Bind(wx.EVT_BUTTON, lambda event: self.OnButton2(static_bitmap))
+
+        # Create a close button
+        close_button = wx.Button(dialog, label="Close")
+        close_button.Bind(wx.EVT_BUTTON, lambda event: dialog.Close())
+
+        # Create a sizer to layout the widgets
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(static_bitmap, proportion=1, flag=wx.EXPAND | wx.ALL, border=10)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        h_sizer.Add(button1,0, flag=wx.ALIGN_CENTER)
+        h_sizer.Add(button2, 0, flag=wx.ALIGN_CENTER)
+        h_sizer.Add((0,0), 1, flag=wx.ALIGN_CENTER)
+        h_sizer.Add(close_button,0, flag=wx.ALIGN_CENTER , border=10)
+        sizer.Add(h_sizer, 1, flag=wx.EXPAND)
+        # Set the sizer to the dialog
+        dialog.SetSizer(sizer)
+        image = wx.Image(join('Art','ChatGPT_Desktop_Art_1.png'), wx.BITMAP_TYPE_PNG)
+        image_width = image.GetWidth()
+        image_height = image.GetHeight()
+        dialog_width, dialog_height = dialog.GetSize()
+        if image_width > image_height:
+            new_width = dialog_width
+            new_height = dialog_width * image_height / image_width
+        else:
+            new_height = dialog_height
+            new_width = dialog_height * image_width / image_height
+        image = image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
+        bitmap = wx.Bitmap(image)
+        static_bitmap.SetBitmap(bitmap)
+        # Center the dialog
+        dialog.Centre()
+
+        # Show the dialog
+        dialog.ShowModal()
+
+        # Load the first image
+
+
+        # Destroy the dialog when it's closed
         dialog.Destroy()
 
+    def OnButton1(self, static_bitmap):
+        # Load the second image
+        image = wx.Image(join('Art','ChatGPT_Desktop_Art_1.png'), wx.BITMAP_TYPE_PNG)
+
+        # Resize and display the image
+        self.ResizeAndDisplayImage(static_bitmap, image)
+
+    def OnButton2(self, static_bitmap):
+        # Load the second image
+        image = wx.Image(join('Art','ChatGPT_Desktop_Art_2.png'), wx.BITMAP_TYPE_PNG)
+
+        # Resize and display the image
+        self.ResizeAndDisplayImage(static_bitmap, image)
+
+    def ResizeAndDisplayImage(self, static_bitmap, image):
+        # Resize the image to fit the dialog, maintaining aspect ratio
+        image_width = image.GetWidth()
+        image_height = image.GetHeight()
+        dialog_width, dialog_height = static_bitmap.GetSize()
+        if image_width > image_height:
+            new_width = dialog_width
+            new_height = dialog_width * image_height / image_width
+        else:
+            new_height = dialog_height
+            new_width = dialog_height * image_width / image_height
+        image = image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
+        bitmap = wx.Bitmap(image)
+        static_bitmap.SetBitmap(bitmap)
 
 class MyApp(wx.App):
     def OnInit(self):

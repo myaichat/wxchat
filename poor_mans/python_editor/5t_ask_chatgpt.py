@@ -128,9 +128,9 @@ class MyTabPanel(wx.Panel):
             #self.ExecuteFile()
         else:
             event.Skip()
-    def log(self, message, color=wx.BLACK):
+    def log(self, message):
         
-        pub.sendMessage('log', message=f'{self.__class__.__name__}: {message}', color=color)
+        pub.sendMessage('log', message=f'{self.__class__.__name__}: {message}')
     def output(self, message):
         
         pub.sendMessage('output', message=f'{message}') 

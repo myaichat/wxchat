@@ -30,30 +30,52 @@ class MyFrame(wx.Frame):
             self.textctrl.SetFocus() 
             self.Centre()   
             self.textctrl.AppendText('conda env list')
-        if 0:
+        if 1:
             # Panel for the button, ensuring it is above the text control
             self.button_panel = wx.Panel(self.main_panel)
             self.button_panel.SetWindowStyle(wx.STAY_ON_TOP) 
-            self.button = wx.Button(self.button_panel, -1, 'Activate', pos=(0, 0))
+            self.button = wx.Button(self.button_panel, -1, 'New', pos=(0, 0))
             self.button.SetBackgroundColour(wx.Colour(200, 200, 200))
-            self.button.Bind(wx.EVT_BUTTON, self.on_button_click)
+            self.button.Bind(wx.EVT_BUTTON, self.on_new_env)
             
             # Positioning panels and controls manually
             self.main_panel.SetSize((800, 600))
             self.textctrl.SetSize((800, 580))
             self.button_panel.SetPosition((10, 10))
-            self.button_panel.SetSize((200, 40))  # Size enough for the button
+            self.button_panel.SetSize((100, 40))  # Size enough for the button
 
             # Ensure the button is visible and functional
             self.button_panel.Raise()
             self.button_panel.Show()
             self.button.Refresh()
             self.button.Update()
+            button_width = 100
+            padding = 10
+            button_position_x = self.main_panel.GetSize()[0] - button_width - padding
+
+            # Position the button panel at the top right corner
+            self.button_panel.SetPosition((button_position_x, 10))
+            self.simulate_hover(self.button)
+
         
 
         self.SetSize((800, 600))
         self.Centre() 
         #wx.CallLater(1, self.simulate_hover, self.button)  # Simulate a hover effect
+   
+    def on_new_env(self, event):
+        dialog = wx.TextEntryDialog(self, "Enter new environment name:", "New Environment")
+        if dialog.ShowModal() == wx.ID_OK:
+            env_name = dialog.GetValue()
+            print("Create new conda env", env_name)
+            command = 'start cmd /k "C:\\tmp\\M\\miniconda3\\condabin\\conda.bat  create -n ' + env_name + ' python=3.9"'
+            #remove existing conda env variables from shell initialization
+            new_env = {k: v for k, v in os.environ.items() if not k.startswith('CONDA') and not k.startswith('VIRTUAL') and not k.startswith('PROMPT')}
+            subprocess.Popen(command, shell=True, env=new_env)
+
+        dialog.Destroy()        
+           
+
     def simulate_hover(self,button):
         # Create an instance of wx.UIActionSimulator
         simulator = wx.UIActionSimulator()
@@ -68,8 +90,7 @@ class MyFrame(wx.Frame):
         
         # Optionally, you can add a small delay to simulate a realistic hover
         #wx.MilliSleep(100)  # Delay of 100 milliseconds    
-    def on_button_click(self, event):
-        print("Button clicked!")                 
+              
     def on_resize(self, event):
         #self.textctrl.Refresh()
         event.Skip()

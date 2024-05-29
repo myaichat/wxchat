@@ -348,7 +348,21 @@ class MainFrame(wx.Frame):
             #pub.sendMessage("append_text", text=f'\n-->Start ({self.model_selector.GetValue()}).\n')
             for chunk in await self.get_chat_completion_client(prompt):
                 if frame.stop_output or frame.pause_output:
-                    break            
+                    # sleep for 0.1
+                    if frame.stop_output:
+                        print('\n-->Stopped\n')
+                        pub.sendMessage("stopped")
+                        break
+                        #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                    else:
+                        while frame.pause_output:
+                            await asyncio.sleep(0.1)
+                            if frame.stop_output:
+                                print('\n-->Stopped\n')
+                                pub.sendMessage("stopped")
+                                break
+                                #pub.sendMessage("append_text", text='\n-->Stopped\n')
+        
                 if hasattr(chunk.choices[0].delta, 'content'):
                     content = chunk.choices[0].delta.content
                     print(content, end='', flush=True)
@@ -414,6 +428,7 @@ class MainFrame(wx.Frame):
             self.response_stream.cancel()
             self.response_stream = None
         self.client=None
+        self.pause_button.SetLabel('Pause')
         #pub.sendMessage("append_text", text='\n-->Done.\n\n\n')
         #self.statusbar.SetStatusText('Stopped')        
     def on_ask_wrapper(self, event):
@@ -477,6 +492,7 @@ can I help you today?'''
         stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
         #self.question_input.Bind(wx.EVT_TEXT_ENTER, self.on_ask_wrapper)
         pub.subscribe(self.OnAskQuestion, "ask_question")
+        
     def on_pause(self, event):
         print('\nPause\n')
         if not self.stop_output:
@@ -487,7 +503,7 @@ can I help you today?'''
             else:
                 self.statusbar.SetStatusText('Resumed')
                 event.GetEventObject().SetLabel('Pause')
-                self.resume_answer(event.GetEventObject())
+                #self.resume_answer(event.GetEventObject())
 
         if 0:
             print(111,self.response_stream)

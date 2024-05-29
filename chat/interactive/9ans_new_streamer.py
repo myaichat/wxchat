@@ -348,7 +348,21 @@ class MainFrame(wx.Frame):
             #pub.sendMessage("append_text", text=f'\n-->Start ({self.model_selector.GetValue()}).\n')
             for chunk in await self.get_chat_completion_client(prompt):
                 if frame.stop_output or frame.pause_output:
-                    break            
+                    # sleep for 0.1
+                    if frame.stop_output:
+                        print('\n-->Stopped\n')
+                        pub.sendMessage("stopped")
+                        break
+                        #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                    else:
+                        while frame.pause_output:
+                            await asyncio.sleep(0.1)
+                            if frame.stop_output:
+                                print('\n-->Stopped\n')
+                                pub.sendMessage("stopped")
+                                break
+                                #pub.sendMessage("append_text", text='\n-->Stopped\n')
+        
                 if hasattr(chunk.choices[0].delta, 'content'):
                     content = chunk.choices[0].delta.content
                     print(content, end='', flush=True)
@@ -369,7 +383,7 @@ class MainFrame(wx.Frame):
                 #self.answer_output.AppendText('\n-->Done.\n\n\n')
                 # Assume `response` is the text of the AI's response
                 print('appending')
-                pp
+              
                 self.conversation_history.append({"role": "assistant", "content": ''.join(out)})
 
                 if not frame.stop_output:
@@ -409,11 +423,12 @@ class MainFrame(wx.Frame):
         self.stop_output = True 
         self.pause_output = False
         
-        #pp(self.response_stream) 
+        print(222, self.response_stream) 
         if self.response_stream :
             self.response_stream.cancel()
             self.response_stream = None
         self.client=None
+        self.pause_button.SetLabel('Pause')
         #pub.sendMessage("append_text", text='\n-->Done.\n\n\n')
         #self.statusbar.SetStatusText('Stopped')        
     def on_ask_wrapper(self, event):
@@ -477,21 +492,37 @@ can I help you today?'''
         stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
         #self.question_input.Bind(wx.EVT_TEXT_ENTER, self.on_ask_wrapper)
         pub.subscribe(self.OnAskQuestion, "ask_question")
+        
     def on_pause(self, event):
-        if self.response_stream:
-            if event.GetEventObject().GetLabel() == 'Pause':
-                print('Pausing')
-                self.pause_output = True 
-                if self.response_stream :
-                    self.response_stream.cancel()
-                    self.response_stream = None   
-                if self.pause_output:
-                    self.statusbar.SetStatusText('Paused')
-                    event.GetEventObject().SetLabel('Resume')
+        print('\nPause\n')
+        if not self.stop_output:
+            self.pause_output = not self.pause_output
+            if  self.pause_output:
+                self.statusbar.SetStatusText('Paused')
+                event.GetEventObject().SetLabel('Resume')
+            else:
+                self.statusbar.SetStatusText('Resumed')
+                event.GetEventObject().SetLabel('Pause')
+                #self.resume_answer(event.GetEventObject())
 
-            else:    
-                print('Resuming')
-                self.resume_answer(event.GetEventObject())
+        if 0:
+            print(111,self.response_stream)
+            if self.response_stream:
+                if event.GetEventObject().GetLabel() == 'Pause':
+                    print('Pausing')
+                    self.pause_output = True 
+                    if self.response_stream :
+                        self.response_stream.cancel()
+                        self.response_stream = None   
+                    if self.pause_output:
+                        self.statusbar.SetStatusText('Paused')
+                        event.GetEventObject().SetLabel('Resume')
+
+                else:    
+                    print('Resuming')
+                    self.resume_answer(event.GetEventObject())
+            else:
+                print('\nNo stream\n')
     def resume_answer(self, btn):
         
         self.statusbar.SetStatusText('Resumed')

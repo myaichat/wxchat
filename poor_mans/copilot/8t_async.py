@@ -1,5 +1,7 @@
 import wx
 import tempfile
+import wxasync
+import asyncio
 import subprocess
 import wx.stc as stc
 import wx.lib.agw.aui as aui
@@ -25,8 +27,9 @@ class CodeException(object):
         return f'''Code to fix: {self.message}      '''
 
 
-SYSTEM = """You are a chatbot that assists with adding new features 
-and debugging scripts written using wxPython. Return only the code required for change. 
+SYSTEM_1 = """You are a chatbot that assists with anwering questions about  code included  or  adding new features 
+and debugging scripts written using wxPython. 
+Return only the code required for change. 
 Present changes in form:
 #Change From:
 [OLD CODE LINES]
@@ -35,8 +38,27 @@ Present changes in form:
 And line number or lines range if possible.
 ."""
 
+
+
+SYSTEM_2 = """You are a chatbot that assists with anwering questions about Python lang 
+."""
+
+
+PROMPT_1='''
+Code to fix: {params.code}
+Question: "{params.input}"
+Answer:
+''' 
+
+PROMPT_2='''
+Context: {params.code}
+Question: "{params.input}"
+Answer:
+''' 
+
+
 openai.api_key = os.getenv("OPENAI_API_KEY")
-class ResponseStreamer:
+class GptResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         
@@ -46,13 +68,16 @@ class ResponseStreamer:
 
     def stream_response(self, prompt):
         # Create a chat completion request with streaming enabled
+        print('streaming...')
         response = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": SYSTEM},
+                {"role": "system", "content": SYSTEM_1},
                 {"role": "user", "content": prompt}
             ],
-            stream=True
+            stream=True,
+            temperature=0.5,
+            max_tokens=500
         )
 
         # Print each response chunk as it arrives
@@ -64,6 +89,99 @@ class ResponseStreamer:
                 if content:
                     
                     pub.sendMessage('chat_output', message=f'{content}')
+
+
+
+class AsyncGptResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        
+
+        # Initialize the client
+        self.client = None
+        #self.client = openai.OpenAI()
+        self.conversation_history = [
+            {"role": "system", "content": SYSTEM_1},
+        ]  
+    async def stream_response(self, prompt):
+        # Create a chat completion request with streaming enabled
+        print('streaming...')
+        #client = self.get_chat_completion_client(prompt)
+
+        # Print each response chunk as it arrives
+        for chunk in await self.get_chat_completion_client(prompt):
+            if hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                #print(content, end='', flush=True)
+                #pp(content)
+                if content:
+                    
+                    pub.sendMessage('chat_output', message=f'{content}')
+
+    async def get_chat_completion_client(self, prompt):
+        if not self.client:
+
+            # Add the user's message to the conversation history
+            self.conversation_history.append({"role": "user", "content": prompt})
+            self.client = openai.OpenAI()
+            self.client = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=self.conversation_history,
+                stream=True,
+                temperature=0.5,
+                max_tokens=500                
+            )
+
+        return self.client 
+    async def _stream_response(self, prompt):
+        global apc
+        out=[]
+        #sleep
+        if 0:
+            await asyncio.sleep(3)
+            pub.sendMessage('chat_output', message=f'test')
+            return
+        try:
+            for chunk in await self.get_chat_completion_client(prompt):
+                if apc.stop_output or apc.pause_output:
+                    if apc.stop_output:
+                        print('\n-->Stopped\n')
+                        pub.sendMessage("stopped")
+                        break
+                    else:
+                        while apc.pause_output:
+                            await asyncio.sleep(0.1)
+                            if apc.stop_output:
+                                print('\n-->Stopped\n')
+                                pub.sendMessage("stopped")
+                                break
+        
+                if hasattr(chunk.choices[0].delta, 'content'):
+                    content = chunk.choices[0].delta.content
+                    print(content, end='', flush=True)
+                    pub.sendMessage('chat_output', message=f'{content}')
+                    out.append(content)
+                    await asyncio.sleep(0)
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            
+            if not apc.pause_output:
+                self.client = None
+                print('appending')
+            
+                self.conversation_history.append({"role": "assistant", "content": ''.join(out)})
+
+                if not apc.stop_output:
+                    print('\n-->Done.\n\n\n')
+                else:
+                    print('\n-->Done(Stop).\n\n\n')
+            else:
+
+                print('--> Paused')
+            
+
 
 
 
@@ -144,7 +262,8 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
         GetClassName.__init__(self)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'self and as assert break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'
+        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
+
 
         self.SetKeyWords(0, python_keywords)
         # Set Python styles
@@ -176,6 +295,8 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
         self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
         self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
         self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
+        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Single triple quotes (''' ''')
+        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")        
         self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
 
         # Set face
@@ -283,6 +404,9 @@ class MyTextInputCtrl(wx.TextCtrl, GetClassName):
         super(MyTextInputCtrl, self).__init__(parent, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER)
         GetClassName.__init__(self)
 
+class AttrDict(object):
+    def __init__(self, adict):
+        self.__dict__.update(adict)
 
 class MyChatInput(wx.Panel):
     def __init__(self, parent):
@@ -291,7 +415,7 @@ class MyChatInput(wx.Panel):
         self.askLabel = wx.StaticText(self, label='Ask chatgpt:')
         self.askButton = wx.Button(self, label='Ask')
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
-        if 1:
+        if 0:
             self.fixButton = wx.Button(self, label='Fix')
             self.fixButton.Bind(wx.EVT_BUTTON, self.onFixButton)
             self.fixButton.Disable()
@@ -300,7 +424,7 @@ class MyChatInput(wx.Panel):
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        askSizer.Add(self.fixButton, 0, wx.ALIGN_CENTER)
+        #askSizer.Add(self.fixButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = MyTextInputCtrl(self)
@@ -318,9 +442,15 @@ class MyChatInput(wx.Panel):
     def onAskButton(self, event):
         # Code to execute when the Ask button is clicked
         print('Ask button clicked')
-        self.ask_question()
-    def ask_question(self):
+        #self.ask_question()
         code=apc.editor.GetValue()
+        asyncio.create_task(self.ask_question(message=code))
+    def evaluate(self,ss, params):
+        #a = f"{ss}"
+        a=eval('f"""'+ss+'"""')
+        return a        
+    async  def ask_question(self, message):
+        code=message
         if not code.strip():
             self.log('The code is empty!', color=wx.RED)
             return        
@@ -328,30 +458,37 @@ class MyChatInput(wx.Panel):
         if not input.strip():
             self.log('The question is empty!', color=wx.RED)
             return        
-        prompt=f'''
-Code to fix: {code}
-Question: "{input}"
-Answer:
-'''        
-        pp(prompt)
-        if 1:
-            rs=ResponseStreamer()
 
-            rs.stream_response(prompt) 
-    def onFixButton(self, event):
+        prompt=self.evaluate(PROMPT_1, AttrDict(dict(code=code, input=input)))
+        #pp(prompt)
+        if prompt:
+            print
+            rs=AsyncGptResponseStreamer()
+
+            #rs.stream_response(prompt) 
+            print('streaming 0 ...')
+            self.response_stream =  await rs.stream_response(prompt)
+    async def onFixButton(self, event):
         if not self.ex:
             wx.MessageBox('No exception to fix', 'Error', wx.OK | wx.ICON_ERROR)
         else:
             # Code to execute when the Ask button is clicked
             print('Fix button clicked')
-            rs=ResponseStreamer()
+            rs=AsyncGptResponseStreamer()
+
             prompt = self.ex.GetFixPrompt()
-            rs.stream_response(prompt) 
+            #rs.stream_response(prompt) 
+            self.response_stream =  await rs.stream_response(prompt)
 
     def OnCharHook(self, event):
         if event.ControlDown() and event.GetKeyCode() == wx.WXK_RETURN:
             print('Executing Ctrl+Enter...')
-            self.ask_question()
+            #self.ask_question()
+            code=apc.editor.GetValue()
+            asyncio.create_task(self.ask_question(message=code))
+            
+
+
         else:
             event.Skip()
     def AskQuestion(self):
@@ -405,7 +542,8 @@ class MyNotebookCodePanel(wx.Panel):
                 
         self.codeCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.codeCtrl.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'self and as assert break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'
+        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
+
         self.codeCtrl.SetKeyWords(0, python_keywords)
         # Set Python styles
         self.codeCtrl.StyleSetSpec(stc.STC_P_DEFAULT, 'fore:#000000')
@@ -437,7 +575,8 @@ class MyNotebookCodePanel(wx.Panel):
         self.codeCtrl.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")
-        
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Single triple quotes (''' ''')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
         apc.editor = self.codeCtrl
         
@@ -561,8 +700,13 @@ class MySplitterPanel(wx.Panel):
 
 
 class MyFrame(wx.Frame):
+    global apc
     def __init__(self, title):
         super(MyFrame, self).__init__(None, title=title, size=(800, 800))
+        apc.stop_output = False
+        apc.response_stream = None
+        apc.client=None
+        apc.pause_output = True
 
         self.splitterPanel = MySplitterPanel(self)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -587,11 +731,15 @@ class MyFrame(wx.Frame):
         print('Save menu item clicked')
         pub.sendMessage('save_file')
                 
-class MyApp(wx.App):
+class MyApp(wxasync.WxAsyncApp):
     def OnInit(self):
         self.frame = MyFrame('Poor Man\'s Copilot')
         return True
 
 if __name__ == '__main__':
     app = MyApp()
-    app.MainLoop()
+    
+    asyncio.run(app.MainLoop())
+
+
+       

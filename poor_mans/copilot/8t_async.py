@@ -39,6 +39,20 @@ And line number or lines range if possible.
 ."""
 
 
+SYSTEM_CHATTY = """You are a chatbot that assists with anwering questions about 
+code included  or  adding new features 
+and debugging scripts written using wxPython. 
+Return short description the code required for change. 
+Present changes in form:
+#Description
+[CHANGE DESCRIPTION]
+#Change From:
+[OLD CODE LINES]
+#Change To:
+[NEW CODE LINES]
+And line number or lines range if possible.
+."""
+
 
 SYSTEM_2 = """You are a chatbot that assists with anwering questions about Python lang 
 ."""
@@ -58,39 +72,6 @@ Answer:
 
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
-class GptResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        
-
-        # Initialize the client
-        self.client = openai.OpenAI()
-
-    def stream_response(self, prompt):
-        # Create a chat completion request with streaming enabled
-        print('streaming...')
-        response = self.client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": SYSTEM_1},
-                {"role": "user", "content": prompt}
-            ],
-            stream=True,
-            temperature=0.5,
-            max_tokens=500
-        )
-
-        # Print each response chunk as it arrives
-        for chunk in response:
-            if hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                #print(content, end='', flush=True)
-                #pp(content)
-                if content:
-                    
-                    pub.sendMessage('chat_output', message=f'{content}')
-
-
 
 class AsyncGptResponseStreamer:
     def __init__(self):
@@ -101,13 +82,13 @@ class AsyncGptResponseStreamer:
         self.client = None
         #self.client = openai.OpenAI()
         self.conversation_history = [
-            {"role": "system", "content": SYSTEM_1},
+            {"role": "system", "content": SYSTEM_CHATTY},
         ]  
     async def stream_response(self, prompt):
         # Create a chat completion request with streaming enabled
         print('streaming...')
         #client = self.get_chat_completion_client(prompt)
-
+        out=[]
         # Print each response chunk as it arrives
         for chunk in await self.get_chat_completion_client(prompt):
             if hasattr(chunk.choices[0].delta, 'content'):
@@ -115,21 +96,26 @@ class AsyncGptResponseStreamer:
                 #print(content, end='', flush=True)
                 #pp(content)
                 if content:
-                    
+                    out.append(content)
                     pub.sendMessage('chat_output', message=f'{content}')
-
+        if out:
+            print('appending assistant')
+            self.conversation_history.append({"role": "assistant", "content": ''.join(out)})
+        self.client=None  
     async def get_chat_completion_client(self, prompt):
+        print('appending user')
+        self.conversation_history.append({"role": "user", "content": prompt})
         if not self.client:
-
+            print(len(self.conversation_history), '444')
             # Add the user's message to the conversation history
-            self.conversation_history.append({"role": "user", "content": prompt})
+            
             self.client = openai.OpenAI()
             self.client = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=self.conversation_history,
                 stream=True,
                 temperature=0.5,
-                max_tokens=500                
+                max_tokens=2000                
             )
 
         return self.client 
@@ -142,7 +128,7 @@ class AsyncGptResponseStreamer:
             pub.sendMessage('chat_output', message=f'test')
             return
         try:
-            for chunk in await self.get_chat_completion_client(prompt):
+            async for chunk in  self.get_chat_completion_client(prompt):
                 if apc.stop_output or apc.pause_output:
                     if apc.stop_output:
                         print('\n-->Stopped\n')
@@ -315,6 +301,9 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
     def AddOutput(self, message):
         if 1: 
             self.AppendText(message)
+            #self.Refresh()
+            self.Update()
+            self.GotoPos(self.GetTextLength()) 
 
         
 
@@ -411,7 +400,7 @@ class AttrDict(object):
 class MyChatInput(wx.Panel):
     def __init__(self, parent):
         super(MyChatInput, self).__init__(parent)
-
+        apc.rs=None
         self.askLabel = wx.StaticText(self, label='Ask chatgpt:')
         self.askButton = wx.Button(self, label='Ask')
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
@@ -462,23 +451,24 @@ class MyChatInput(wx.Panel):
         prompt=self.evaluate(PROMPT_1, AttrDict(dict(code=code, input=input)))
         #pp(prompt)
         if prompt:
-            print
-            rs=AsyncGptResponseStreamer()
+            if not apc.rs:
+                apc.rs=AsyncGptResponseStreamer()
 
             #rs.stream_response(prompt) 
             print('streaming 0 ...')
-            self.response_stream =  await rs.stream_response(prompt)
+            self.response_stream =  await apc.rs.stream_response(prompt)
     async def onFixButton(self, event):
         if not self.ex:
             wx.MessageBox('No exception to fix', 'Error', wx.OK | wx.ICON_ERROR)
         else:
             # Code to execute when the Ask button is clicked
             print('Fix button clicked')
-            rs=AsyncGptResponseStreamer()
+            if not apc.rs:
+                apc.rs=AsyncGptResponseStreamer()
 
             prompt = self.ex.GetFixPrompt()
             #rs.stream_response(prompt) 
-            self.response_stream =  await rs.stream_response(prompt)
+            self.response_stream =  await apc.rs.stream_response(prompt)
 
     def OnCharHook(self, event):
         if event.ControlDown() and event.GetKeyCode() == wx.WXK_RETURN:

@@ -5,11 +5,29 @@ import wx.stc as stc
 import wx.lib.agw.aui as aui
 from pubsub import pub
 from pprint import pprint as pp
+import include.config.init_config as init_config 
+
+init_config.init(**{})
+apc = init_config.apc
 
 import openai
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+
+fn='_wx_test.py'
+class CodeException(object):
+    def __init__(self, message):
+        super(CodeException, self).__init__(message)
+        self.message = message
+    def GetFixPrompt(self):
+        return f'''Code to fix: {self.message}      '''
+
+
+SYSTEM = """You are a chatbot that assists with adding new features 
+and debugging scripts written using wxPython. Return only the code required for change. 
+And line number where change has to be made."""
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 class ResponseStreamer:
@@ -25,7 +43,7 @@ class ResponseStreamer:
         response = self.client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a chatbot that assists with Python interview ."},
+                {"role": "system", "content": SYSTEM},
                 {"role": "user", "content": prompt}
             ],
             stream=True
@@ -59,6 +77,66 @@ class ChatDisplayPanel(wx.Panel):
             end_pos = self.chatDisplay.GetLastPosition()
             self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))
 
+class CopilotDisplayPanel(wx.Panel):
+    def __init__(self, parent):
+        super(CopilotDisplayPanel, self).__init__(parent)
+
+        self.chatDisplay = wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY)
+        self.chatDisplay = stc.StyledTextCtrl(self)
+        self.chatDisplay.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.chatDisplay.SetLexer(stc.STC_LEX_PYTHON)
+        python_keywords = 'self and as assert break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'
+        self.chatDisplay.SetKeyWords(0, python_keywords)
+        # Set Python styles
+        self.chatDisplay.StyleSetSpec(stc.STC_P_DEFAULT, 'fore:#000000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_COMMENTLINE, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_NUMBER, 'fore:#008080')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_STRING, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_CHARACTER, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_WORD, 'fore:#000080,bold')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_TRIPLE, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_CLASSNAME, 'fore:#0000FF,,weight:bold')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_DEFNAME, 'fore:#008080,,weight:bold')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_OPERATOR, 'fore:#000000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_IDENTIFIER, 'fore:#0000FF')  # Change color for variable names to blue
+        self.chatDisplay.StyleSetSpec(stc.STC_P_COMMENTBLOCK, 'fore:#008000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_STRINGEOL, 'fore:#008000,back:#E0C0E0,eol')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_DECORATOR, 'fore:#805000')
+        self.chatDisplay.StyleSetSpec(stc.STC_P_WORD2, 'fore:#800080,bold')
+        # Set Python styles
+        self.chatDisplay.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
+        self.chatDisplay.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        self.chatDisplay.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
+        self.chatDisplay.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        self.chatDisplay.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        self.chatDisplay.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
+        self.chatDisplay.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        self.chatDisplay.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        self.chatDisplay.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
+        self.chatDisplay.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
+        self.chatDisplay.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
+        self.chatDisplay.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
+
+        # Set face
+        self.chatDisplay.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.chatDisplay, 1, wx.EXPAND)
+        self.SetSizer(sizer) 
+        pub.subscribe(self.AddOutput, 'chat_output')
+
+    def OnCharHook(self, event):
+        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
+            self.AskQuestion()
+        else:
+            event.Skip()        
+    def AddOutput(self, message):
+        #start_pos = self.chatDisplay.GetLastPosition()
+        if 1: #for line in message.splitlines():
+            self.chatDisplay.AppendText(message)
+            #end_pos = self.chatDisplay.GetLastPosition()
+            #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))
 
 class LogPanel(wx.Panel):
     def __init__(self, parent):
@@ -134,7 +212,7 @@ class MyChatInput(wx.Panel):
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
-        self.inputCtrl.SetValue("Hey, how do i ... ?")
+        self.inputCtrl.SetValue("Hey, how do i add menubar ?")
         self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -148,9 +226,18 @@ class MyChatInput(wx.Panel):
     def onAskButton(self, event):
         # Code to execute when the Ask button is clicked
         print('Ask button clicked')
-        rs=ResponseStreamer()
-        prompt = self.inputCtrl.GetValue()
-        rs.stream_response(prompt)  
+        code=apc.editor.GetValue()
+        input = self.inputCtrl.GetValue()
+        prompt=f'''
+Code to fix: {code}
+Question: "{input}"
+Answer:
+'''        
+        pp(prompt)
+        if 1:
+            rs=ResponseStreamer()
+
+            rs.stream_response(prompt)  
     def onFixButton(self, event):
         if not self.ex:
             wx.MessageBox('No exception to fix', 'Error', wx.OK | wx.ICON_ERROR)
@@ -181,11 +268,11 @@ class MyChatInput(wx.Panel):
 
 
 
-class MyChatPanel(wx.Panel):
+class MyCopilotChatPanel(wx.Panel):
     def __init__(self, parent):
-        super(MyChatPanel, self).__init__(parent)
+        super(MyCopilotChatPanel, self).__init__(parent)
 
-        self.chatDisplay = ChatDisplayPanel (self)
+        self.chatDisplay = CopilotDisplayPanel (self)
 
 
         #self.askButton.Disable() 
@@ -199,24 +286,7 @@ class MyChatPanel(wx.Panel):
         sizer.Add(self.chatInput, 0, wx.EXPAND)
         self.SetSizer(sizer)
 
-               
-class MyPropertiesPanel(wx.Panel):
-    def __init__(self, parent):
-        super(MyPropertiesPanel, self).__init__(parent)
 
-        self.classDisplay = ChatDisplayPanel (self)
-
-
-        #self.askButton.Disable() 
-        self.chatInput = MyChatInput(self)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.chatDisplay, 1, wx.EXPAND)
-
-
-
-        sizer.Add(self.chatInput, 0, wx.EXPAND)
-        self.SetSizer(sizer)
 
 class MyTabPanel(wx.Panel):
     def __init__(self, parent):
@@ -225,22 +295,77 @@ class MyTabPanel(wx.Panel):
         logPanel = LogPanel(self)
         self.notebook = notebook
         self.logPanel = logPanel
-        self.textCtrl = stc.StyledTextCtrl(notebook)
-        self.textCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        self.textCtrl.SetLexer(stc.STC_LEX_PYTHON)
-        fn='_wx_test.py'
+        self.codeCtrl = stc.StyledTextCtrl(notebook)
+        self.codeCtrl.SetMarginType(0, stc.STC_MARGIN_NUMBER)
+        self.codeCtrl.SetMarginWidth(0, self.codeCtrl.TextWidth(stc.STC_STYLE_LINENUMBER, '9999'))
+        self.codeCtrl.StyleSetForeground(stc.STC_STYLE_LINENUMBER, wx.Colour(75, 75, 75))
+                
+        self.codeCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.codeCtrl.SetLexer(stc.STC_LEX_PYTHON)
+        python_keywords = 'self and as assert break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'
+        self.codeCtrl.SetKeyWords(0, python_keywords)
+        # Set Python styles
+        self.codeCtrl.StyleSetSpec(stc.STC_P_DEFAULT, 'fore:#000000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_COMMENTLINE, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_NUMBER, 'fore:#008080')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_STRING, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_CHARACTER, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_WORD, 'fore:#000080,bold')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_CLASSNAME, 'fore:#0000FF,,weight:bold')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_DEFNAME, 'fore:#008080,,weight:bold')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_OPERATOR, 'fore:#000000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_IDENTIFIER, 'fore:#0000FF')  # Change color for variable names to blue
+        self.codeCtrl.StyleSetSpec(stc.STC_P_COMMENTBLOCK, 'fore:#008000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_STRINGEOL, 'fore:#008000,back:#E0C0E0,eol')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_DECORATOR, 'fore:#805000')
+        self.codeCtrl.StyleSetSpec(stc.STC_P_WORD2, 'fore:#800080,bold')
+        # Set Python styles
+        self.codeCtrl.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
+        self.codeCtrl.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        self.codeCtrl.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
+        self.codeCtrl.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        self.codeCtrl.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        self.codeCtrl.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        self.codeCtrl.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
+        self.codeCtrl.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
+        self.codeCtrl.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
+        self.codeCtrl.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
+        #self.codeCtrl.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#0000FF,back:#FFFFFF,bold")  # Class name
+        #self.codeCtrl.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#FF00FF,back:#FFFFFF,bold")  # Function or method name        
+        
+        # Set face
+        self.codeCtrl.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        apc.editor=self.codeCtrl
+
         self.load_file(fn)
-        notebook.AddPage(self.textCtrl, fn)
+        notebook.AddPage(self.codeCtrl, fn)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.notebook, 1, wx.EXPAND)
         sizer.Add(self.logPanel, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.Layout()
         pub.subscribe(self.ExecuteFile, 'execute')
+        pub.subscribe(self.OnSaveFile, 'save_file') 
+    def OnSaveFile(self):
+        print('Saving file...')
+        with open(fn, 'w') as file:
+            data = self.codeCtrl.GetValue().replace('\r\n', '\n')
+            file.write(data)
+    def OnCharHook(self, event):
+        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
+            print('Executing Ctrl+A...')
+        else:
+            event.Skip()
+
     def load_file(self, file_path):
         with open(file_path, 'r') as file:
             data = file.read()
-        self.textCtrl.SetValue(data)
+        data = data.replace('\r\n', '\n')
+        self.codeCtrl.SetValue(data)
     def OnCharHook(self, event):
         if event.ControlDown() and (event.GetKeyCode() == ord('E') or event.GetKeyCode() == wx.WXK_RETURN):
             self.log('Executing...')
@@ -294,7 +419,7 @@ class MyFrame(wx.Frame):
         super(MyFrame, self).__init__(None, title=title, size=(800, 800))
 
         self.panel = MyTabPanel(self)
-        self.mychat = MyChatPanel(self)
+        self.mychat = MyCopilotChatPanel(self)
         self.mychat.SetMinSize((300, -1))
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.mychat, 1, wx.EXPAND)
@@ -302,11 +427,22 @@ class MyFrame(wx.Frame):
         self.SetSizer(sizer)
 
         self.mychat.SetSize(wx.Size(300, -1))
-
+        self.AddMenuBar()
         self.Centre()
 
         self.Show()
-
+    def AddMenuBar(self):
+        menuBar = wx.MenuBar()
+        fileMenu = wx.Menu()
+        saveItem = wx.MenuItem(fileMenu, wx.ID_SAVE, "&Save\tCtrl+S")
+        fileMenu.Append(saveItem)
+        self.Bind(wx.EVT_MENU, self.onSave, saveItem)
+        menuBar.Append(fileMenu, "&File")
+        self.SetMenuBar(menuBar)
+    def onSave(self, event):
+        print('Save menu item clicked')
+        pub.sendMessage('save_file')
+                
 class MyApp(wx.App):
     def OnInit(self):
         self.frame = MyFrame('Poor Man\'s Copilot')

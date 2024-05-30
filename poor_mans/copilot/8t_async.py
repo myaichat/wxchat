@@ -7,6 +7,7 @@ import wx.stc as stc
 import wx.lib.agw.aui as aui
 from pubsub import pub
 from pprint import pprint as pp
+from include.fmt import fmt
 import include.config.init_config as init_config 
 
 init_config.init(**{})
@@ -42,7 +43,8 @@ And line number or lines range if possible.
 SYSTEM_CHATTY = """You are a chatbot that assists with anwering questions about 
 code included  or  adding new features 
 and debugging scripts written using wxPython. 
-Return short description the code required for change. 
+Give short description for each change the code required for change.
+Numerate each change by index 
 Present changes in form:
 #Description
 [CHANGE DESCRIPTION]
@@ -50,8 +52,7 @@ Present changes in form:
 [OLD CODE LINES]
 #Change To:
 [NEW CODE LINES]
-And line number or lines range if possible.
-."""
+"""
 
 
 SYSTEM_2 = """You are a chatbot that assists with anwering questions about Python lang 
@@ -104,11 +105,11 @@ class AsyncGptResponseStreamer:
         self.client=None  
     async def get_chat_completion_client(self, prompt):
         print('appending user')
-        self.conversation_history.append({"role": "user", "content": prompt})
+        
         if not self.client:
             print(len(self.conversation_history), '444')
             # Add the user's message to the conversation history
-            
+            self.conversation_history.append({"role": "user", "content": prompt})    
             self.client = openai.OpenAI()
             self.client = self.client.chat.completions.create(
                 model="gpt-4o",
@@ -128,7 +129,7 @@ class AsyncGptResponseStreamer:
             pub.sendMessage('chat_output', message=f'test')
             return
         try:
-            async for chunk in  self.get_chat_completion_client(prompt):
+            async for chunk in  await self.get_chat_completion_client(prompt):
                 if apc.stop_output or apc.pause_output:
                     if apc.stop_output:
                         print('\n-->Stopped\n')
@@ -171,34 +172,6 @@ class AsyncGptResponseStreamer:
 
 
 
-class _GetClassName:
-    def __init__(self):
-        self.Bind(wx.EVT_CONTEXT_MENU, self.OnRightClick)
-    def OnRightClick(self, event):
-        # Create a popup menu
-        menu = wx.Menu()
-        
-        # Add a root menu item with a submenu
-        pname=self.GetParent().__class__.__name__
-        root_item = wx.MenuItem(menu, wx.ID_ANY, pname)
-        submenu = wx.Menu()
-        current_class_name = self.__class__.__name__
-        submenu_item = submenu.Append(wx.ID_ANY, current_class_name)
-        #menu.Append(root_item)
-        menu.AppendSubMenu(submenu, pname)
-        
-        # Add a menu item to the popup menu
-        
-        #test_item = menu.Append(wx.ID_ANY, current_class_name)
-        
-        # Bind the menu item to an event handler
-        self.Bind(wx.EVT_MENU, self.OnCopyName, submenu_item)
-        
-        # Show the popup menu
-        self.PopupMenu(menu)
-        
-        # Destroy the menu after it's used
-        menu.Destroy()
 
 
 class GetClassName:
@@ -253,23 +226,6 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
 
         self.SetKeyWords(0, python_keywords)
         # Set Python styles
-        self.StyleSetSpec(stc.STC_P_DEFAULT, 'fore:#000000')
-        self.StyleSetSpec(stc.STC_P_COMMENTLINE, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_NUMBER, 'fore:#008080')
-        self.StyleSetSpec(stc.STC_P_STRING, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_CHARACTER, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_WORD, 'fore:#000080,bold')
-        self.StyleSetSpec(stc.STC_P_TRIPLE, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_CLASSNAME, 'fore:#0000FF,,weight:bold')
-        self.StyleSetSpec(stc.STC_P_DEFNAME, 'fore:#008080,,weight:bold')
-        self.StyleSetSpec(stc.STC_P_OPERATOR, 'fore:#000000')
-        self.StyleSetSpec(stc.STC_P_IDENTIFIER, 'fore:#0000FF')  # Change color for variable names to blue
-        self.StyleSetSpec(stc.STC_P_COMMENTBLOCK, 'fore:#008000')
-        self.StyleSetSpec(stc.STC_P_STRINGEOL, 'fore:#008000,back:#E0C0E0,eol')
-        self.StyleSetSpec(stc.STC_P_DECORATOR, 'fore:#805000')
-        self.StyleSetSpec(stc.STC_P_WORD2, 'fore:#800080,bold')
-        # Set Python styles
         self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
         self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
         self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
@@ -281,10 +237,8 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
         self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
         self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
         self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
-        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Single triple quotes (''' ''')
-        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")        
         self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
-
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
         # Set face
         self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
         pub.subscribe(self.AddOutput, 'chat_output')
@@ -392,14 +346,16 @@ class MyTextInputCtrl(wx.TextCtrl, GetClassName):
     def __init__(self, parent):
         super(MyTextInputCtrl, self).__init__(parent, style=wx.TE_MULTILINE | wx.TE_PROCESS_ENTER)
         GetClassName.__init__(self)
-
+        font = self.GetFont()
+        font.SetPointSize(10)  # Set the font size to 12
+        self.SetFont(font)
 class AttrDict(object):
     def __init__(self, adict):
         self.__dict__.update(adict)
 
-class MyChatInput(wx.Panel):
+class MyChatInputPanel(wx.Panel):
     def __init__(self, parent):
-        super(MyChatInput, self).__init__(parent)
+        super(MyChatInputPanel, self).__init__(parent)
         apc.rs=None
         self.askLabel = wx.StaticText(self, label='Ask chatgpt:')
         self.askButton = wx.Button(self, label='Ask')
@@ -443,12 +399,15 @@ class MyChatInput(wx.Panel):
         if not code.strip():
             self.log('The code is empty!', color=wx.RED)
             return        
-        input = self.inputCtrl.GetValue()
-        if not input.strip():
+        
+        question = self.inputCtrl.GetValue()  
+        if not question.strip():
             self.log('The question is empty!', color=wx.RED)
-            return        
-
-        prompt=self.evaluate(PROMPT_1, AttrDict(dict(code=code, input=input)))
+            return      
+        header=fmt([[question]],['User Question'])
+        print(header)
+        pub.sendMessage('chat_output', message=f'\n\n{header}\n')
+        prompt=self.evaluate(PROMPT_1, AttrDict(dict(code=code, input=question)))
         #pp(prompt)
         if prompt:
             if not apc.rs:
@@ -504,12 +463,12 @@ class MyCopilotChatPanel(wx.Panel):
 
 
         #self.askButton.Disable() 
-        self.chatInput = MyChatInput(self.splitter)
+        self.chatInput = MyChatInputPanel(self.splitter)
 
         
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Add CopilotDisplayPanel and MyChatInput to the splitter window
+        # Add CopilotDisplayPanel and MyChatInputPanel to the splitter window
         self.splitter.SplitHorizontally(self.chatDisplay, self.chatInput)
         self.splitter.SetSashPosition(300)  # Set initial sash position as per your need
 

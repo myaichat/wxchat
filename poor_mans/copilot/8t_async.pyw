@@ -585,13 +585,12 @@ class MyNotebookCodePanel(wx.Panel):
         local_dir = os.getcwd()
         command = f'start cmd /k "python {fn} "'
         #remove existing conda env variables from shell initialization
-        new_env = {k: v for k, v in os.environ.items()}
-        #pp(new_env)
-        process = subprocess.Popen(f'conda activate poor_mans_copilot_test  &&  python {fn}'.split(), 
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=local_dir, env=new_env, shell=True)
+        #new_env = {k: v for k, v in os.environ.items() if not k.startswith('CONDA') and not k.startswith('VIRTUAL') and not k.startswith('PROMPT')}
+        apc.process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        cwd=local_dir, creationflags=subprocess.CREATE_NO_WINDOW)
 
-        if 1:
+
+        if 0:
             stdout, stderr = process.communicate()
             if stderr:
                 self.output(stdout.decode())
@@ -680,23 +679,7 @@ class MySplitterPanel(wx.Panel):
         sizer.Add(self.splitter, 1, wx.EXPAND|wx.ALL)
         self.SetSizer(sizer)  # Add this line to set the sizer for MySplitterPanel class
 
-def get_current_conda_env():
-    try:
-        result = subprocess.run(
-            ["conda", "info", "--envs"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True, shell=True
-        )
-        envs_output = result.stdout
-        for line in envs_output.splitlines():
-            if '*' in line:
-                return line.split()[0]
-        return None
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred: {e}")
-        return None
+
 
 class MyFrame(wx.Frame):
     global apc
@@ -706,8 +689,7 @@ class MyFrame(wx.Frame):
         apc.response_stream = None
         apc.client=None
         apc.pause_output = True
-        apc.conda_env=get_current_conda_env()
-        print(apc.conda_env)
+
         self.splitterPanel = MySplitterPanel(self)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.splitterPanel, 1, wx.EXPAND|wx.ALL)  
@@ -717,11 +699,6 @@ class MyFrame(wx.Frame):
 
         self.AddMenuBar()
         self.Centre()
-        if apc.conda_env.endswith('test'):
-           
-           x, y = self.GetPosition() 
-           self.SetPosition((x+100, y+100))
-
         self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Show()
     def AddMenuBar(self):

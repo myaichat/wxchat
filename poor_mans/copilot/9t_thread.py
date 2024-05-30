@@ -1,7 +1,8 @@
 import wx
 import tempfile
 import wxasync
-import asyncio
+#import asyncio
+import threading
 import subprocess
 import wx.stc as stc
 import wx.lib.agw.aui as aui
@@ -20,7 +21,6 @@ load_dotenv()
 
 
 fn=__file__
-#fn='1d_styled.py'
 class CodeException(object):
     def __init__(self, message):
         super(CodeException, self).__init__()
@@ -75,7 +75,7 @@ Answer:
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-class AsyncGptResponseStreamer:
+class GptResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         
@@ -86,13 +86,13 @@ class AsyncGptResponseStreamer:
         self.conversation_history = [
             {"role": "system", "content": SYSTEM_CHATTY},
         ]  
-    async def stream_response(self, prompt):
+    def stream_response(self, prompt):
         # Create a chat completion request with streaming enabled
         print('streaming...')
         #client = self.get_chat_completion_client(prompt)
         out=[]
         # Print each response chunk as it arrives
-        for chunk in await self.get_chat_completion_client(prompt):
+        for chunk in self.get_chat_completion_client(prompt):
             if hasattr(chunk.choices[0].delta, 'content'):
                 content = chunk.choices[0].delta.content
                 #print(content, end='', flush=True)
@@ -103,8 +103,9 @@ class AsyncGptResponseStreamer:
         if out:
             print('appending assistant')
             self.conversation_history.append({"role": "assistant", "content": ''.join(out)})
+        pub.sendMessage('chat_output', message=f'\n\n\n')    
         self.client=None  
-    async def get_chat_completion_client(self, prompt):
+    def get_chat_completion_client(self, prompt):
         print('appending user')
         
         if not self.client:
@@ -112,25 +113,31 @@ class AsyncGptResponseStreamer:
             # Add the user's message to the conversation history
             self.conversation_history.append({"role": "user", "content": prompt})    
             self.client = openai.OpenAI()
-            self.client = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=self.conversation_history,
-                stream=True,
-                temperature=0.5,
-                max_tokens=2000                
-            )
+            try:
+                self.client = self.client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=self.conversation_history,
+                    stream=True,
+                    temperature=0.5,
+                    max_tokens=2000                
+                )
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                pub.sendMessage('log', message=f"An error occurred: {e}", color=wx.RED)
+                
+                return ()
 
         return self.client 
-    async def _stream_response(self, prompt):
+    def _stream_response(self, prompt):
         global apc
         out=[]
         #sleep
         if 0:
-            await asyncio.sleep(3)
+            #await asyncio.sleep(3)
             pub.sendMessage('chat_output', message=f'test')
             return
         try:
-            async for chunk in  await self.get_chat_completion_client(prompt):
+            for chunk in  self.get_chat_completion_client(prompt):
                 if apc.stop_output or apc.pause_output:
                     if apc.stop_output:
                         print('\n-->Stopped\n')
@@ -138,7 +145,7 @@ class AsyncGptResponseStreamer:
                         break
                     else:
                         while apc.pause_output:
-                            await asyncio.sleep(0.1)
+                            #await asyncio.sleep(0.1)
                             if apc.stop_output:
                                 print('\n-->Stopped\n')
                                 pub.sendMessage("stopped")
@@ -149,7 +156,7 @@ class AsyncGptResponseStreamer:
                     print(content, end='', flush=True)
                     pub.sendMessage('chat_output', message=f'{content}')
                     out.append(content)
-                    await asyncio.sleep(0)
+                    #await asyncio.sleep(0)
 
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -336,10 +343,9 @@ class LogPanel(wx.Panel):
         #normal_font = wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         #self.logCtrl.SetFont(normal_font)
         start_pos = self.logCtrl.GetLastPosition()
-        self.logCtrl.AppendText('EXCEPTION:\n')
         for line in message.splitlines():
             print(222, line)
-            self.logCtrl.AppendText(line + '\n')
+            self.logCtrl.AppendText('EXCEPTION: '+ line + '\n')
             
             end_pos = self.logCtrl.GetLastPosition()
             self.logCtrl.SetStyle(start_pos, end_pos, wx.TextAttr(color))
@@ -359,7 +365,7 @@ class MyChatInputPanel(wx.Panel):
     def __init__(self, parent):
         super(MyChatInputPanel, self).__init__(parent)
         apc.rs=None
-        self.askLabel = wx.StaticText(self, label='Ask chatgpt:')
+        self.askLabel = wx.StaticText(self, label='Ask copilot:')
         self.askButton = wx.Button(self, label='Ask')
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
         if 0:
@@ -391,12 +397,12 @@ class MyChatInputPanel(wx.Panel):
         print('Ask button clicked')
         #self.ask_question()
         code=apc.editor.GetValue()
-        asyncio.create_task(self.ask_question(message=code))
+        self.ask_question(message=code)
     def evaluate(self,ss, params):
         #a = f"{ss}"
         a=eval('f"""'+ss+'"""')
         return a        
-    async  def ask_question(self, message):
+    def ask_question(self, message):
         code=message
         if not code.strip():
             self.log('The code is empty!', color=wx.RED)
@@ -408,35 +414,37 @@ class MyChatInputPanel(wx.Panel):
             return      
         header=fmt([[question]],['User Question'])
         print(header)
-        pub.sendMessage('chat_output', message=f'\n\n{header}\n')
+        pub.sendMessage('chat_output', message=f'{header}\n')
         prompt=self.evaluate(PROMPT_1, AttrDict(dict(code=code, input=question)))
         #pp(prompt)
         if prompt:
             if not apc.rs:
-                apc.rs=AsyncGptResponseStreamer()
+                apc.rs=GptResponseStreamer()
 
             #rs.stream_response(prompt) 
             print('streaming 0 ...')
-            self.response_stream =  await apc.rs.stream_response(prompt)
-    async def onFixButton(self, event):
+            #self.response_stream =  await apc.rs.stream_response(prompt)
+            threading.Thread(target=apc.rs.stream_response, args=(prompt,)).start()
+    def onFixButton(self, event):
         if not self.ex:
             wx.MessageBox('No exception to fix', 'Error', wx.OK | wx.ICON_ERROR)
         else:
             # Code to execute when the Ask button is clicked
             print('Fix button clicked')
             if not apc.rs:
-                apc.rs=AsyncGptResponseStreamer()
+                apc.rs=GptResponseStreamer()
 
             prompt = self.ex.GetFixPrompt()
             #rs.stream_response(prompt) 
-            self.response_stream =  await apc.rs.stream_response(prompt)
+            #self.response_stream =  await apc.rs.stream_response(prompt)
+            threading.Thread(target=apc.rs.stream_response, args=(prompt,)).start()
 
     def OnCharHook(self, event):
         if event.ControlDown() and event.GetKeyCode() == wx.WXK_RETURN:
             print('Executing Ctrl+Enter...')
             #self.ask_question()
             code=apc.editor.GetValue()
-            asyncio.create_task(self.ask_question(message=code))
+            self.ask_question(message=code)
             
 
 
@@ -581,37 +589,7 @@ class MyNotebookCodePanel(wx.Panel):
         with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as f:
             f.write(code.encode())
             temp_file_name = f.name
-        
-        local_dir = os.getcwd()
-        command = f'start cmd /k "python {fn} "'
-        #remove existing conda env variables from shell initialization
-        new_env = {k: v for k, v in os.environ.items()}
-        #pp(new_env)
-        process = subprocess.Popen(f'conda activate poor_mans_copilot_test  &&  python {fn}'.split(), 
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=local_dir, env=new_env, shell=True)
-
-        if 1:
-            stdout, stderr = process.communicate()
-            if stderr:
-                self.output(stdout.decode())
-                self.exception(stderr.decode())
-                ex = CodeException(stderr.decode())
-                #self.fixButton.Enable()
-                pub.sendMessage('fix_exception', message=ex)
-            else:
-                self.output(stdout.decode())
-
-    def _ExecuteFile(self):
-        code = self.codeCtrl.GetText()
-        with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as f:
-            f.write(code.encode())
-            temp_file_name = f.name
-        predefined_dir = 'path/to/your/directory'
-        local_dir = os.getcwd()
-        process = subprocess.Popen(['python', fn], 
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   cwd=local_dir)
+        process = subprocess.Popen(['python', temp_file_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         if stderr:
             self.output(stdout.decode())
@@ -621,8 +599,6 @@ class MyNotebookCodePanel(wx.Panel):
             pub.sendMessage('fix_exception', message=ex)
         else:
             self.output(stdout.decode())
-
-
 
 class MyCodePanel(wx.Panel):
     def __init__(self, parent):
@@ -680,23 +656,7 @@ class MySplitterPanel(wx.Panel):
         sizer.Add(self.splitter, 1, wx.EXPAND|wx.ALL)
         self.SetSizer(sizer)  # Add this line to set the sizer for MySplitterPanel class
 
-def get_current_conda_env():
-    try:
-        result = subprocess.run(
-            ["conda", "info", "--envs"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True, shell=True
-        )
-        envs_output = result.stdout
-        for line in envs_output.splitlines():
-            if '*' in line:
-                return line.split()[0]
-        return None
-    except subprocess.CalledProcessError as e:
-        print(f"Error occurred: {e}")
-        return None
+
 
 class MyFrame(wx.Frame):
     global apc
@@ -706,8 +666,7 @@ class MyFrame(wx.Frame):
         apc.response_stream = None
         apc.client=None
         apc.pause_output = True
-        apc.conda_env=get_current_conda_env()
-        print(apc.conda_env)
+
         self.splitterPanel = MySplitterPanel(self)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.splitterPanel, 1, wx.EXPAND|wx.ALL)  
@@ -717,12 +676,7 @@ class MyFrame(wx.Frame):
 
         self.AddMenuBar()
         self.Centre()
-        if apc.conda_env.endswith('test'):
-           
-           x, y = self.GetPosition() 
-           self.SetPosition((x+100, y+100))
 
-        self.Bind(wx.EVT_CLOSE, self.OnClose)
         self.Show()
     def AddMenuBar(self):
         menuBar = wx.MenuBar()
@@ -735,20 +689,14 @@ class MyFrame(wx.Frame):
     def onSave(self, event):
         print('Save menu item clicked')
         pub.sendMessage('save_file')
-    def OnClose(self, event):
-        if hasattr(apc, 'process') and apc.process:
-            apc.process.terminate()
-        self.Destroy()
-
-class MyApp(wxasync.WxAsyncApp):
+          
+class MyApp(wx.App):
     def OnInit(self):
         self.frame = MyFrame('Poor Man\'s Copilot')
         return True
 
+
 if __name__ == '__main__':
     app = MyApp()
-    
-    asyncio.run(app.MainLoop())
-
-
+    app.MainLoop()
        

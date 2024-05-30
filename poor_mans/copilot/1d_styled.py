@@ -2,12 +2,20 @@ import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
 from pubsub import pub
-from pprint import pprint as pp
+from pprint import pprint as pp 
 from include.fmt import fmt
 import threading
 from os.path import join
 import openai
-import os
+import os, subprocess
+import wx.stc as stc
+from wx.stc import StyledTextCtrl
+
+import include.config.init_config as init_config 
+
+init_config.init(**{})
+apc = init_config.apc
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -21,6 +29,24 @@ currentModel   = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+def get_current_conda_env():
+    try:
+        result = subprocess.run(
+            ["conda", "info", "--envs"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True, shell=True
+        )
+        envs_output = result.stdout
+        for line in envs_output.splitlines():
+            if '*' in line:
+                return line.split()[0]
+        return None
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred: {e}")
+        return None
+    
 def log(message, color=None):
     pub.sendMessage('log', message=message, color=color)
 def set_status(message):
@@ -104,16 +130,118 @@ class NewChat(object):
             pub.sendMessage('log', message=f'New chat name: {chatName}')
             pub.sendMessage('add_chat', name=chatName, system=system)
         dialog.Destroy()        
+class GetClassName:
+    def __init__(self):
+        self.Bind(wx.EVT_CONTEXT_MENU, self.OnRightClick)
+    def OnRightClick(self, event):
+        # Create a popup menu
+        menu = wx.Menu()
+        
+        # Add a menu item to the popup menu
+        current_class_name=self.__class__.__name__
+        item = menu.Append(wx.ID_ANY, current_class_name)
 
+        pname=self.GetParent().__class__.__name__
+        parent_item = menu.Append(wx.ID_ANY, pname)
+        
+        # Bind the menu item to an event handler
+        self.Bind(wx.EVT_MENU, lambda event, name=current_class_name: self.OnCopyName(event, name), item)
+        self.Bind(wx.EVT_MENU, lambda event, name=pname: self.OnCopyName(event, name), parent_item)
+
+        
+        # Show the popup menu
+        self.PopupMenu(menu)
+        
+        # Destroy the menu after it's used
+        menu.Destroy()
+
+    def OnCopyName(self, event, name):
+        # Create a data object for the clipboard
+        data_object = wx.TextDataObject()
+
+        # Set the class name into the data object
+        
+        data_object.SetText(name)
+
+        # Copy the text to the clipboard
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(data_object)
+            wx.TheClipboard.Close()
+        else:
+            wx.MessageBox('Unable to open the clipboard', 'Error', wx.OK | wx.ICON_ERROR)
+
+class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
+    def __init__(self, parent):
+        super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
+        GetClassName.__init__(self)
+        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.SetLexer(stc.STC_LEX_PYTHON)
+        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
+
+
+        self.SetKeyWords(0, python_keywords)
+        # Set Python styles
+        self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
+        self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
+        self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
+        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
+        self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
+        self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
+        self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        # Set face
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        #pub.subscribe(self.AddOutput, 'chat_output')
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+
+    def OnResize(self, event):
+        self.Refresh()
+        event.Skip()
+
+    def _OnCharHook(self, event):
+        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
+            self.AskQuestion()
+        else:
+            event.Skip()
+
+    def AskQuestion(self):
+        pass  # Implement if needed
+    def IsTextInvisible(self):
+        last_position = self.GetTextLength()
+        line_number = self.LineFromPosition(last_position)
+        first_visible_line = self.GetFirstVisibleLine()
+        lines_on_screen = self.LinesOnScreen()
+        return not (first_visible_line <= line_number < first_visible_line + lines_on_screen)
+
+    def AddOutput(self, message):
+        wx.CallAfter(self._AddOutput, message)
+    def _AddOutput(self, message):
+        self.AppendText(message)
+        if self.IsTextInvisible():
+            self.GotoPos(self.GetTextLength())
 class ChatDisplayPanel(wx.Panel, NewChat):
     def __init__(self, parent):
         super(ChatDisplayPanel, self).__init__(parent)
         #self.tab_id=0
-        self.chatDisplay = chatDisplay =  wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY)
+        #self.chatDisplay = chatDisplay =  wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY)
+        #self.chatDisplay = chatDisplay = StyledTextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY| wx.TE_WORDWRAP)
+        self.chatDisplay = chatDisplay = StyledTextDisplay(self)
+        
+        #chatDisplay.SetWrapMode(wx.stc.STC_WRAP_WORD)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
         # Set the font of chatDisplay
-        chatDisplay.SetFont(font)        
+        chatDisplay.SetFont(font) 
+
+        #font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+
+        # Set the font of chatDisplay
+        #chatDisplay.SetFont(font)        
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.chatDisplay, 1, wx.EXPAND)
@@ -152,12 +280,15 @@ class ChatDisplayPanel(wx.Panel, NewChat):
         if self.tab_id==tab_id:
             start_pos = self.chatDisplay.GetLastPosition()
             if 1: #for line in message.splitlines():
-                self.chatDisplay.AppendText(message)
-                end_pos = self.chatDisplay.GetLastPosition()
-                self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))
+                #self.chatDisplay.AppendText(message)
+                #self.chatDisplay.AddOutput(message)
+                wx.CallAfter(self.chatDisplay.AddOutput, message)
+                
+                #end_pos = self.chatDisplay.GetLastPosition()
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))
 class LogPanel(wx.Panel):
     def __init__(self, parent):
-        super(LogPanel, self).__init__(parent, size=(800, 200))
+        super(LogPanel, self).__init__(parent)
         self.logCtrl = wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_RICH2)
         self.default_font = self.logCtrl.GetFont()
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -248,7 +379,7 @@ class MyChatInput(wx.Panel):
 
 
         self.inputCtrl.SetValue(self.tabs[0]['q'])
-        self.inputCtrl.SetMinSize((-1, 120))  
+        #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(askSizer, 0, wx.EXPAND)
@@ -436,7 +567,7 @@ class ChatNotebook(wx.Notebook):
 
         # Add the panel to the notebook
         self.AddPage(chatDisplayPanel, title)
-        self.SetSelection(self.GetPageCount() - 1)
+        self.SetSelection(self.GetPageCount() - 1)  
         tab_id=self.GetPageCount() - 1
         pub.sendMessage('set_question_tab_id', new_tab_id=tab_id , system=system)
         self.chatDisplay.tab_id=tab_id
@@ -444,22 +575,26 @@ class ChatNotebook(wx.Notebook):
 class MyChatPanel(wx.Panel,NewChat):
     def __init__(self, parent):
         super(MyChatPanel, self).__init__(parent)
+        self.h_splitter = h_splitter=wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
+        self.v_splitter = v_splitter= wx.SplitterWindow(h_splitter, style=wx.SP_LIVE_UPDATE)
+        #self.splitter.SetMinimumPaneSize(20)        
 
-        
-
-        self.notebook = ChatNotebook(self)
+        self.notebook = ChatNotebook(h_splitter)
         #self.askButton.Disable() 
-        self.chatInput = MyChatInput(self)
-        self.chatInput.SetMinSize((300, -1)) 
+        self.chatInput = MyChatInput(v_splitter)
+        self.chatInput.SetMinSize((300, 200)) 
         
-        self.logPanel = LogPanel(self)
+        self.logPanel = LogPanel(v_splitter)
+        self.v_splitter.SplitVertically(self.chatInput, self.logPanel)
+        self.h_splitter.SplitHorizontally(self.notebook, v_splitter)
+        #self.h_splitter.SetSashPosition(500)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.notebook, 1, wx.EXPAND|wx.ALL)
+        #sizer.Add(self.notebook, 1, wx.EXPAND|wx.ALL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        h_sizer.Add(self.chatInput, 0, wx.EXPAND|wx.ALL)
-        h_sizer.Add(self.logPanel, 0, wx.EXPAND|wx.ALL)
-        sizer.Add(h_sizer, 0, wx.EXPAND|wx.ALL)
+        h_sizer.Add(self.h_splitter, 1, wx.EXPAND|wx.ALL)        
+        sizer.Add(h_sizer, 1, wx.EXPAND|wx.ALL)
         self.SetSizer(sizer)
+        self.v_splitter.SetMinimumPaneSize(200)
         if 1:
             accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
 
@@ -469,7 +604,14 @@ class MyChatPanel(wx.Panel,NewChat):
             # Bind the event to the handler
             self.chatInput.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
         self.chatInput.SetFocus()
-
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+    def OnResize(self, event):
+        #print('OnResize')
+        # Adjust the sash position to keep the vertical splitter size constant
+        width, height=self.GetParent().GetSize()
+        self.h_splitter.SetSashPosition(height-self.v_splitter.GetMinimumPaneSize())
+        #self.h_splitter.SetSashPosition(self.v_splitter.GetSize().GetHeight())
+        event.Skip()
     def SetInputFocus(self):
         self.chatInput.SetFocus()
 class MyFrame(wx.Frame, NewChat):
@@ -503,6 +645,14 @@ class MyFrame(wx.Frame, NewChat):
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)   
         pub.subscribe(self.StartProgress, 'start_progress')  
         pub.subscribe(self.StopProgress, 'stop_progress') 
+        apc.conda_env=get_current_conda_env()
+        print(apc.conda_env)
+        if apc.conda_env.endswith('test'):
+           
+           x, y = self.GetPosition() 
+           self.SetPosition((x+100, y+100))
+
+
     def StartProgress(self):
         # ...
         # Start the timer

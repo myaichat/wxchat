@@ -21,6 +21,7 @@ load_dotenv()
 
 fn=__file__
 #fn='1d_styled.py'
+#fn='7d_copilot.py'
 class CodeException(object):
     def __init__(self, message):
         super(CodeException, self).__init__()

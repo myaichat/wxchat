@@ -4,7 +4,7 @@ import wx.lib.agw.aui as aui
 from pubsub import pub
 from pprint import pprint as pp 
 from include.fmt import fmt
-import time, threading
+import threading
 from os.path import join
 import openai
 import os, subprocess
@@ -15,8 +15,7 @@ import include.config.init_config as init_config
 
 init_config.init(**{})
 apc = init_config.apc
-apc.pause_output = {}
-apc.stop_output = {}
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -115,25 +114,7 @@ class ResponseStreamer:
         )
         out = []
         # Print each response chunk as it arrives
-        stop_output=apc.stop_output[receiveing_tab_id]
-        pause_output=apc.pause_output[receiveing_tab_id]
         for chunk in response:
-            if stop_output[0] or pause_output[0] :
-                
-                if stop_output[0] :
-                    print('\n-->Stopped\n')
-                    pub.sendMessage("stopped")
-                    break
-                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                else:
-                    while pause_output[0] :
-                        time.sleep(0.1)
-                        if stop_output[0]:
-                            print('\n-->Stopped\n')
-                            pub.sendMessage("stopped")
-                            break
-                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                                            
             if hasattr(chunk.choices[0].delta, 'content'):
                 content = chunk.choices[0].delta.content
                 #print(content, end='', flush=True)
@@ -507,27 +488,23 @@ class PauseHandlet:
     def __init__(self,tab_id):
         self.tab_id=tab_id
 
-
-        apc.pause_output[self.tab_id]=[False]
-        apc.stop_output[self.tab_id]=[False]
+        apc.pause_output = {}
+        apc.stop_output = {}
+        apc.pause_output[self.tab_id]=False
+        apc.stop_output[self.tab_id]=False
         pub.subscribe(self.SetPause, 'pause_output')
         pub.subscribe(self.SetStop, 'stop_output')
     def pause_output(self,on_off=None):
         if on_off is not None:
-            apc.pause_output[self.tab_id][0]=on_off
+            apc.pause_output[self.tab_id]=on_off
         else:
-            return apc.pause_output[self.tab_id][0]
+            return apc.pause_output[self.tab_id]
 
     def stop_output(self,on_off=None):
         if on_off is not None:
-            apc.stop_output[self.tab_id][0]=on_off
-            if on_off:
-                self.stop_button.Disable()
-            else:
-                self.stop_button.Enable()
-                self.pause_button.Enable()
+            apc.stop_output[self.tab_id]=on_off
         else:
-            return apc.stop_output[self.tab_id][0]
+            return apc.stop_output[self.tab_id]
     
     def on_pause(self, event):
         print('\nPause\n')
@@ -545,17 +522,14 @@ class PauseHandlet:
                 #self.resume_answer(event.GetEventObject())  
     def on_stop(self, event):
         print('\nStop\n')
-        #self.stop_output(not self.stop_output())
-        self.stop_output(True)
-        if  1: #self.stop_output():
+        self.stop_output(not self.stop_output())
+        if  self.stop_output():
             #self.statusBar.SetStatusText('Stopped')
             pub.sendMessage('set_status', message='Stopped')
-            #event.GetEventObject().SetLabel('Start')
+            event.GetEventObject().SetLabel('Start')
             self.pause_button.Disable()
-            self.stop_button.Disable()
-        if 0:
+        else:
             #self.statusBar.SetStatusText('Started')
-
             pub.sendMessage('set_status', message='Started')
             event.GetEventObject().SetLabel('Stop')
             self.pause_button.Enable()
@@ -577,16 +551,10 @@ class PausePanel(wx.Panel,PauseHandlet):
         sizer.Add(self.pause_button, 0, wx.ALL)
         sizer.Add(self.stop_button, 0, wx.ALL)
         self.SetSizer(sizer)
-        self.stop_button.Disable()
-        self.pause_button.Disable()
         
-        
-class Base_InputPanel:
-    def Base_OnAskQuestion(self):
-        self.pause_panel.pause_output(False)
-        self.pause_panel.stop_output(False)   
 
-class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+
+class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Gpt4_Chat_InputPanel, self).__init__(parent)
@@ -664,7 +632,19 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         self.tab_id=tab_id
       
         return self
-
+    def on_pause(self, event):
+        print('\nPause\n')
+        if not self.stop_output:
+            self.pause_output = not self.pause_output
+            if  self.pause_output:
+                #self.statusBar.SetStatusText('Paused')
+                pub.sendMessage('set_status', message='Paused')
+                event.GetEventObject().SetLabel('Resume')
+            else:
+                #self.statusBar.SetStatusText('Resumed')
+                pub.sendMessage('set_status', message='Resumed')
+                event.GetEventObject().SetLabel('Pause')
+                #self.resume_answer(event.GetEventObject())  
                       
     def OnModelChange(self, event):
         # Get the selected model
@@ -714,15 +694,13 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
     def onAskButton(self, event):
         # Code to execute when the Ask button is clicked
         print('Ask button clicked')
-
         self.AskQuestion()
     def AskQuestion(self):
         global chatHistory, questionHistory, currentQuestion,currentModel
         # Get the content of the StyledTextCtrl
         #print('current tab_id', self.q_tab_id)
+        pub.sendMessage('show_tab_id')
         
-        #pub.sendMessage('show_tab_id')
-        self.Base_OnAskQuestion()           
         question = self.inputCtrl.GetValue()
         if not question:
             self.log('There is no question!', color=wx.RED)
@@ -796,8 +774,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         
         pub.sendMessage('log', message=f'{message}', color=color)
 
-        
-class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Gpt4_Copilot_InputPanel, self).__init__(parent)
@@ -919,8 +896,8 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
         global chatHistory, questionHistory, currentQuestion,currentModel
         # Get the content of the StyledTextCtrl
         #print('current tab_id', self.q_tab_id)
-        #pub.sendMessage('show_tab_id')
-        self.Base_OnAskQuestion()
+        pub.sendMessage('show_tab_id')
+        
         question = self.inputCtrl.GetValue()
         if not question:
             self.log('There is no question!', color=wx.RED)
@@ -1349,6 +1326,14 @@ class MyApp(wx.App):
         self.frame = MyFrame('Poor Man\'s Desktop ChatGPT')
         return True
 
+if __name__ == "__main__":
+    app = wxasync.WxAsyncApp()
+    frame = MainFrame()
+    frame.SetSize(1000, 600)
+    frame.Show()
+    #asyncio.get_event_loop().run_until_complete(app.MainLoop())
+    asyncio.run(app.MainLoop())
+    
 if __name__ == '__main__':
     app = MyApp()
     app.MainLoop()

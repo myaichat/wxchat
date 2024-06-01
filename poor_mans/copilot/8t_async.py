@@ -20,7 +20,7 @@ load_dotenv()
 
 
 fn=__file__
-#fn='1d_styled.py'
+fn='7d_copilot.py'
 class CodeException(object):
     def __init__(self, message):
         super(CodeException, self).__init__()
@@ -546,6 +546,7 @@ class MyNotebookCodePanel(wx.Panel):
         with open(fn, 'w') as file:
             data = self.codeCtrl.GetValue().replace('\r\n', '\n')
             file.write(data)
+            self.log('File saved successfully.')
 
     def OnCharHook(self, event):
         if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
@@ -568,7 +569,7 @@ class MyNotebookCodePanel(wx.Panel):
             event.Skip()
 
     def log(self, message):
-        pub.sendMessage('log', message=f'{self.__class__.__name__}: {message}')
+        pub.sendMessage('log', message=f'LOG: {message}')
 
     def output(self, message):
         pub.sendMessage('output', message=f'{message}')
@@ -713,8 +714,6 @@ class MyFrame(wx.Frame):
         sizer.Add(self.splitterPanel, 1, wx.EXPAND|wx.ALL)  
         
         self.SetSizer(sizer)
-
-
         self.AddMenuBar()
         self.Centre()
         if apc.conda_env.endswith('test'):

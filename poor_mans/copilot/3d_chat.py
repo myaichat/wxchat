@@ -16,11 +16,14 @@ import include.config.init_config as init_config
 init_config.init(**{})
 apc = init_config.apc
 
+
 from dotenv import load_dotenv
 load_dotenv()
 
 SYSTEM = "You are a chatbot that assists with Python interview questions. numerate options in answer."
 MODEL  = 'gpt-4o'
+#record with 2 values 'Chat'  or 'Copilot'
+
 chatHistory = {}
 
 questionHistory = {}
@@ -28,6 +31,46 @@ currentQuestion = {}
 currentModel   = {}
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
+from enum import Enum
+
+class AttrDict(object):
+    def __init__(self, adict):
+        self.__dict__.update(adict)
+
+
+class dict2(dict):                                                              
+
+    def __init__(self, **kwargs):                                               
+        super(dict2, self).__init__(kwargs)                                     
+
+    def __setattr__(self, key, value):                                          
+        self[key] = value                                                       
+
+    def __dir__(self):                                                          
+        return self.keys()                                                      
+
+    def __getattr__(self, key):                                                 
+        try:                                                                    
+            return self[key]                                                    
+        except KeyError:                                                        
+            raise AttributeError(key)                                           
+
+    def __setstate__(self, state):                                              
+        pass 
+
+def d2d2(d):
+    out=dict2()
+    for k, v in d.items():
+        if type(v) in [dict]:
+            out[k]= d2d2(v)
+        else:
+            out[k]=v
+    return out
+
+
+vendors    =  d2d2({'Gpt4' : d2d2(dict(chat='Chat', copilot='Copilot'))})
+
+panels     = AttrDict(dict(vendor='VendorDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
 def get_current_conda_env():
     try:
@@ -77,6 +120,7 @@ class ResponseStreamer:
                 #pp(content)
                 if content:
                     out.append(content)
+                    #print(content, receiveing_tab_id)
                     pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
@@ -86,6 +130,8 @@ class ResponseStreamer:
 class NewChatDialog(wx.Dialog):
     def __init__(self, *args, **kwargs):
         super(NewChatDialog, self).__init__(*args, **kwargs)
+        self.vendor = wx.RadioBox(self, label="Vendor:", choices=list(vendors.keys()), majorDimension=1, style=wx.RA_SPECIFY_ROWS)
+        self.chat_type = wx.RadioBox(self, label="Gpt:", choices=list(vendors.Gpt4.values()), majorDimension=1, style=wx.RA_SPECIFY_ROWS)
 
         self.name = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.name.Bind(wx.EVT_TEXT_ENTER, self.on_enter)
@@ -94,6 +140,11 @@ class NewChatDialog(wx.Dialog):
         self.system.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        h_sizer.Add(self.vendor, flag=wx.EXPAND|wx.ALL, border=5)         
+        
+        h_sizer.Add(self.chat_type, flag=wx.EXPAND|wx.ALL, border=5) 
+        sizer.Add(h_sizer, flag=wx.EXPAND|wx.ALL, border=5)
         sizer.Add(wx.StaticText(self, label="Name:"), flag=wx.EXPAND|wx.ALL, border=5)
         sizer.Add(self.name, flag=wx.EXPAND|wx.ALL, border=5)
         sizer.Add(wx.StaticText(self, label="System:"), flag=wx.EXPAND|wx.ALL, border=5)
@@ -117,18 +168,29 @@ class NewChatDialog(wx.Dialog):
     def on_enter(self, event):
         self.EndModal(wx.ID_OK)
 class NewChat(object):
-    def __init__(self, parent):
-        pass
+    def __init__(self):
+        if 1:
+            accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
+
+            # Set the accelerator table for chatInput
+            self.SetAcceleratorTable(accel_tbl)
+
+            # Bind the event to the handler
+            self.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
     
     def OnNewChat(self, event):
         dialog = NewChatDialog(self, title="New Chat")
         if dialog.ShowModal() == wx.ID_OK:
+            vendor=dialog.vendor.GetStringSelection()
+            chat_type_str = dialog.chat_type.GetStringSelection()
+            chat_type =chat_type_str
             name = dialog.name.GetValue()
             system = dialog.system.GetValue()
             chatName = name
-            print(f"New chat name: {chatName}")
-            pub.sendMessage('log', message=f'New chat name: {chatName}')
-            pub.sendMessage('add_chat', name=chatName, system=system)
+            out=AttrDict(dict(vendor=vendor, chat_type=chat_type, name=name, system=system))
+            print(f"New chat name: {name}")
+            pub.sendMessage('log', message=f'New chat name: {name}')
+            pub.sendMessage('add_chat', chat=out)
         dialog.Destroy()        
 class GetClassName:
     def __init__(self):
@@ -170,10 +232,11 @@ class GetClassName:
         else:
             wx.MessageBox('Unable to open the clipboard', 'Error', wx.OK | wx.ICON_ERROR)
 
-class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
+class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
         GetClassName.__init__(self)
+        NewChat.__init__(self)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
         python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
@@ -224,68 +287,156 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName):
         self.AppendText(message)
         if self.IsTextInvisible():
             self.GotoPos(self.GetTextLength())
-class ChatDisplayPanel(wx.Panel, NewChat):
+
+class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent):
-        super(ChatDisplayPanel, self).__init__(parent)
-        #self.tab_id=0
-        #self.chatDisplay = chatDisplay =  wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY)
-        #self.chatDisplay = chatDisplay = StyledTextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY| wx.TE_WORDWRAP)
-        self.chatDisplay = chatDisplay = StyledTextDisplay(self)
-        
-        #chatDisplay.SetWrapMode(wx.stc.STC_WRAP_WORD)
+        StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
-        # Set the font of chatDisplay
-        chatDisplay.SetFont(font) 
+        self.SetFont(font) 
+     
 
-        #font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        pub.subscribe(self.AddChatOutput, 'chat_output')
+        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+    def AddChatOutput(self, message, tab_id):
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
+        if self.tab_id==tab_id:
+            #start_pos = self.GetLastPosition()
+            if 1: #for line in message.splitlines():
 
-        # Set the font of chatDisplay
-        #chatDisplay.SetFont(font)        
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.chatDisplay, 1, wx.EXPAND)
-        self.SetSizer(sizer) 
-        pub.subscribe(self.AddOutput, 'chat_output')
-        pub.subscribe(self.OnShowTabId, 'show_tab_id')
+                wx.CallAfter(self.AddOutput, message)
+                
+                #end_pos = self.chatDisplay.GetLastPosition()
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))        
     def OnShowTabId(self):
-        #print('My tab_id=', self.tab_id)
-        #log('My tab_id=' + str(self.tab_id))
+        print('show_tab_id', self.tab_id)
 
-        if 1:
+        if 0:
             accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
 
             # Set the accelerator table for chatInput
             self.chatDisplay.SetAcceleratorTable(accel_tbl)
 
             # Bind the event to the handler
-            self.chatDisplay.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
+            self.chatDisplay.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)               
 
-    def _OnNewChat(self, event):
-        # Code to execute when the "New" item is selected
-        dialog = wx.TextEntryDialog(self, "Enter new chat name", "New Chat")
+class Gpt4_Copilot_DisplayPanel(StyledTextDisplay):
+    def __init__(self, parent):
+        StyledTextDisplay.__init__(self,parent)
+        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
-        # Show the dialog and get the result
-        if dialog.ShowModal() == wx.ID_OK:
-            chatName = dialog.GetValue()
-            print(f"New chat name: {chatName}")
-            pub.sendMessage('log', message=f'New chat name: {chatName}')
-            pub.sendMessage('add_chat', message=chatName)
+        self.SetFont(font) 
+     
 
-        # Destroy the dialog
-        dialog.Destroy()
-
-    def AddOutput(self, message, tab_id):
-        #print(self.tab_id,tab_id, self.tab_id==tab_id, message)
+        pub.subscribe(self.AddChatOutput, 'chat_output')
+        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+    def AddChatOutput(self, message, tab_id):
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
         if self.tab_id==tab_id:
-            start_pos = self.chatDisplay.GetLastPosition()
+            #start_pos = self.GetLastPosition()
             if 1: #for line in message.splitlines():
-                #self.chatDisplay.AppendText(message)
-                #self.chatDisplay.AddOutput(message)
-                wx.CallAfter(self.chatDisplay.AddOutput, message)
+
+                wx.CallAfter(self.AddOutput, message)
                 
                 #end_pos = self.chatDisplay.GetLastPosition()
-                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))        
+    def OnShowTabId(self):
+        print('show_tab_id', self.tab_id)
+
+        if 0:
+            accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
+
+            # Set the accelerator table for chatInput
+            self.chatDisplay.SetAcceleratorTable(accel_tbl)
+
+            # Bind the event to the handler
+            self.chatDisplay.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)               
+
+                                         
+
+class Gpt4_VendorDisplayNotebookPanel(wx.Panel):
+    def __init__(self, parent, vendor_tab_id):
+        super(Gpt4_VendorDisplayNotebookPanel, self).__init__(parent)
+       
+        self.chat_notebook = wx.Notebook(self)
+        self.vendor_tab_id=vendor_tab_id
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.chat_notebook, 1, wx.EXPAND)
+        #self.chat_notebook.SetActiveTabColour(wx.RED)
+        #self.chat_notebook.SetNonActiveTabTextColour(wx.BLUE)
+        self.SetSizer(sizer)        
+    def AddTab(self, chat):
+        chat_notebook=self.chat_notebook
+        title=f'{chat.chat_type}: {chat.name}'
+        chatDisplay=None
+        if 1:
+            #pp(panels.__dict__)
+            #pp(chat.__dict__)
+            display_panel = f'Gpt4_{chat.chat_type}_{panels.chat}'
+            print('display_panel', display_panel)
+            try:
+                assert display_panel in globals()
+                cls= globals()[display_panel]
+                chatDisplay = cls (chat_notebook)
+                #chatDisplay = Gpt4_Chat_DisplayPanel(chat_notebook)
+                #self.chatDisplay.AddTab(chat)  
+                pub.sendMessage('swap_input_panel', chat=chat)
+            except AssertionError:
+                #raise AssertionError(f"Display class '{display_panel}' does not exist.")
+                raise
+        assert chatDisplay   
+        chat_notebook.AddPage(chatDisplay, title)
+        chat_notebook.SetSelection(chat_notebook.GetPageCount() - 1)  
+        
+        chat_tab_id = chat_notebook.GetPageCount() - 1
+        #self.SetTabLabelColor(chat_tab_id, wx.Colour(255, 0, 0))
+        chatDisplay.tab_id=tab_id=(self.vendor_tab_id, chat_tab_id)
+        apc.chats[tab_id]=chat
+        pub.sendMessage('set_question_tab_id', new_tab_id=tab_id)
+        self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
+        self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
+    def OnPageChanging(self, event):
+        # Code to execute when the notebook page is about to be changed
+        print("Notebook page is about to be changed")
+        # Get the index of the new tab that is about to be selected
+        oldTabIndex = event.GetSelection()
+
+        # Print the index
+        print(f"Old tab index: {oldTabIndex}")
+        #preserve the question
+        
+        pub.sendMessage('save_question_for_tab_id', message=(self.vendor_tab_id, oldTabIndex))
+        
+
+        # Continue processing the event
+        
+        event.Skip()
+
+    
+    def OnPageChanged(self, event):
+        # Code to execute when the notebook page has been changed
+        nb=event.GetEventObject()
+        newtabIndex = nb.GetSelection()
+
+        # Print the index
+        print(f"Selected tab index: {newtabIndex}")
+        tab_id=(self.vendor_tab_id, newtabIndex)
+        pub.sendMessage('restore_question_for_tab_id', message=tab_id)
+        if tab_id in apc.chats:
+            chat=apc.chats[tab_id]
+            pub.sendMessage('swap_input_panel', chat=chat)
+        # Continue processing the event
+        event.Skip()          
+
+
+
+    def get_latest_chat_tab_id(self):
+        return self.GetPageCount() - 1
+
+
+
 class LogPanel(wx.Panel):
     def __init__(self, parent):
         super(LogPanel, self).__init__(parent)
@@ -341,15 +492,16 @@ class LogPanel(wx.Panel):
             end_pos = self.logCtrl.GetLastPosition()
             self.logCtrl.SetStyle(start_pos, end_pos, wx.TextAttr(color))
     
-class MyChatInput(wx.Panel):
+class Gpt4_Chat_InputPanel(wx.Panel, NewChat):
     def __init__(self, parent):
-        global chatHistory, chatHistory, currentQuestion, currentModel
-        super(MyChatInput, self).__init__(parent)
+        global chatHistory,  currentQuestion, currentModel
+        super(Gpt4_Chat_InputPanel, self).__init__(parent)
+        NewChat.__init__(self)
         self.tabs={}
-        self.q_tab_id=0
+        self.tab_id=(0,0)
 
-        chatHistory[self.q_tab_id]=[]
-        chatHistory[self.q_tab_id]= [{"role": "system", "content": SYSTEM}]
+        chatHistory[self.tab_id]=[]
+        chatHistory[self.tab_id]= [{"role": "system", "content": SYSTEM}]
         self.askLabel = wx.StaticText(self, label='Ask chatgpt:')
         model_names = [MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -369,16 +521,16 @@ class MyChatInput(wx.Panel):
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
-        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
             q="Hey,  what is the fastest way to sort in python?"
-            self.tabs[0]=dict(q=q)
-            questionHistory[0]=[q]
-            currentQuestion[0]=0
-            currentModel[0]=MODEL
+            self.tabs[self.tab_id]=dict(q=q)
+            questionHistory[self.tab_id]=[q]
+            currentQuestion[self.tab_id]=0
+            currentModel[self.tab_id]=MODEL
 
 
-        self.inputCtrl.SetValue(self.tabs[0]['q'])
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -410,7 +562,7 @@ class MyChatInput(wx.Panel):
         self.inputCtrl.SetValue(self.tabs[message]['q'])
         
         self.model_dropdown.SetValue(currentModel[message])
-        self.q_tab_id=message
+        self.tab_id=message
         #self.q_tab_id=message
         #self.inputCtrl.SetSelection(0, -1)
         self.inputCtrl.SetFocus()
@@ -421,17 +573,18 @@ class MyChatInput(wx.Panel):
         currentModel[message]=self.model_dropdown.GetValue()
         if 0:
             d={"role": "user", "content":q}
-            if self.q_tab_id in chatHistory:
-                if d not in chatHistory[self.q_tab_id]:
-                    chatHistory[self.q_tab_id] += [{"role": "user", "content":q}]
-    def SetQuestionTabId(self, new_tab_id, system):
+            if self.tab_id in chatHistory:
+                if d not in chatHistory[self.tab_id]:
+                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+    def SetQuestionTabId(self, new_tab_id):
         global chatHistory
-        self.q_tab_id=new_tab_id
-        self.tabs[self.q_tab_id]=dict(q="Replace this with your question")
-        chatHistory[self.q_tab_id]= [{"role": "system", "content": system}]
-        questionHistory[self.q_tab_id]=[]
-        currentModel[self.q_tab_id]=MODEL
-        self.inputCtrl.SetValue(self.tabs[self.q_tab_id]['q'])
+        self.tab_id=new_tab_id
+        system=apc.chats[self.tab_id].system
+        self.tabs[self.tab_id]=dict(q="Replace this with your question")
+        chatHistory[self.tab_id]= [{"role": "system", "content": system}]
+        questionHistory[self.tab_id]=[]
+        currentModel[self.tab_id]=MODEL
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         self.inputCtrl.SetFocus()
         self.inputCtrl.SetSelection(0, -1) 
 
@@ -456,20 +609,20 @@ class MyChatInput(wx.Panel):
             pub.sendMessage('start_progress')
             
             
-            chatHistory[self.q_tab_id] += [{"role": "user", "content": prompt}]
+            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
 
-            questionHistory[self.q_tab_id].append(question)
-            currentQuestion[self.q_tab_id]=len(questionHistory[self.q_tab_id])-1
-            currentModel[self.q_tab_id]=self.model_dropdown.GetValue()
+            questionHistory[self.tab_id].append(question)
+            currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
+            currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
             header=fmt([[prompt]], ['User Question'])
             print(header)
-            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.q_tab_id)
+            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)
             #pub.sendMessage('chat_output', message=f'{prompt}\n')
             
             #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.q_tab_id, self.model_dropdown.GetValue())).start()
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
 
     def stream_response(self, prompt, chatHistory, tab_id, model):
         # Call stream_response and store the result in out
@@ -483,21 +636,202 @@ class MyChatInput(wx.Panel):
         set_status('Done.')        
 
     def PrevQuestion(self):
-        qid=currentQuestion[self.q_tab_id]
+        qid=currentQuestion[self.tab_id]
         if qid:
-            q=questionHistory[self.q_tab_id][qid-1]
+            q=questionHistory[self.tab_id][qid-1]
             self.inputCtrl.SetValue(q)
             self.inputCtrl.SetFocus()
-            currentQuestion[self.q_tab_id]=qid-1
+            currentQuestion[self.tab_id]=qid-1
         else:
             self.log('No previous question.', color=wx.RED)
     def NextQuestion(self):
-        qid=currentQuestion[self.q_tab_id]
-        if len(questionHistory[self.q_tab_id])>qid+1:
-            q=questionHistory[self.q_tab_id][qid+1]
+        qid=currentQuestion[self.tab_id]
+        if len(questionHistory[self.tab_id])>qid+1:
+            q=questionHistory[self.tab_id][qid+1]
             self.inputCtrl.SetValue(q)
             self.inputCtrl.SetFocus()
-            currentQuestion[self.q_tab_id]=qid+1
+            currentQuestion[self.tab_id]=qid+1
+        else:
+            self.log('No next question.', color=wx.RED)
+    def OnCharHook(self, event):
+        if event.ControlDown() and  event.GetKeyCode() == wx.WXK_RETURN:
+            self.AskQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_RIGHT:
+            log("Ctrl+-> pressed")
+            set_status("Ctrl+-> pressed")
+            self.NextQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_LEFT:
+            self.log("Ctrl+<- pressed")
+            set_status("Ctrl+<- pressed")
+            self.PrevQuestion()
+                       
+        else:
+            event.Skip()
+
+
+    def log(self, message, color=wx.BLUE):
+        
+        pub.sendMessage('log', message=f'{message}', color=color)
+
+class Gpt4_Copilot_InputPanel(wx.Panel, NewChat):
+    def __init__(self, parent):
+        global chatHistory,  currentQuestion, currentModel
+        super(Gpt4_Copilot_InputPanel, self).__init__(parent)
+        NewChat.__init__(self)
+        self.tabs={}
+        self.tab_id=(0,0)
+
+        chatHistory[self.tab_id]=[]
+        chatHistory[self.tab_id]= [{"role": "system", "content": SYSTEM}]
+        self.askLabel = wx.StaticText(self, label='Ask copilot:')
+        model_names = [MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
+        self.model_dropdown.SetValue(MODEL)
+        
+        self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
+
+        self.askButton = wx.Button(self, label='Ask')
+        self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
+
+
+
+        askSizer = wx.BoxSizer(wx.HORIZONTAL)
+        askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
+        askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
+  
+        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
+
+        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
+        if 1:
+            q="Hey,  what is the fastest way to sort in python?"
+            self.tabs[self.tab_id]=dict(q=q)
+            questionHistory[self.tab_id]=[q]
+            currentQuestion[self.tab_id]=0
+            currentModel[self.tab_id]=MODEL
+
+
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
+        #self.inputCtrl.SetMinSize((-1, 120))  
+        self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(self.inputCtrl, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+        self.ex=None
+        self.receiveing_tab_id=0
+
+        pub.subscribe(self.SetException, 'fix_exception')
+        pub.subscribe(self.SetQuestionTabId  , 'set_question_tab_id')
+        pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+        pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        wx.CallAfter(self.inputCtrl.SetFocus)
+    def OnModelChange(self, event):
+        # Get the selected model
+        selected_model = self.model_dropdown.GetValue()
+
+        # Print the selected model
+        print(f"Selected model: {selected_model}")
+
+        # You can add more code here to do something with the selected model
+
+        # Continue processing the event
+        event.Skip()
+
+    def RestoreQuestionForTabId(self, message):
+        global currentModel
+        self.inputCtrl.SetValue(self.tabs[message]['q'])
+        
+        self.model_dropdown.SetValue(currentModel[message])
+        self.tab_id=message
+        #self.q_tab_id=message
+        #self.inputCtrl.SetSelection(0, -1)
+        self.inputCtrl.SetFocus()
+    def SaveQuestionForTabId(self, message):
+        global currentModel
+        q=self.inputCtrl.GetValue()
+        self.tabs[message]=dict(q=q)
+        currentModel[message]=self.model_dropdown.GetValue()
+        if 0:
+            d={"role": "user", "content":q}
+            if self.tab_id in chatHistory:
+                if d not in chatHistory[self.tab_id]:
+                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+    def SetQuestionTabId(self, new_tab_id):
+        global chatHistory
+        self.tab_id=new_tab_id
+        system=apc.chats[self.tab_id].system
+        self.tabs[self.tab_id]=dict(q="Replace this with your question")
+        chatHistory[self.tab_id]= [{"role": "system", "content": system}]
+        questionHistory[self.tab_id]=[]
+        currentModel[self.tab_id]=MODEL
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
+        self.inputCtrl.SetFocus()
+        self.inputCtrl.SetSelection(0, -1) 
+
+    def SetException(self, message):
+        self.ex=message
+    def onAskButton(self, event):
+        # Code to execute when the Ask button is clicked
+        print('Ask button clicked')
+        self.AskQuestion()
+    def AskQuestion(self):
+        global chatHistory, questionHistory, currentQuestion,currentModel
+        # Get the content of the StyledTextCtrl
+        #print('current tab_id', self.q_tab_id)
+        pub.sendMessage('show_tab_id')
+        
+        question = self.inputCtrl.GetValue()
+        if not question:
+            self.log('There is no question!', color=wx.RED)
+        else:
+            prompt = self.inputCtrl.GetValue()
+            self.log(f'Asking: {prompt}')
+            pub.sendMessage('start_progress')
+            
+            
+            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+
+            questionHistory[self.tab_id].append(question)
+            currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
+            currentModel[self.tab_id]=self.model_dropdown.GetValue()
+
+
+            header=fmt([[prompt]], ['User Question'])
+            print(header)
+            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)
+            #pub.sendMessage('chat_output', message=f'{prompt}\n')
+            
+            #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
+
+    def stream_response(self, prompt, chatHistory, tab_id, model):
+        # Call stream_response and store the result in out
+        self.receiveing_tab_id=tab_id
+        rs=ResponseStreamer()
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        if out:
+            chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+        pub.sendMessage('stop_progress')
+        log('Done.')
+        set_status('Done.')        
+
+    def PrevQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if qid:
+            q=questionHistory[self.tab_id][qid-1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid-1
+        else:
+            self.log('No previous question.', color=wx.RED)
+    def NextQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if len(questionHistory[self.tab_id])>qid+1:
+            q=questionHistory[self.tab_id][qid+1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid+1
         else:
             self.log('No next question.', color=wx.RED)
     def OnCharHook(self, event):
@@ -521,10 +855,12 @@ class MyChatInput(wx.Panel):
         pub.sendMessage('log', message=f'{message}', color=color)
 
 
-class ChatNotebook(wx.Notebook):
-    def __init__(self, parent):
-        super().__init__(parent)        
-        self.AddTab('Python Sort', SYSTEM)
+class VendorNotebook(wx.Notebook):
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.NB_LEFT, name=wx.NotebookNameStr):
+        super().__init__(parent, id, pos, size, style, name)      
+        
+        chat=apc.default_chat 
+        self.AddTab(chat)
         pub.subscribe(self.AddTab, 'add_chat')
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
@@ -538,7 +874,7 @@ class ChatNotebook(wx.Notebook):
         print(f"Old tab index: {oldTabIndex}")
         #preserve the question
         
-        pub.sendMessage('save_question_for_tab_id', message=oldTabIndex)
+        pub.sendMessage('vendor_tab_changing', message=oldTabIndex)
         # Continue processing the event
         
         event.Skip()
@@ -550,43 +886,78 @@ class ChatNotebook(wx.Notebook):
 
         # Print the index
         print(f"Selected tab index: {tabIndex}")
-        pub.sendMessage('restore_question_for_tab_id', message=tabIndex)
+        pub.sendMessage('vendor_tab_changed', message=tabIndex)
 
         # Continue processing the event
         event.Skip()       
 
 
-    def AddTab(self, name, system):
-        title=name
-        chatDisplayPanel = wx.Panel(self)
-        self.chatDisplay = ChatDisplayPanel (chatDisplayPanel)
-        # Add the chat display to the panel
-        chatDisplaySizer = wx.BoxSizer(wx.VERTICAL)
-        chatDisplaySizer.Add(self.chatDisplay, 1, wx.EXPAND)
-        chatDisplayPanel.SetSizer(chatDisplaySizer)
-
-        # Add the panel to the notebook
-        self.AddPage(chatDisplayPanel, title)
-        self.SetSelection(self.GetPageCount() - 1)  
-        tab_id=self.GetPageCount() - 1
-        pub.sendMessage('set_question_tab_id', new_tab_id=tab_id , system=system)
-        self.chatDisplay.tab_id=tab_id
+    def PageExists(self, title):
+        for index in range(self.GetPageCount()):
+            if self.GetPageText(index) == title:
+                return index
+        return -1
+    def AddTab(self,  chat):
         
-class MyChatPanel(wx.Panel,NewChat):
+        title=f'{chat.vendor}'
+
+        existing_page_index = self.PageExists(title)
+        if existing_page_index != -1:
+            print(f"Vendor Page '{title}' already exists")
+            self.SetSelection(existing_page_index)
+            page=self.GetPage(existing_page_index)
+
+            page.AddTab(chat)
+        else:
+
+            #Gpt4_VendorDisplayNotebookPanel
+            #Gpt4_VendorDisplayNotebookPanel
+            #chatDisplayPanel = wx.Panel(self)
+            #pp(panels.__dict__)
+            #pp(chat.__dict__)
+            display_panel = f'{chat.vendor}_{panels.vendor}'
+            print('display_panel', display_panel)
+            try:
+                assert display_panel in globals().keys()
+                cls= globals()[display_panel]
+                self.chatDisplay = cls (self, self.GetPageCount())
+                self.chatDisplay.AddTab(chat)  
+                            
+            except AssertionError:
+                pp(globals().keys())
+                #raise AssertionError(f"Display class '{display_panel}' does not exist.")
+                raise
+
+            # Add the chat display to the panel
+            #chatDisplaySizer = wx.BoxSizer(wx.VERTICAL)
+            #chatDisplaySizer.Add(self.chatDisplay, 1, wx.EXPAND)
+            #chatDisplayPanel.SetSizer(chatDisplaySizer)
+
+            # Add the panel to the notebook
+            self.AddPage(self.chatDisplay, title)
+            self.SetSelection(self.GetPageCount() - 1)  
+            vendor_tab_id=self.GetPageCount() - 1
+
+        
+class WorkspacePanel(wx.Panel,NewChat):
     def __init__(self, parent):
-        super(MyChatPanel, self).__init__(parent)
+        super(WorkspacePanel, self).__init__(parent)
         self.h_splitter = h_splitter=wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
         self.v_splitter = v_splitter= wx.SplitterWindow(h_splitter, style=wx.SP_LIVE_UPDATE)
         #self.splitter.SetMinimumPaneSize(20)        
-
-        self.notebook = ChatNotebook(h_splitter)
+        apc.default_chat=chat=AttrDict(dict(vendor='Gpt4', chat_type='Chat', name='Python Sort', system=SYSTEM))  
+        self.vendor_notebook = VendorNotebook(h_splitter)
         #self.askButton.Disable() 
-        self.chatInput = MyChatInput(v_splitter)
+        self.chatInput = Gpt4_Chat_InputPanel(v_splitter)
+        self.chatInputs={}
+        self.chatInputs[(chat.vendor, chat.chat_type)]=self.chatInput
+
+                
         self.chatInput.SetMinSize((300, 200)) 
         
         self.logPanel = LogPanel(v_splitter)
         self.v_splitter.SplitVertically(self.chatInput, self.logPanel)
-        self.h_splitter.SplitHorizontally(self.notebook, v_splitter)
+        self.h_splitter.SplitHorizontally(self.vendor_notebook, v_splitter)
         #self.h_splitter.SetSashPosition(500)
         sizer = wx.BoxSizer(wx.VERTICAL)
         #sizer.Add(self.notebook, 1, wx.EXPAND|wx.ALL)
@@ -595,16 +966,33 @@ class MyChatPanel(wx.Panel,NewChat):
         sizer.Add(h_sizer, 1, wx.EXPAND|wx.ALL)
         self.SetSizer(sizer)
         self.v_splitter.SetMinimumPaneSize(200)
-        if 1:
-            accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
 
-            # Set the accelerator table for chatInput
-            self.chatInput.SetAcceleratorTable(accel_tbl)
-
-            # Bind the event to the handler
-            self.chatInput.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
         self.chatInput.SetFocus()
         self.Bind(wx.EVT_SIZE, self.OnResize)
+        pub.subscribe(self.SwapInputPanel, 'swap_input_panel')
+
+    def SwapInputPanel(self, chat):
+        #parent = self.GetParent()
+        print('SwapInputPanel', chat.chat_type)
+        v_splitter = self.v_splitter
+        #old_chat_input = self.chatInput
+        v_splitter.Unsplit(self.chatInput)
+        input_id=(chat.vendor, chat.chat_type)
+        
+            
+        if input_id in self.chatInputs:
+            self.chatInput=self.chatInputs[input_id]
+        else:
+            if chat.chat_type == 'Chat':
+                self.chatInput = Gpt4_Chat_InputPanel(v_splitter)
+            else:
+                self.chatInput = Gpt4_Copilot_InputPanel(v_splitter)
+            self.chatInputs[input_id]=self.chatInput
+        print('SwapInputPanel', self.chatInputs.keys())
+        v_splitter.SplitVertically(self.chatInput, self.logPanel)
+        self.chatInput.SetFocus()
+        #old_chat_input.Destroy()
+
     def OnResize(self, event):
         #print('OnResize')
         # Adjust the sash position to keep the vertical splitter size constant
@@ -617,9 +1005,9 @@ class MyChatPanel(wx.Panel,NewChat):
 class MyFrame(wx.Frame, NewChat):
     def __init__(self, title):
         super(MyFrame, self).__init__(None, title=title, size=(800, 800))
-
+        apc.chats={}
         
-        self.mychat = MyChatPanel(self)
+        self.mychat = WorkspacePanel(self)
         #self.mychat.SetMinSize((300, -1))
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.mychat, 1, wx.EXPAND|wx.ALL)

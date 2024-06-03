@@ -50,6 +50,11 @@ def d2d2(d):
             out[k]=v
     return out
 
+class AttrDict(object):
+    def __init__(self, adict):
+        self.__dict__.update(adict)
+
+
 
 
 templates = d2d2(dict(Chat={}, Copilot={}))
@@ -66,6 +71,8 @@ with open('template/Python/Gpt4/Copilot/default.Python.Gpt4.Copilot.yaml', 'r') 
 templates.update(copilot_templates['templates'])
 templates=d2d2(templates)
 
+apc.default_copilot = AttrDict(dict(vendor='Gpt4', chat_type='Copilot', name='Py DEV', system=templates.Copilot[default_copilot_template])) 
+apc.default_chat = AttrDict(dict(vendor='Gpt4', chat_type='Chat', name='Python') )
 
 #e()
 if 0:
@@ -138,15 +145,12 @@ from enum import Enum
 
 fn='_wx_test.py'
 fn=__file__ 
-class AttrDict(object):
-    def __init__(self, adict):
-        self.__dict__.update(adict)
-
 
 
 vendors    =  d2d2({'Gpt4' : d2d2(dict(chat='Chat', copilot='Copilot'))})
-
-panels     = AttrDict(dict(vendor='VendorDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
+workspaces    =  d2d2({'Oracle':{'Gpt4' : d2d2(dict(chat='Chat', copilot='Copilot'))}})
+apc.default_workspace = d2d2(dict(workspace='Oracle', vendor='Gpt4', chat='Chat', copilot='Copilot'))
+panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
 def get_current_conda_env():
     try:
@@ -676,9 +680,9 @@ class Gpt4_Copilot_DisplayPanel(wx.Panel):
 
                                          
 
-class Gpt4_VendorDisplayNotebookPanel(wx.Panel):
+class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id):
-        super(Gpt4_VendorDisplayNotebookPanel, self).__init__(parent)
+        super(Gpt4_ChatDisplayNotebookPanel, self).__init__(parent)
        
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
         self.vendor_tab_id=vendor_tab_id
@@ -686,7 +690,31 @@ class Gpt4_VendorDisplayNotebookPanel(wx.Panel):
         sizer.Add(self.chat_notebook, 1, wx.EXPAND)
         #self.chat_notebook.SetActiveTabColour(wx.RED)
         #self.chat_notebook.SetNonActiveTabTextColour(wx.BLUE)
-        self.SetSizer(sizer)        
+        self.SetSizer(sizer)    
+        self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        
+    def OnMouseMotion(self, event):
+        # Get the mouse position
+        position = event.GetPosition()
+        # Get the tab index under the mouse position
+        #print(self.notebook.HitTest(position))
+        tab_index, _= self.chat_notebook.HitTest(position)
+
+        #print(tab_index)
+        # If the mouse is over a tab
+        if tab_index >= 0:
+            # Get the tab text
+            tab_text = self.chat_notebook.GetPageText(tab_index)
+            # Set the tab tooltip
+            tt=self.GetToolTipText()
+            self.chat_notebook.SetToolTip(f'{tt}/{tab_text}')
+        else:
+            self.chat_notebook.SetToolTip(None)
+        event.Skip()
+    def GetToolTipText(self):
+        return f'{apc.default_workspace.workspace}/{apc.default_workspace.vendor}'
+        
+
     def AddTab(self, chat):
         chat_notebook=self.chat_notebook
         title=f'{chat.chat_type}: {chat.name}'
@@ -1319,6 +1347,8 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
 
 
 
+
+#GPT4 Vendor Display Panel
 class VendorNotebook(wx.Notebook):
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.NB_LEFT, name=wx.NotebookNameStr):
         super().__init__(parent, id, pos, size, style, name)      
@@ -1328,17 +1358,33 @@ class VendorNotebook(wx.Notebook):
         pub.subscribe(self.AddTab, 'add_chat')
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
- 
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         pub.subscribe(self.AddDefaultTabs, 'add_default_tabs')
+    def OnMouseMotion(self, event):
+        # Get the mouse position
+        position = event.GetPosition()
+        # Get the tab index under the mouse position
+        tab_index, _ = self.HitTest(position)
+
+        #print(tab_index)
+        # If the mouse is over a tab
+        if tab_index >= 0:
+            # Get the tab text
+            tab_text = self.GetPageText(tab_index)
+            # Set the tab tooltip
+            tt=self.GetToolTipText()
+            self.SetToolTip(f'{tt}/{tab_text}')
+        else:
+            self.SetToolTip(None)
+        event.Skip()
+    def GetToolTipText(self):
+        return f'{apc.default_workspace.workspace}'
     def AddDefaultTabs(self):
         if 1:
-            chat=apc.default_chat 
-            self.AddTab(chat)
+            self.AddTab(apc.default_chat)
         
         if 1:
-            chat=default_copilot=AttrDict(dict(vendor='Gpt4', chat_type='Copilot', name='Py DEV', system=templates.Copilot[default_copilot_template])) 
-            #chat=apc.default_copilot
-            self.AddTab(default_copilot)                             
+            self.AddTab(apc.default_copilot)                             
     def OnPageChanging(self, event):
         # Code to execute when the notebook page is about to be changed
         print("Notebook page is about to be changed")
@@ -1410,18 +1456,20 @@ class VendorNotebook(wx.Notebook):
             self.SetSelection(self.GetPageCount() - 1)  
             vendor_tab_id=self.GetPageCount() - 1
 
-        
+   
+
 class WorkspacePanel(wx.Panel,NewChat):
     def __init__(self, parent):
         super(WorkspacePanel, self).__init__(parent)
         self.h_splitter = h_splitter=wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
         self.v_splitter = v_splitter= wx.SplitterWindow(h_splitter, style=wx.SP_LIVE_UPDATE)
         #self.splitter.SetMinimumPaneSize(20)        
-        apc.default_chat=chat=AttrDict(dict(vendor='Gpt4', chat_type='Chat', name='Python') ) 
+         
         
         self.vendor_notebook = VendorNotebook(h_splitter)
         #self.askButton.Disable()
         self.chatInputs={} 
+        chat=apc.default_chat
         self.SwapInputPanel(chat, (0,0), resplit=False)
         
         if 0:
@@ -1488,15 +1536,51 @@ class WorkspacePanel(wx.Panel,NewChat):
     def SetInputFocus(self):
         self.chatInput.SetFocus()
 
+class Workspace(wx.Panel):
+    def __init__(self, parent):
+        super(Workspace, self).__init__(parent)
+        # Create a notebook
+        self.notebook = wx.Notebook(self)
 
+        # Add vendor panel to the notebook
+        self.workspace_panel = WorkspacePanel(self.notebook)
+        self.notebook.AddPage(self.workspace_panel, "Oracle")
 
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.notebook, 1, wx.EXPAND)
+        self.SetSizer(sizer)   
+
+        self.notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        
+    def OnMouseMotion(self, event):
+        # Get the mouse position
+        position = event.GetPosition()
+        # Get the tab index under the mouse position
+        #print(self.notebook.HitTest(position))
+        tab_index, _= self.notebook.HitTest(position)
+
+        #print(tab_index)
+        # If the mouse is over a tab
+        if tab_index >= 0:
+            # Get the tab text
+            tab_text = self.notebook.GetPageText(tab_index)
+            # Set the tab tooltip
+            
+            self.notebook.SetToolTip(f'{tab_text} Workspace')
+        else:
+            self.notebook.SetToolTip(None)
+        event.Skip()
+    def GetToolTipText(self):
+        #return f'{apc.default_workspace.workspace}'
+        pass
+    
 class MyFrame(wx.Frame, NewChat):
     def __init__(self, title):
         global apc
         super(MyFrame, self).__init__(None, title=title, size=(800, 800))
         apc.chats={}
         apc.chat_panels={}
-        self.workspace = apc.workspace = WorkspacePanel(self)
+        self.workspace = apc.workspace = Workspace(self)
         
         #self.mychat.SetMinSize((300, -1))
         sizer = wx.BoxSizer(wx.HORIZONTAL)

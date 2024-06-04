@@ -1671,7 +1671,7 @@ class MyFrame(wx.Frame, NewChat):
         sizer.Add(h_sizer, 1, flag=wx.EXPAND)
         # Set the sizer to the dialog
         dialog.SetSizer(sizer)
-        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}_Art_1.jpg'), wx.BITMAP_TYPE_JPEG)
+        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}Copilot_Art_1.jpg'), wx.BITMAP_TYPE_JPEG)
         image_width = image.GetWidth()
         image_height = image.GetHeight()
         dialog_width, dialog_height = dialog.GetSize()
@@ -1698,14 +1698,14 @@ class MyFrame(wx.Frame, NewChat):
 
     def OnButton1(self, static_bitmap):
         # Load the second image
-        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}_Art_1.jpg'), wx.BITMAP_TYPE_JPEG)
+        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}Copilot_Art_1.jpg'), wx.BITMAP_TYPE_JPEG)
 
         # Resize and display the image
         self.ResizeAndDisplayImage(static_bitmap, image)
 
     def OnButton2(self, static_bitmap):
         # Load the second image
-        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}_Art_2.jpg'), wx.BITMAP_TYPE_JPEG)
+        image = wx.Image(join('Art',f'{apc.default_workspace.workspace}Copilot_Art_2.jpg'), wx.BITMAP_TYPE_JPEG)
 
         # Resize and display the image
         self.ResizeAndDisplayImage(static_bitmap, image)

@@ -97,7 +97,8 @@ all_chats=dict2()
 all_system_templates=dict2()
 # Load the YAML using the custom loader
 for yfn in yaml_files:
-    if yfn.startswith('_'):
+    bn=os.path.basename(yfn)
+    if bn.startswith('_'):
         continue
     with open(yfn, 'r') as file:
         print(f'Loading template {yfn}...')
@@ -1061,6 +1062,10 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
             currentQuestion[self.tab_id]=0
             currentModel[self.tab_id]=DEFAULT_MODEL
 
+            chat=apc.chats[tab_id]
+            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+         
+
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
@@ -1073,16 +1078,17 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         self.receiveing_tab_id=0
 
         pub.subscribe(self.SetException, 'fix_exception')
-        #pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
-        self.askLabel.SetLabel(f'Ask copilot {tab_id}:')
-    def _SetChatDefaults(self, tab_id):
+        self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
+    def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:
+            assert self.chat_type==tab_id[1]
             
             #pp(apc.chats[tab_id])
             #e()
@@ -1125,7 +1131,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
             #self.q_tab_id=message
             #self.inputCtrl.SetSelection(0, -1)
             self.inputCtrl.SetFocus()
-    def SaveQuestionForTabId(self, message):
+    def _SaveQuestionForTabId(self, message):
         global currentModel
         q=self.inputCtrl.GetValue()
         self.tabs[message]=dict(q=q)
@@ -1149,6 +1155,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         #print('current tab_id', self.q_tab_id)
         
         #pub.sendMessage('show_tab_id')
+        #pp(chatHistory)
         self.Base_OnAskQuestion()           
         question = self.inputCtrl.GetValue()
         if not question:
@@ -1236,6 +1243,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
         self.tabs={}
         self.tab_id=tab_id
         chat=   apc.chats[tab_id]
+        self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
         chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
@@ -1265,7 +1273,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
             currentModel[self.tab_id]=DEFAULT_MODEL
-
+            chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
@@ -1279,7 +1287,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
 
         #pub.subscribe(self.SetException, 'fix_exception')
         pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
-        pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
     def SetTabId(self, tab_id):
@@ -1288,6 +1296,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:
+            assert self.chat_type==tab_id[1]
             chat=apc.chats[tab_id]
   
 
@@ -1318,7 +1327,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
             #self.q_tab_id=message
             #self.inputCtrl.SetSelection(0, -1)
             self.inputCtrl.SetFocus()
-    def SaveQuestionForTabId(self, message):
+    def _SaveQuestionForTabId(self, message):
         global currentModel
         q=self.inputCtrl.GetValue()
         self.tabs[message]=dict(q=q)

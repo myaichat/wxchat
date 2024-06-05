@@ -97,6 +97,8 @@ all_chats=dict2()
 all_system_templates=dict2()
 # Load the YAML using the custom loader
 for yfn in yaml_files:
+    if yfn.startswith('_'):
+        continue
     with open(yfn, 'r') as file:
         print(f'Loading template {yfn}...')
         data = yaml.load(file, Loader=MyLoader)

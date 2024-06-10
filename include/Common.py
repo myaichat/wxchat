@@ -1,5 +1,7 @@
 import wx
 from pubsub import pub
+from include.fmt import fmt
+from pprint import pprint as pp 
 import include.config.init_config as init_config 
 apc = init_config.apc
 
@@ -38,7 +40,15 @@ class AttrDict(object):
     def __init__(self, adict):
         self.__dict__.update(adict)
 
-
+def log(message, color=None):
+    pub.sendMessage('log', message=message, color=color)
+def set_status(message):
+    pub.sendMessage('set_status', message=message)
+def format_stacktrace():
+    parts = ["Traceback (most recent call last):\n"]
+    parts.extend(traceback.format_stack(limit=25))
+    parts.extend(traceback.format_exception(*sys.exc_info())[1:])
+    return "".join(parts)
 
 class NewChat(object):
     def __init__(self):

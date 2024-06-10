@@ -15,11 +15,29 @@ templates:
     Copilot:
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
+      name: 'test'
+      system: SYSTEM_CHATTY
+      question:  |
+        What is shown in this image? Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind
+      default_file: 'Art/0_2.jpg'
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
       name: 'Phi-3-vision-128k-instruct'
       system: SYSTEM_CHATTY
-      question: 'Describe this image'
-      default_file: 'Art/0_2.jpg'
-
+      question:  |
+        What is shown in this image? Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with general questions about Oracle. numerate options in answer."
@@ -57,6 +75,8 @@ templates:
         Code to fix: {params.code}
         Question: "{params.input}"
         Answer:
+      DESCRIBE_IMAGE: |
+        <|image_1|>\n{params.input}        
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

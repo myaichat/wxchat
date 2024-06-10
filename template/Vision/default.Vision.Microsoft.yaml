@@ -17,8 +17,8 @@ templates:
       chat_type: 'Copilot'
       name: 'Phi-3-vision-128k-instruct'
       system: SYSTEM_CHATTY
-      question: 'Describe this image?'
-      default_file: 'docs\demo.plsql'
+      question: 'Describe this image'
+      default_file: 'Art/0_2.jpg'
 
   System:
     Chat:

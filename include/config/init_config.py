@@ -1,6 +1,11 @@
 from include.config.AppConfig import AppConfig
 
-def init(**kwargs):
-	global apc
+# Initialize the AppConfig instance or any other relevant configuration here
+apc = AppConfig()
 
-	apc = AppConfig(**kwargs)
+# You might have an initialization function like this
+def init(**kwargs):
+    global apc
+    # Initialize apc with necessary parameters
+    apc.init(**kwargs)
+    # Additional setup if needed

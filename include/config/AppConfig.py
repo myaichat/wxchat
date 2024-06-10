@@ -28,15 +28,17 @@ class Counter(object):
 		
 
 class AppConfig(Config): 
-	def __init__(self, **kwargs):
-		Config.__init__(self,**kwargs)
+	def __init__(self):
+		
 		self.gid=0
 		self.cntr = Counter()
+		self.all={}
+	def init(self, **kwargs):
+		Config.__init__(self,**kwargs)
 		if 0:
 			self.kwargs=kwargs
 			self.ui_layout=kwargs['ui_layout']
-			self.params=params=kwargs['params']
-		self.all={}
+
 	def get_gid(self, obj):
 		self.gid += 1
 		self.all[self.gid] = obj

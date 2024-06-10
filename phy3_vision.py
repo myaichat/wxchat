@@ -17,7 +17,7 @@ init_config.init(**{})
 apc = init_config.apc
 apc.pause_output = {}
 apc.stop_output = {}
-DEFAULT_MODEL  = 'gpt-4o'
+DEFAULT_MODEL  = "microsoft/Phi-3-vision-128k-instruct"
 
 
 apc.chatHistory = chatHistory={}
@@ -156,44 +156,37 @@ def format_stacktrace():
     return "".join(parts)
 
 class VisionResponseStreamer:
-    def __init__(self):
+    def __init__(self, model_id):
         # Set your OpenAI API key here
-        
+        from transformers import AutoModelForCausalLM 
+        from transformers import AutoProcessor 
 
         # Initialize the client
-        pass
+        self.model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cuda", trust_remote_code=True, torch_dtype="auto", _attn_implementation='flash_attention_2') # use _attn_implementation='eager' to disable flash attention
+
+        self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True) 
 
     def stream_response(self, prompt, chatHistory, receiveing_tab_id, model_id, image_path):
         # Create a chat completion request with streaming enabled
         #pp(chatHistory)
         from PIL import Image 
         import requests 
-        from transformers import AutoModelForCausalLM 
-        from transformers import AutoProcessor 
+
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
 
         #model_id = chat.model_id
-
-        model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cuda", trust_remote_code=True, torch_dtype="auto", _attn_implementation='flash_attention_2') # use _attn_implementation='eager' to disable flash attention
-
-        processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True) 
-
-        messages = [ 
-            {"role": "user", "content": "<|image_1|>\nWhat is shown in this image?"}, 
-            {"role": "assistant", "content": 'The image depicts a scene of conflict or war. A person is holding a Ukrainian flag aloft, suggesting a theme of nationalism or resistance. The individual is equipped with a rifle and is surrounded by a group of soldiers, some of whom are engaged in combat, and others are in the background. The setting appears to be a battlefield with a desolate landscape, and the weather is overcast, contributing to the somber atmosphere of the scene.'},
-            {"role": "user", "content": "add ukrainian essence to the image and show updated description. "}, 
-            {"role": "assistant", "content": "The image has been updated to include a Ukrainian flag, which now flutters in the wind, adding a sense of national pride and identity to the scene. The flag's vibrant colors contrast with the otherwise muted tones of the battlefield. The updated description reflects the presence of the flag and its significance in the context of the image."},
-            {"role": "user", "content": 'Show full upated description.'},
-        ] 
-
-        messages = [{"role": "user", "content": "<|image_1|>\nWhat is shown in this image? Be as detailed and as artistic as possible"}]
+    
+        model, processor = self.model, self.processor
 
         messages = [{"role": "user", "content": prompt}]
         fn = image_path
         image = Image.open(fn)
 
-        prompt = processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        #prompt = processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        #chat history
+        prompt = processor.tokenizer.apply_chat_template(chatHistory, tokenize=False, add_generation_prompt=True)
+        
         out = []
         try:
             
@@ -202,7 +195,7 @@ class VisionResponseStreamer:
             inputs = processor(prompt, [image], return_tensors="pt").to("cuda:0") 
 
             generation_args = { 
-                "max_new_tokens": 1500, 
+                "max_new_tokens": 4026 *2, #32064, 
                 "temperature": 1, 
                 "do_sample": False, 
             } 
@@ -437,7 +430,7 @@ class MyNotebookImagePanel(wx.Panel):
         self.canvasCtrl = wx.Panel(notebook)
 
         apc.canvas = self.canvasCtrl
-        
+        self.static_bitmap = None
         #self.Bind(wx.EVT_SIZE, self.OnResize)
         self.image_path = None
         chat = apc.chats[tab_id]
@@ -459,12 +452,22 @@ class MyNotebookImagePanel(wx.Panel):
         # This method will be used to load and display an image on the canvas
         self.image_path = file_path
         self.DisplayImageOnCanvas(file_path)
-
+        self.update_notebook_tab_label(file_path)
+    def update_notebook_tab_label(self, file_path):
+        # Update the notebook tab label to the new file name
+        file_name = os.path.basename(file_path)
+        notebook = self.notebook
+        
+        # Find the tab with the canvas and update its label
+        for i in range(notebook.GetPageCount()):
+            if notebook.GetPage(i) == self.canvasCtrl:
+                notebook.SetPageText(i, file_name)
+                break
         
     def DisplayImageOnCanvas(self, image_path):
         # Load the image
-        if hasattr(self, 'static_bitmap'):
-            self.static_bitmap.Destroy()        
+        if hasattr(self, 'static_bitmap') and self.static_bitmap:
+            self.static_bitmap.Destroy()      
         image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
         
         # Get the top-level window size
@@ -1073,7 +1076,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         chat=   apc.chats[tab_id]
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
-        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
+        #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask Phy-3 {tab_id}:')
         if 0:
             model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
@@ -1104,7 +1107,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             currentQuestion[self.tab_id]=0
             currentModel[self.tab_id]=DEFAULT_MODEL
 
-            chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+            #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
@@ -1121,6 +1124,9 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+        if  not  hasattr(apc, 'vrs'):
+            apc.vrs=VisionResponseStreamer(DEFAULT_MODEL)
+        
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask Phy-3 {tab_id}:')
@@ -1132,9 +1138,10 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
   
 
             self.tabs[self.tab_id]=dict(q=chat.question)
-            chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+            #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL        
+            currentModel[self.tab_id]=DEFAULT_MODEL 
+            chatHistory[self.tab_id]=[]       
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
@@ -1194,10 +1201,13 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 #print(888, chatDisplay.__class__.__name__)
                 #code='print(1223)'
                 chat=apc.chats[self.tab_id]
+                chat=apc.chats[self.tab_id]
+
                 #question=question.replace('\n', ' ')
                 prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.DESCRIBE_IMAGE, dict2(input=question))
                 pp(prompt)
-                chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+                payload =[{"role": "user", "content": prompt}] 
+
 
                 questionHistory[self.tab_id].append(question)
                 currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
@@ -1209,7 +1219,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 # DO NOT REMOVE THIS LINE
                 from os.path import basename
                 bn=basename(image_path)
-                header=fmt([[f'User Question']],[])
+                header=fmt([[f'User Question|Hist:{chat.history}']],[])
                 print(f'\nFile: {bn}\n')
                 print(header)
                 print(question)
@@ -1217,16 +1227,22 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
                 
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-                threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, chat.model_id,image_path)).start()
+                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, chat.model_id,image_path, chat.history)).start()
         except Exception as e:
             print(format_stacktrace())
             self.log(f'Error: {format_stacktrace()}', color=wx.RED)
             pub.sendMessage('stop_progress')
-    def stream_response(self, prompt, chatHistory, tab_id, model, image_path):
+    def stream_response(self, prompt, payload, tab_id, model, image_path, keep_history):
         # Call stream_response and store the result in out
+        global chatHistory, questionHistory, currentQuestion,currentModel
         self.receiveing_tab_id=tab_id
-        rs=VisionResponseStreamer()
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model,image_path)
+        
+        print(1111, keep_history)
+        chatHistory[self.tab_id] += payload
+        if keep_history:
+            payload=chatHistory[self.tab_id]
+
+        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, model,image_path)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
         pub.sendMessage('stop_progress')

@@ -15,7 +15,8 @@ templates:
     Copilot:
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
-      name: 'test'
+      name: 'Hist'
+      history: true
       system: SYSTEM_CHATTY
       question:  |
         What is shown in this image? Provide a detailed and artistically 
@@ -26,6 +27,20 @@ templates:
         the image to life in the reader's mind
       default_file: 'Art/0_2.jpg'
       model_id: "microsoft/Phi-3-vision-128k-instruct" 
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'no-Hist'
+      history: false
+      system: SYSTEM_CHATTY
+      question:  |
+        What is shown in this image? Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind
+      default_file: 'Art/0_2.jpg'
+      model_id: "microsoft/Phi-3-vision-128k-instruct"       
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'Phi-3-vision-128k-instruct'

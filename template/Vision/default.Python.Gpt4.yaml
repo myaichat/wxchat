@@ -22,7 +22,7 @@ templates:
       name: 'Python Copilot'
       system: SYSTEM_CHATTY
       question: 'What can I improve in this Python code?'
-      default_file: '3vis.py'
+      default_file: 'phy3_vision.py'
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with General questions. numerate options in answer."

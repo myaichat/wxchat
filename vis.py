@@ -63,11 +63,11 @@ class AttrDict(object):
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
-dir_path = 'template\\Gpt4'
+dir_path = 'template'
 
 # list all files in the directory
 # list all .yaml files in the directory
-yaml_files = glob.glob(f'{dir_path}\\*.yaml')
+yaml_files = glob.glob(f'{dir_path}\\*\\*.yaml')
 
 #pp(yaml_files)
 
@@ -97,15 +97,18 @@ all_chats=dict2()
 all_system_templates=dict2()
 # Load the YAML using the custom loader
 for yfn in yaml_files:
+    #print(f'Loading template {yfn}...')
     bn=os.path.basename(yfn)
-    if bn.startswith('_'):
+    if '__' in yfn:
         continue
     with open(yfn, 'r') as file:
-        print(f'Loading template {yfn}...')
+        print(f'Processing template {yfn}...')
         data = yaml.load(file, Loader=MyLoader)
 
         all_templates[data.templates.workspace.name]=data
-        all_chats[data.templates.workspace.name] =data.templates.tabs.Chat + data.templates.tabs.Copilot
+        all_chats[data.templates.workspace.name]=[]
+        for tab in data.templates.tabs:
+            all_chats[data.templates.workspace.name] +=data.templates.tabs[tab]
         for ch in all_chats[data.templates.workspace.name]:
             ch.workspace=data.templates.workspace.name
         all_system_templates[data.templates.workspace.name]=data.templates.System
@@ -455,7 +458,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
                 self.GotoPos(self.GetTextLength())
 
         
-class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
+class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent, tab_id, chat):
         StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -645,7 +648,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
 
 
-class _Gpt4_Copilot_DisplayPanel(StyledTextDisplay):
+class Copilot_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent, tab_id):
         StyledTextDisplay.__init__(self,parent)
         
@@ -680,9 +683,9 @@ class _Gpt4_Copilot_DisplayPanel(StyledTextDisplay):
           
 
 
-class Gpt4_Copilot_DisplayPanel(wx.Panel):
+class Microsoft_Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(Gpt4_Copilot_DisplayPanel, self).__init__(parent)
+        super(Microsoft_Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -693,7 +696,7 @@ class Gpt4_Copilot_DisplayPanel(wx.Panel):
         self.notebook_panel=notebook_panel = MyNotebookCodePanel(self.copilot_splitter, tab_id)
         notebook_panel.SetMinSize((-1, 50))
         #notebook_panel.SetMinSize((800, -1))
-        self.chatPanel = _Gpt4_Copilot_DisplayPanel(self.copilot_splitter, tab_id)
+        self.chatPanel = Copilot_DisplayPanel(self.copilot_splitter, tab_id)
         self.chatPanel.SetMinSize((-1, 50))
 
         # Add notebook panel and log panel to the splitter window
@@ -720,9 +723,9 @@ class Gpt4_Copilot_DisplayPanel(wx.Panel):
 
                                          
 
-class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
+class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Gpt4_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Microsoft_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -813,15 +816,20 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
         if 1:
             #pp(panels.__dict__)
             #pp(chat.__dict__)
-            display_panel = f'Gpt4_{chat.chat_type}_{panels.chat}'
+            display_panel = f'{chat.vendor}_{chat.chat_type}_{panels.chat}'
             #print('display_panel', display_panel)
             try:
-                assert display_panel in globals()
+                assert display_panel in globals(), display_panel
                 print(f'\t\tAdding {chat.workspace} "{chat.chat_type}" panel:', display_panel)
                 cls= globals()[display_panel]
                 # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-                chatDisplay = cls (chat_notebook, tab_id=tab_id, chat=chat)
-                #chatDisplay.SetFocus()
+                try:
+                    chatDisplay = cls (chat_notebook, tab_id=tab_id, chat=chat)
+                    #chatDisplay.SetFocus()
+                except:
+                    print(format_stacktrace())
+                    print(f'Error in {display_panel} class')
+                    e(1)
                 if 1:
                     pub.sendMessage('swap_input_panel', chat=chat, tab_id=tab_id)
             except AssertionError:
@@ -1017,10 +1025,10 @@ class Base_InputPanel:
         #a = f"{ss}"
         a=eval('f"""'+ss+'"""')
         return a 
-class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Chat_InputPanel, self).__init__(parent)
+        super(Microsoft_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -1028,6 +1036,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         chat=   apc.chats[tab_id]
         chatHistory[self.tab_id]=[]
         #pp(chat)
+        pp(all_system_templates[chat.workspace])
         chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
         model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
@@ -1235,10 +1244,10 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         pub.sendMessage('log', message=f'{message}', color=color)
 
         
-class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Copilot_InputPanel, self).__init__(parent)
+        super(Microsoft_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -1274,6 +1283,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
             currentModel[self.tab_id]=DEFAULT_MODEL
+
             chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
@@ -1582,13 +1592,35 @@ class WorkspacePanel(wx.Panel,NewChat):
             #print(self.chatInput, tab_id)
             self.chatInput.SetTabId(tab_id)
         else:
+            if 0:
+                if chat.chat_type == 'Chat':
+                    #print(f'NEW Gpt4_Chat_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
+                    self.chatInput = Gpt4_Chat_InputPanel(v_splitter,tab_id=tab_id)
+                else:
+                    #print(f'NEW Gpt4_Copilot_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
+                    self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
 
-            if chat.chat_type == 'Chat':
-                #print(f'NEW Gpt4_Chat_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                self.chatInput = Gpt4_Chat_InputPanel(v_splitter,tab_id=tab_id)
-            else:
-                #print(f'NEW Gpt4_Copilot_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
+
+            chatInput_panel = f'{chat.vendor}_{chat.chat_type}_{panels.input}'
+            #print('display_panel', display_panel)
+            try:
+                
+                print(f'\t\tAdding {chat.workspace} "{chat.chat_type}" panel:', chatInput_panel)
+                assert chatInput_panel in globals(), f"Display class '{chatInput_panel}' does not exist."
+                cls= globals()[chatInput_panel]
+                # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+                try:
+                    self.chatInput = cls (v_splitter, tab_id=tab_id)
+                except:
+                    print(format_stacktrace())
+                    print(f'Error creating {chatInput_panel}')
+                    e(1)
+                    
+
+            except AssertionError:
+                #raise AssertionError(f"Display class '{display_panel}' does not exist.")
+                raise
+
             self.chatInputs[input_id]=self.chatInput
         #print('SwapInputPanel', self.chatInputs.keys())
         if resplit:

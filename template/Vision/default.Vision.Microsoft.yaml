@@ -43,7 +43,7 @@ templates:
       model_id: "microsoft/Phi-3-vision-128k-instruct" 
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
-      name: 'PasteDual'
+      name: 'Paste 2'
       
       num_of_images: 2
       history: false
@@ -55,7 +55,22 @@ templates:
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
-      model_id: "microsoft/Phi-3-vision-128k-instruct"       
+      model_id: "microsoft/Phi-3-vision-128k-instruct"
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'Paste 3'
+      
+      num_of_images: 3
+      history: false
+      system: 'DESCRIBE_3_IMAGES'
+      question:  |
+        creatively mix 3 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct"             
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'no-Hist'
@@ -110,7 +125,9 @@ templates:
       DESCRIBE_IMAGE: |
         <|image_{params.image_id}|>\n{params.input}      
       DESCRIBE_2_IMAGES: |
-        <|image_1|><|image_2|>\n{params.input}            
+        <|image_1|><|image_2|>\n{params.input} 
+      DESCRIBE_3_IMAGES: |
+        <|image_1|><|image_2|><|image_3|>\n{params.input}                    
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

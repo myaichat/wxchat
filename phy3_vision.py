@@ -6,7 +6,7 @@ from pprint import pprint as pp
 from include.fmt import fmt
 import time, glob,threading, traceback
 from os.path import join
-
+from datetime import datetime
 import os, subprocess, yaml, sys
 import wx.stc as stc
 
@@ -166,7 +166,7 @@ class VisionResponseStreamer:
 
         self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True) 
 
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id, model_id, image_path):
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id, max_new_tokens, image_path):
         # Create a chat completion request with streaming enabled
         #pp(chatHistory)
         from PIL import Image 
@@ -181,7 +181,7 @@ class VisionResponseStreamer:
 
         messages = [{"role": "user", "content": prompt}]
         fn = image_path
-        image = Image.open(fn)
+        
 
         #prompt = processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         #chat history
@@ -195,7 +195,7 @@ class VisionResponseStreamer:
             inputs = processor(prompt, [image], return_tensors="pt").to("cuda:0") 
 
             generation_args = { 
-                "max_new_tokens": 4026 *2, #32064, 
+                "max_new_tokens": max_new_tokens , 
                 "temperature": 1, 
                 "do_sample": False, 
             } 
@@ -333,7 +333,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         self.SetWrapMode(stc.STC_WRAP_WORD)
 
         self.SetLexer(stc.STC_LEX_PYTHON)
-        text_keywords = 'model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
+        text_keywords = 'picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
         self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
         
         self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
@@ -448,6 +448,44 @@ class MyNotebookImagePanel(wx.Panel):
         self.SetSizer(sizer)
         self.Layout()
         pub.subscribe(self.load_image_file, 'open_image_file')
+        # Bind paste event
+        #self.Bind(wx.EVT_TEXT_PASTE, self.OnPaste)
+        
+        # Bind key down event to handle Ctrl+V
+        accel_tbl = wx.AcceleratorTable([
+            (wx.ACCEL_CTRL, ord('V'), wx.ID_PASTE)
+        ])
+        #self.SetAcceleratorTable(accel_tbl)
+        #self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
+        self.canvasCtrl.SetAcceleratorTable(accel_tbl)
+        self.canvasCtrl.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
+        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+           
+    def OnPaste(self, event):
+        print('Pasting...')
+        clipboard = wx.Clipboard.Get()
+        if clipboard.Open():
+            if clipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
+                data_object = wx.BitmapDataObject()
+                if clipboard.GetData(data_object):
+                    bitmap = data_object.GetBitmap()
+                    image = wx.Image(bitmap.ConvertToImage())
+                    
+                    # Save the image to a temporary file or set it directly to the canvas
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    temp_image_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
+                    
+                    image.SaveFile(temp_image_path, wx.BITMAP_TYPE_PNG)
+                    self.load_image_file(temp_image_path)
+                else:
+                    print("Clipboard data retrieve failed")
+            else:
+                print("Clipboard does not contain image data")
+            clipboard.Close()
+            log('Paste done.')
+            set_status('Paste done.') 
+        else:
+            print("Unable to open clipboard")        
     def load_image_file(self, file_path):
         # This method will be used to load and display an image on the canvas
         self.image_path = file_path
@@ -494,11 +532,17 @@ class MyNotebookImagePanel(wx.Panel):
         bitmap = wx.Bitmap(image)
         
         # Create a StaticBitmap widget to display the image
-        static_bitmap = wx.StaticBitmap(self.canvasCtrl, -1, bitmap)
-        
+        self.static_bitmap = wx.StaticBitmap(self.canvasCtrl, -1, bitmap)
+        self.static_bitmap.Bind(wx.EVT_LEFT_DOWN, self.OnBitmapClick)
         # Optionally, resize the panel to fit the image
         self.canvasCtrl.SetSize(bitmap.GetWidth(), bitmap.GetHeight()) 
-
+    def OnBitmapClick(self, event):
+        # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
+        for i in range(self.notebook.GetPageCount()):
+            if self.notebook.GetPage(i) == self.canvasCtrl:
+                self.notebook.SetSelection(i)
+                self.canvasCtrl.SetFocus()
+                break
     def OnResize(self, event):
         if self.image_path:
             self.DisplayImageOnCanvas(self.image_path)
@@ -526,18 +570,14 @@ class MyNotebookImagePanel(wx.Panel):
         # Resize the image
         return image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
             
-    def OnCharHook(self, event):
-        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
-            print('Executing Ctrl+A...')
-        else:
-            event.Skip()
+
 
 
 
     def OnCharHook(self, event):
-        if event.ControlDown() and (event.GetKeyCode() == ord('E') or event.GetKeyCode() == wx.WXK_RETURN):
-            self.log('Executing...')
-            self.ExecuteFile()
+        if event.ControlDown() and (event.GetKeyCode() == ord('V') or event.GetKeyCode() == wx.WXK_RETURN):
+            self.log('Loading...')
+            self.OnPaste(event)
             self.log('Done.')
         else:
             event.Skip()
@@ -1064,7 +1104,40 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         
         pub.sendMessage('log', message=f'{message}', color=color)
 
+class ChatHistoryDialog(wx.Dialog):
+    def __init__(self, parent, tab_id, chat_history):
+        super(ChatHistoryDialog, self).__init__(parent, title="Chat History", size=(600, 400))
+        self.tab_id = tab_id
+        self.chat_history = chat_history
         
+        # Create the ListCtrl
+        self.listCtrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
+        
+        # Add columns
+        self.listCtrl.InsertColumn(0, 'Role', width=100)
+        self.listCtrl.InsertColumn(1, 'Content', width=450)
+        
+        # Populate the ListCtrl with chat history
+        self.populate_list_ctrl()
+        
+        # Create a close button
+        closeButton = wx.Button(self, label="Close")
+        closeButton.Bind(wx.EVT_BUTTON, self.on_close)
+        
+        # Layout
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.listCtrl, 1, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(closeButton, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+        
+        self.SetSizer(sizer)
+        
+    def populate_list_ctrl(self):
+        for entry in self.chat_history[self.tab_id]:
+            index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), entry['role'])
+            self.listCtrl.SetItem(index, 1, entry['content'])
+    
+    def on_close(self, event):
+        self.Close()        
 class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -1072,6 +1145,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
+        self.image_id=1
         self.tab_id=tab_id
         chat=   apc.chats[tab_id]
         self.chat_type=chat.chat_type
@@ -1085,20 +1159,30 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             
             self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
+        if 1:       
+            max_new_tokens_values = ["256", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
+            # Create a ComboBox for max_new_tokens
+            self.max_new_tokens_dropdown = wx.ComboBox(self, choices=max_new_tokens_values, style=wx.CB_READONLY)
+            self.max_new_tokens_dropdown.SetValue("2048")  # Default value
+            chat.max_new_tokens = "2048"
+            self.max_new_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxNewTokensChange)
+
+
         self.askButton = wx.Button(self, label='Ask')
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
-
+        self.historyButton = wx.Button(self, label='History')
+        self.historyButton.Bind(wx.EVT_BUTTON, self.onHistoryButton)
 
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
-        #askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.max_new_tokens_dropdown, 0, wx.ALIGN_CENTER)
         if 0:
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
-
+        askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
             q= apc.chats[self.tab_id].question
@@ -1126,7 +1210,20 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         wx.CallAfter(self.inputCtrl.SetFocus)
         if  not  hasattr(apc, 'vrs'):
             apc.vrs=VisionResponseStreamer(DEFAULT_MODEL)
+
+    def onHistoryButton(self, event):
+        global chatHistory
+        dialog = ChatHistoryDialog(self, self.tab_id, chatHistory)
+        dialog.ShowModal()
+        dialog.Destroy()
         
+    def OnMaxNewTokensChange(self, event):
+        # This method will be called when the selection changes
+        selected_value = self.max_new_tokens_dropdown.GetValue()
+        print(f"Selected max_new_tokens: {selected_value}")
+        chat = apc.chats[self.tab_id]
+        chat.max_new_tokens = selected_value
+                
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask Phy-3 {tab_id}:')
@@ -1204,7 +1301,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 chat=apc.chats[self.tab_id]
 
                 #question=question.replace('\n', ' ')
-                prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.DESCRIBE_IMAGE, dict2(input=question))
+                prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.DESCRIBE_IMAGE, dict2(image_id=1, input=question))
                 pp(prompt)
                 payload =[{"role": "user", "content": prompt}] 
 
@@ -1219,7 +1316,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 # DO NOT REMOVE THIS LINE
                 from os.path import basename
                 bn=basename(image_path)
-                header=fmt([[f'User Question|Hist:{chat.history}']],[])
+                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}']],[])
                 print(f'\nFile: {bn}\n')
                 print(header)
                 print(question)
@@ -1227,12 +1324,12 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
                 
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, chat.model_id,image_path, chat.history)).start()
+                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()
         except Exception as e:
             print(format_stacktrace())
             self.log(f'Error: {format_stacktrace()}', color=wx.RED)
             pub.sendMessage('stop_progress')
-    def stream_response(self, prompt, payload, tab_id, model, image_path, keep_history):
+    def stream_response(self, prompt, payload, tab_id,  image_path, keep_history):
         # Call stream_response and store the result in out
         global chatHistory, questionHistory, currentQuestion,currentModel
         self.receiveing_tab_id=tab_id
@@ -1242,9 +1339,10 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         if keep_history:
             payload=chatHistory[self.tab_id]
 
-        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, model,image_path)
+        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, int(self.max_new_tokens_dropdown.GetValue()) ,image_path)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+            self.image_id +=1
         pub.sendMessage('stop_progress')
         log('Done.')
         set_status('Done.')        
@@ -1920,7 +2018,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'All-In-One Copilot')
+        self.frame = MyFrame(f'Phy-3 Vision')
         return True
 
 if __name__ == '__main__':

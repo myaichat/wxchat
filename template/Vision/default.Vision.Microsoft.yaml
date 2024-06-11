@@ -25,8 +25,36 @@ templates:
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind
-      default_file: 'Art/0_2.jpg'
+      default_file: 'Art/0_1.jpg'
       model_id: "microsoft/Phi-3-vision-128k-instruct" 
+      
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'Paste'
+      history: false
+      system: SYSTEM_CHATTY
+      question:  |
+        creatively mix 2 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'PasteDual'
+      num_of_images: 2
+      history: false
+      system: SYSTEM_CHATTY
+      question:  |
+        creatively mix 2 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct"       
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'no-Hist'
@@ -41,18 +69,6 @@ templates:
         the image to life in the reader's mind
       default_file: 'Art/0_2.jpg'
       model_id: "microsoft/Phi-3-vision-128k-instruct"       
-    - vendor: 'Microsoft'
-      chat_type: 'Copilot'
-      name: 'Phi-3-vision-128k-instruct'
-      system: SYSTEM_CHATTY
-      question:  |
-        What is shown in this image? Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind
-      model_id: "microsoft/Phi-3-vision-128k-instruct" 
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with general questions about Oracle. numerate options in answer."
@@ -91,7 +107,7 @@ templates:
         Question: "{params.input}"
         Answer:
       DESCRIBE_IMAGE: |
-        <|image_1|>\n{params.input}        
+        <|image_{params.image_id}|>\n{params.input}       
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

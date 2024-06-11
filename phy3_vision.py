@@ -441,6 +441,8 @@ class MyNotebookImagePanel(wx.Panel):
             self.DisplayImageOnCanvas(self.image_path)
             notebook.AddPage(self.canvasCtrl, self.image_path)
         else:
+            pp(chat)
+            e()
             notebook.AddPage(self.canvasCtrl, 'Canvas')
         
         sizer = wx.BoxSizer(wx.VERTICAL)

@@ -1362,8 +1362,12 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                         log(f'Image {i} is not set', color=wx.RED)
                         pub.sendMessage('stop_progress')
                         return
-                    
-                    
+                    log(fn)
+                import random  
+                pp(image_path)
+                random.shuffle(image_path)
+                pp(image_path)
+
                 threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()
         except Exception as e:
             print(format_stacktrace())

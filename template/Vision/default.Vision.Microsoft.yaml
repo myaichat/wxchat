@@ -56,6 +56,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
       model_id: "microsoft/Phi-3-vision-128k-instruct"
+
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'Paste 3'
@@ -70,7 +71,54 @@ templates:
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
-      model_id: "microsoft/Phi-3-vision-128k-instruct"             
+      model_id: "microsoft/Phi-3-vision-128k-instruct"   
+
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'Paste 4'      
+      num_of_images: 4
+      history: false
+      system: 'DESCRIBE_4_IMAGES'
+      question:  |
+        creatively mix 4 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'Paste 5'      
+      num_of_images: 5
+      history: false
+      system: 'DESCRIBE_5_IMAGES'
+      question:  |
+        creatively mix 5 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: '10'      
+      num_of_images: 10
+      history: false
+      system: 'DESCRIBE_10_IMAGES'
+      question:  |
+        creatively mix 10 image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+
+
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'no-Hist'
@@ -84,7 +132,8 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind
       default_file: 'Art/0_2.jpg'
-      model_id: "microsoft/Phi-3-vision-128k-instruct"       
+      model_id: "microsoft/Phi-3-vision-128k-instruct"   
+          
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with general questions about Oracle. numerate options in answer."
@@ -127,7 +176,17 @@ templates:
       DESCRIBE_2_IMAGES: |
         <|image_1|><|image_2|>\n{params.input} 
       DESCRIBE_3_IMAGES: |
-        <|image_1|><|image_2|><|image_3|>\n{params.input}                    
+        <|image_1|><|image_2|><|image_3|>\n{params.input}   
+
+      DESCRIBE_4_IMAGES: |
+        <|image_1|><|image_2|><|image_3|><|image_4|>\n{params.input}   
+
+      DESCRIBE_5_IMAGES: |
+        <|image_1|><|image_2|><|image_3|><|image_4|><|image_5|>\n{params.input}   
+
+      DESCRIBE_10_IMAGES: |
+        <|image_1|><|image_2|><|image_3|><|image_4|><|image_5|><|image_6|><|image_7|><|image_8|><|image_9|><|image_10|>\n{params.input}   
+
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

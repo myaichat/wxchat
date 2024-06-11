@@ -189,10 +189,14 @@ class VisionResponseStreamer:
         
         out = []
         try:
-            
-            assert isfile(fn)
-            image = Image.open(fn)
-            inputs = processor(prompt, [image], return_tensors="pt").to("cuda:0") 
+            images=[]   
+            for fn in image_path:
+                if not fn:
+                    log(f'No image file not set', 'red')
+                    return ''
+                assert isfile(fn)
+                images.append( Image.open(fn))
+            inputs = processor(prompt, images, return_tensors="pt").to("cuda:0") 
 
             generation_args = { 
                 "max_new_tokens": max_new_tokens , 
@@ -211,14 +215,13 @@ class VisionResponseStreamer:
             
             
             out.append(response)
-            from os.path import basename
-            bn=basename(image_path)            
+           
             header=fmt([[f'System Answer']],[])
-            print(f'\nFile: {bn}\n')
+            
             print(header)
             print(response)
             #print(content, receiveing_tab_id)
-            pub.sendMessage('chat_output', message=f'{header}\nFile: {bn}\n\n{response}', tab_id=receiveing_tab_id)
+            pub.sendMessage('chat_output', message=f'{header}\nFiles: {len(image_path)}\n\n{response}', tab_id=receiveing_tab_id)
             
         except Exception as e:
             log(f'Error in stream_response', 'red')
@@ -416,53 +419,21 @@ class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
         print('show_tab_id', self.tab_id)
 
              
-
-
-
-class MyNotebookImagePanel(wx.Panel):
-    def __init__(self, parent, tab_id):
-        super(MyNotebookImagePanel, self).__init__(parent)
-        
-        notebook = aui.AuiNotebook(self)
-        
-        self.notebook = notebook
-        
-        self.canvasCtrl = wx.Panel(notebook)
-
-        apc.canvas = self.canvasCtrl
-        self.static_bitmap = None
-        #self.Bind(wx.EVT_SIZE, self.OnResize)
-        self.image_path = None
-        chat = apc.chats[tab_id]
-
+class CanvasCtrl(wx.Panel):
+    def __init__(self, parent,chat):
+        super().__init__(parent)
+        self.chat=chat
+        self.image_path=None
         if 'default_file' in chat:
             self.image_path = chat.default_file
-            print(self.image_path)
-            self.DisplayImageOnCanvas(self.image_path)
-            notebook.AddPage(self.canvasCtrl, self.image_path)
-        else:
-            pp(chat)
-            e()
-            notebook.AddPage(self.canvasCtrl, 'Canvas')
-        
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.notebook, 1, wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Layout()
-        pub.subscribe(self.load_image_file, 'open_image_file')
-        # Bind paste event
-        #self.Bind(wx.EVT_TEXT_PASTE, self.OnPaste)
-        
-        # Bind key down event to handle Ctrl+V
         accel_tbl = wx.AcceleratorTable([
             (wx.ACCEL_CTRL, ord('V'), wx.ID_PASTE)
         ])
         #self.SetAcceleratorTable(accel_tbl)
         #self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
-        self.canvasCtrl.SetAcceleratorTable(accel_tbl)
-        self.canvasCtrl.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
-        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-           
+        self.SetAcceleratorTable(accel_tbl)
+        self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
+        pub.subscribe(self.load_image_file, 'open_image_file')
     def OnPaste(self, event):
         print('Pasting...')
         clipboard = wx.Clipboard.Get()
@@ -487,23 +458,24 @@ class MyNotebookImagePanel(wx.Panel):
             log('Paste done.')
             set_status('Paste done.') 
         else:
-            print("Unable to open clipboard")        
+            print("Unable to open clipboard")
     def load_image_file(self, file_path):
         # This method will be used to load and display an image on the canvas
         self.image_path = file_path
         self.DisplayImageOnCanvas(file_path)
-        self.update_notebook_tab_label(file_path)
-    def update_notebook_tab_label(self, file_path):
-        # Update the notebook tab label to the new file name
-        file_name = os.path.basename(file_path)
-        notebook = self.notebook
-        
-        # Find the tab with the canvas and update its label
-        for i in range(notebook.GetPageCount()):
-            if notebook.GetPage(i) == self.canvasCtrl:
-                notebook.SetPageText(i, file_name)
-                break
-        
+        #self.update_notebook_tab_label(file_path)
+
+    def OnBitmapClick(self, event):
+        # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
+        self.SetFocus()
+        if 0:
+            notebook= self.GetParent()
+            for i in range(self.notebook.GetPageCount()):
+                if notebook.GetPage(i) == self.canvasCtrl:
+                    notebook.SetSelection(i)
+                    canvasCtrl[i].SetFocus()
+                    break
+
     def DisplayImageOnCanvas(self, image_path):
         # Load the image
         if hasattr(self, 'static_bitmap') and self.static_bitmap:
@@ -534,21 +506,72 @@ class MyNotebookImagePanel(wx.Panel):
         bitmap = wx.Bitmap(image)
         
         # Create a StaticBitmap widget to display the image
-        self.static_bitmap = wx.StaticBitmap(self.canvasCtrl, -1, bitmap)
+        self.static_bitmap = wx.StaticBitmap(self, -1, bitmap)
         self.static_bitmap.Bind(wx.EVT_LEFT_DOWN, self.OnBitmapClick)
         # Optionally, resize the panel to fit the image
-        self.canvasCtrl.SetSize(bitmap.GetWidth(), bitmap.GetHeight()) 
-    def OnBitmapClick(self, event):
-        # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
-        for i in range(self.notebook.GetPageCount()):
-            if self.notebook.GetPage(i) == self.canvasCtrl:
-                self.notebook.SetSelection(i)
-                self.canvasCtrl.SetFocus()
+        self.SetSize(bitmap.GetWidth(), bitmap.GetHeight()) 
+
+class MyNotebookImagePanel(wx.Panel):
+    def __init__(self, parent, tab_id):
+        super(MyNotebookImagePanel, self).__init__(parent)
+        
+        notebook = aui.AuiNotebook(self)
+        
+        self.notebook = notebook
+        self.canvasCtrl=[]
+        chat = apc.chats[tab_id]
+        canvasCtrl=CanvasCtrl(notebook, chat)
+        self.canvasCtrl.append(canvasCtrl)
+
+        apc.canvas = self.canvasCtrl
+        self.static_bitmap = None
+        #self.Bind(wx.EVT_SIZE, self.OnResize)
+        self.image_path = None
+        
+        chat.num_of_images=    chat.get('num_of_images',    1)
+        if canvasCtrl.image_path:
+            
+            print(canvasCtrl.image_path)
+            canvasCtrl.DisplayImageOnCanvas(canvasCtrl.image_path)
+            notebook.AddPage(canvasCtrl, canvasCtrl.image_path)
+        else:
+            notebook.AddPage(canvasCtrl, f'Image_1')
+            
+            
+            for i in range(2,chat.num_of_images+1):
+                canvasCtrl = CanvasCtrl(notebook, chat)
+                self.canvasCtrl.append(canvasCtrl)                
+                notebook.AddPage(canvasCtrl, f'Image_{i}')
+                
+        
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.notebook, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+        self.Layout()
+        
+        # Bind paste event
+        #self.Bind(wx.EVT_TEXT_PASTE, self.OnPaste)
+        
+        # Bind key down event to handle Ctrl+V
+
+        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+           
+        
+
+    def update_notebook_tab_label(self, file_path):
+        # Update the notebook tab label to the new file name
+        file_name = os.path.basename(file_path)
+        notebook = self.notebook
+        
+        # Find the tab with the canvas and update its label
+        for i in range(notebook.GetPageCount()):
+            if notebook.GetPage(i) == self.canvasCtrl:
+                notebook.SetPageText(i, file_name)
                 break
-    def OnResize(self, event):
-        if self.image_path:
-            self.DisplayImageOnCanvas(self.image_path)
-        event.Skip()
+        
+
+
+
 
 
     def ScaleImage(self, image, max_width, max_height):
@@ -661,7 +684,13 @@ class Microsoft_Copilot_DisplayPanel(wx.Panel):
         self.Bind(wx.EVT_SIZE, self.OnResize)
     def GetImagePath(self, tab_id):
         assert tab_id==self.tab_id, self.__class__.__name__
-        return self.notebook_panel.image_path
+        
+        out=[]
+        notebook= self.notebook_panel.canvasCtrl
+        for canvas in  self.notebook_panel.canvasCtrl:
+            out.append(canvas.image_path)
+        return out
+
     def OnResize(self, event):
         # Adjust the sash position to keep the vertical splitter size constant
         width, height = self.GetSize()
@@ -1296,14 +1325,17 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 #code=???
                 chatDisplay=apc.chat_panels[self.tab_id]
                 image_path=chatDisplay.GetImagePath(self.tab_id)
+                pp(image_path)
+                
                 assert image_path,chatDisplay
                 #print(888, chatDisplay.__class__.__name__)
                 #code='print(1223)'
                 chat=apc.chats[self.tab_id]
-                chat=apc.chats[self.tab_id]
+                
 
                 #question=question.replace('\n', ' ')
-                prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.DESCRIBE_IMAGE, dict2(image_id=1, input=question))
+                system= chat.get('system', 'DESCRIBE_IMAGE')
+                prompt=self.evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(image_id=1, input=question))
                 pp(prompt)
                 payload =[{"role": "user", "content": prompt}] 
 
@@ -1316,16 +1348,22 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 
 
                 # DO NOT REMOVE THIS LINE
-                from os.path import basename
-                bn=basename(image_path)
-                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}']],[])
-                print(f'\nFile: {bn}\n')
+                
+                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}']],[])
+                
                 print(header)
                 print(question)
-                pub.sendMessage('chat_output', message=f'{header}\nFile: {bn}\n\n{question}\n', tab_id=self.tab_id)
+                pub.sendMessage('chat_output', message=f'{header}\nFiles: {len(image_path)}\n\n{question}\n', tab_id=self.tab_id)
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
                 
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
+                for i, fn in enumerate(image_path):
+                    if not fn:
+                        log(f'Image {i} is not set', color=wx.RED)
+                        pub.sendMessage('stop_progress')
+                        return
+                    
+                    
                 threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()
         except Exception as e:
             print(format_stacktrace())

@@ -17,7 +17,7 @@ templates:
       chat_type: 'Copilot'
       name: 'Hist'
       history: true
-      system: SYSTEM_CHATTY
+      system: 'DESCRIBE_IMAGE'
       question:  |
         What is shown in this image? Provide a detailed and artistically 
         rich description of the image provided by the user. 
@@ -32,9 +32,9 @@ templates:
       chat_type: 'Copilot'
       name: 'Paste'
       history: false
-      system: SYSTEM_CHATTY
+      system: 'DESCRIBE_IMAGE'
       question:  |
-        creatively mix 2 image descriptions.  Provide a detailed and artistically 
+        Provide a detailed and artistically 
         rich description of the image provided by the user. 
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
@@ -44,9 +44,10 @@ templates:
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'PasteDual'
+      
       num_of_images: 2
       history: false
-      system: SYSTEM_CHATTY
+      system: 'DESCRIBE_2_IMAGES'
       question:  |
         creatively mix 2 image descriptions.  Provide a detailed and artistically 
         rich description of the image provided by the user. 
@@ -59,7 +60,7 @@ templates:
       chat_type: 'Copilot'
       name: 'no-Hist'
       history: false
-      system: SYSTEM_CHATTY
+      system: 'DESCRIBE_IMAGE'
       question:  |
         What is shown in this image? Provide a detailed and artistically 
         rich description of the image provided by the user. 
@@ -107,7 +108,9 @@ templates:
         Question: "{params.input}"
         Answer:
       DESCRIBE_IMAGE: |
-        <|image_{params.image_id}|>\n{params.input}       
+        <|image_{params.image_id}|>\n{params.input}      
+      DESCRIBE_2_IMAGES: |
+        <|image_1|><|image_2|>\n{params.input}            
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

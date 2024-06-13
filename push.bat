@@ -1,3 +1,3 @@
 git add .
 git commit -m "%1"
-git push -u origin phy3_vision
+git push -u origin phy3_copilot

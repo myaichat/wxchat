@@ -84,9 +84,9 @@ class ResponseStreamer:
 
         return ''.join(out)
 
-class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
+class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Gpt4_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Microsoft_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -238,10 +238,10 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 
-class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Copilot_InputPanel, self).__init__(parent)
+        super(Microsoft_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -757,10 +757,10 @@ class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
 
              
 
-class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Chat_InputPanel, self).__init__(parent)
+        super(Microsoft_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}

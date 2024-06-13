@@ -4,12 +4,12 @@ import wx.lib.agw.aui as aui
 from pubsub import pub
 from pprint import pprint as pp 
 from include.fmt import fmt
-import time, glob,threading, traceback
+import time, random, glob,threading, traceback
 from os.path import join
 from datetime import datetime
 import os, subprocess, yaml, sys
 import wx.stc as stc
-
+from PIL import Image as PILImage
 
 import include.config.init_config as init_config 
 
@@ -178,9 +178,10 @@ class VisionResponseStreamer:
         #model_id = chat.model_id
     
         model, processor = self.model, self.processor
-
-        messages = [{"role": "user", "content": prompt}]
-        fn = image_path
+        print(fmt([[f'Prompt']], []) )
+        pp(chatHistory)
+        
+    
         
 
         #prompt = processor.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
@@ -196,11 +197,13 @@ class VisionResponseStreamer:
                     return ''
                 assert isfile(fn)
                 images.append( Image.open(fn))
+            print(fmt([[f'Images']], []) )
+            pp(images)
             inputs = processor(prompt, images, return_tensors="pt").to("cuda:0") 
 
             generation_args = { 
                 "max_new_tokens": max_new_tokens , 
-                "temperature": 1, 
+                "temperature": chat.temp_val, 
                 "do_sample": False, 
             } 
 
@@ -433,7 +436,18 @@ class CanvasCtrl(wx.Panel):
         #self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
         self.SetAcceleratorTable(accel_tbl)
         self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
-        pub.subscribe(self.load_image_file, 'open_image_file')
+        pub.subscribe(self.OnOpenImageFile, 'open_image_file')
+    def OnOpenImageFile(self, file_path):
+
+        if self.IsTabVisible():
+            print('Opening image file...')
+            self.load_image_file(file_path)
+        else:
+            print('Not visible')
+    def IsTabVisible(self):
+        parent_notebook = self.GetParent()  # Assuming direct parent is the notebook
+        current_page = parent_notebook.GetCurrentPage()
+        return current_page == self            
     def OnPaste(self, event):
         print('Pasting...')
         clipboard = wx.Clipboard.Get()
@@ -459,6 +473,21 @@ class CanvasCtrl(wx.Panel):
             set_status('Paste done.') 
         else:
             print("Unable to open clipboard")
+
+    def load_image(self, image_path):
+        image = None
+        try:
+            if image_path.lower().endswith('.webp'):
+                pil_image = PILImage.open(image_path)
+                image = wx.Image(pil_image.size[0], pil_image.size[1])
+                image.SetData(pil_image.convert("RGB").tobytes())
+                image.SetAlpha(pil_image.convert("RGBA").tobytes()[3::4])
+            else:
+                image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
+        except Exception as e:
+            print(f"Error loading image: {e}")
+        return image
+    
     def load_image_file(self, file_path):
         # This method will be used to load and display an image on the canvas
         self.image_path = file_path
@@ -468,19 +497,16 @@ class CanvasCtrl(wx.Panel):
     def OnBitmapClick(self, event):
         # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
         self.SetFocus()
-        if 0:
-            notebook= self.GetParent()
-            for i in range(self.notebook.GetPageCount()):
-                if notebook.GetPage(i) == self.canvasCtrl:
-                    notebook.SetSelection(i)
-                    canvasCtrl[i].SetFocus()
-                    break
+
 
     def DisplayImageOnCanvas(self, image_path):
         # Load the image
         if hasattr(self, 'static_bitmap') and self.static_bitmap:
             self.static_bitmap.Destroy()      
-        image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
+        image = self.load_image(image_path)
+        if image is None:
+            print("Failed to load image.")
+            return
         
         # Get the top-level window size
         top_level_window = self.GetTopLevelParent()
@@ -516,7 +542,7 @@ class MyNotebookImagePanel(wx.Panel):
         super(MyNotebookImagePanel, self).__init__(parent)
         
         notebook = aui.AuiNotebook(self)
-        
+        self.tab_id=tab_id
         self.notebook = notebook
         self.canvasCtrl=[]
         chat = apc.chats[tab_id]
@@ -555,9 +581,34 @@ class MyNotebookImagePanel(wx.Panel):
         # Bind key down event to handle Ctrl+V
 
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-           
-        
+        pub.subscribe(self.load_random_images, 'load_random_images')
+        self.image_pool=self.get_image_list()
+    def get_image_list(self):
+        from pathlib import Path
 
+        image_path = Path.home() / 'Downloads'
+        #image_path= Path(__file__).parent / 'test'
+        print(image_path)
+        
+        jpg_files = list(image_path.glob('*.jpg')) +list(image_path.glob('*.jpeg'))
+        png_files = list(image_path.glob('*.png'))
+        webp_files = list(image_path.glob('*.webp'))
+        
+        return  jpg_files + png_files + webp_files
+    def load_random_images(self, tab_id):
+        if tab_id == self.tab_id:
+            
+            chat = apc.chats[self.tab_id]
+            print('Loading random images...', chat.num_of_images)
+            
+            print(len(self.image_pool))
+            random_subset = random.sample(self.image_pool, chat.num_of_images)
+            pp(random_subset)
+            if 1:
+                for i, fn in enumerate(random_subset):
+                    self.canvasCtrl[i].load_image_file(str(fn))
+        else:
+            print('Not for me', self.tab_id)
     def update_notebook_tab_label(self, file_path):
         # Update the notebook tab label to the new file name
         file_name = os.path.basename(file_path)
@@ -1197,23 +1248,40 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             self.max_new_tokens_dropdown.SetValue("2048")  # Default value
             chat.max_new_tokens = "2048"
             self.max_new_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxNewTokensChange)
+        if 1:       
+            temp_vals = ["0", "0.2", "0.4", "0.6", "0.8", "1", "2", "5"]
+            # Create a ComboBox for max_new_tokens
+            self.temp_dropdown = wx.ComboBox(self, choices=temp_vals, style=wx.CB_READONLY)
+            self.temp_dropdown.SetValue("1")  # Default value
+            chat.temp_val = "1"
+            self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
 
-
-        self.askButton = wx.Button(self, label='Ask')
+        self.askButton = wx.Button(self, label='Ask', size=(40, 25))
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
-        self.historyButton = wx.Button(self, label='History')
+        self.historyButton = wx.Button(self, label='Hist', size=(40, 25))
         self.historyButton.Bind(wx.EVT_BUTTON, self.onHistoryButton)
+        # New Random button
+        self.randomButton = wx.Button(self, label='Rand', size=(40, 25))
+        self.randomButton.Bind(wx.EVT_BUTTON, self.onRandomButton)    
+
+        self.numOfTabsCtrl = wx.TextCtrl(self, value="1", size=(40, 25))
+        self.tabsButton = wx.Button(self, label='Tabs', size=(40, 25))
+        self.tabsButton.Bind(wx.EVT_BUTTON, self.onTabsButton)
 
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.max_new_tokens_dropdown, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.temp_dropdown, 0, wx.ALIGN_CENTER)
         if 0:
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.numOfTabsCtrl, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
             q= apc.chats[self.tab_id].question
@@ -1241,7 +1309,17 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         wx.CallAfter(self.inputCtrl.SetFocus)
         if  not  hasattr(apc, 'vrs'):
             apc.vrs=VisionResponseStreamer(DEFAULT_MODEL)
+    def onTabsButton(self, event):
+        try:
+            num_of_tabs = int(self.numOfTabsCtrl.GetValue())
+            pub.sendMessage('set_num_of_tabs', num=num_of_tabs, tab_id=self.tab_id)
+        except ValueError:
+            self.log("Invalid number of tabs.", color=wx.RED)
 
+    def onRandomButton(self, event):
+        # Implement the random function logic here
+        self.log('Random button clicked')
+        pub.sendMessage('load_random_images', tab_id=self.tab_id)
     def onHistoryButton(self, event):
         global chatHistory
         dialog = ChatHistoryDialog(self, self.tab_id, chatHistory)
@@ -1254,7 +1332,13 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         print(f"Selected max_new_tokens: {selected_value}")
         chat = apc.chats[self.tab_id]
         chat.max_new_tokens = selected_value
-                
+    def OnTempChange(self, event):
+
+        # This method will be called when the selection changes
+        selected_value = self.temp_dropdown.GetValue()
+        print(f"Selected temp: {selected_value}")
+        chat = apc.chats[self.tab_id]
+        chat.temp_val = selected_value            
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask Phy-3 {tab_id}:')
@@ -1274,10 +1358,6 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
 
-        # Print the selected model
-        #print(f"Selected model: {selected_model}")
-
-        # You can add more code here to do something with the selected model
 
         # Continue processing the event
         event.Skip()
@@ -1348,8 +1428,8 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                 
 
                 # DO NOT REMOVE THIS LINE
-                
-                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}']],[])
+                chat.temp_val = chat.get('temp_val',"1")
+                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}|{chat.temp_val}']],[])
                 
                 print(header)
                 print(question)
@@ -1365,7 +1445,8 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
                     log(fn)
                 import random  
                 pp(image_path)
-                random.shuffle(image_path)
+                if 1:
+                    random.shuffle(image_path)
                 pp(image_path)
 
                 threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()

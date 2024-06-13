@@ -118,6 +118,20 @@ templates:
         the image to life in the reader's mind. 
       model_id: "microsoft/Phi-3-vision-128k-instruct" 
 
+    - vendor: 'Microsoft'
+      chat_type: 'Copilot'
+      name: 'Flex'      
+      num_of_images: -1
+      history: false
+      system: 'DESCRIBE_FLEX_IMAGES'
+      question:  |
+        creatively mix all image descriptions.  Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
 
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
@@ -171,12 +185,13 @@ templates:
         Code to fix: {params.code}
         Question: "{params.input}"
         Answer:
+      LIST: 'list descriptions for all images. numerate them'
       DESCRIBE_IMAGE: |
         <|image_{params.image_id}|>\n{params.input}      
       DESCRIBE_2_IMAGES: |
-        <|image_1|><|image_2|>\n{params.input} 
+        <|image_1|>\n<|image_2|>\n{params.input} 
       DESCRIBE_3_IMAGES: |
-        <|image_1|><|image_2|><|image_3|>\n{params.input}   
+        <|image_1|>\n<|image_2|>\n<|image_3|>\n{params.input}   
 
       DESCRIBE_4_IMAGES: |
         <|image_1|><|image_2|><|image_3|><|image_4|>\n{params.input}   
@@ -186,7 +201,8 @@ templates:
 
       DESCRIBE_10_IMAGES: |
         <|image_1|><|image_2|><|image_3|><|image_4|><|image_5|><|image_6|><|image_7|><|image_8|><|image_9|><|image_10|>\n{params.input}   
-
+      DESCRIBE_FLEX_IMAGES: |
+        {params.image_str}\n{params.input} 
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

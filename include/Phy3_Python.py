@@ -106,7 +106,7 @@ class ResponseStreamer:
         chat.timings=chat.get('timings', True)
         
         chat.do_sample=chat.get('do_sample', False)
-        chat.max_length=chat.get('max_length', 2048)
+        chat.max_length=chat.get('max_length', 2048*2)
         chat.min_length=chat.get('min_length', 1)
         chat.top_p=chat.get('top_p', 1)
         chat.top_k=chat.get('top_k', 50)
@@ -130,33 +130,25 @@ class ResponseStreamer:
         # Set the max length to something sensible by default, unless it is specified by the user,
         # since otherwise it will be set to the entire context length
         if 'max_length' not in search_options:
-            search_options['max_length'] = 2048
-
-        chat_template = '''<|user|>
-list python versions numereted by index <|end|>
-<|assistant|>
- 1. Python 2.7
-2. Python 3.6
-3. Python 3.7
-4. Python 3.8
-5. Python 3.9
-6. Python 3.10 <|end|>
-<|user|>\n{input} <|end|>
+            search_options['max_length'] = 4096
+        #pp(search_options)
+        #e()
+        chat_template = '''{input}
 <|assistant|>'''
 
         # Keep asking for input prompts in a loop
         if 1:
-            text = chatHistory
-            pp(chatHistory[-1]['content'])
+            text = '\n'.join(chatHistory)
+            #pp(chatHistory)
             #e()
             if chat.timings: started_timestamp = time.time()
 
             # If there is a chat template, use it
-            text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
+            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
             #pp(text)
             #e()
             prompt = f'{chat_template.format(input=text)}'
-            #pp(prompt)
+            pp(prompt)
             #e()
             input_tokens = tokenizer.encode(prompt)
 
@@ -374,7 +366,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         chat=   apc.chats[tab_id]
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
-        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
+        chatHistory[self.tab_id]= []
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
         model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -402,7 +394,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
             currentModel[self.tab_id]=DEFAULT_MODEL
-            chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+            chatHistory[self.tab_id]= []
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
@@ -430,7 +422,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
   
 
             self.tabs[self.tab_id]=dict(q=chat.question)
-            chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+            chatHistory[self.tab_id]= []
             questionHistory[self.tab_id]=[]
             currentModel[self.tab_id]=DEFAULT_MODEL        
     def OnModelChange(self, event):
@@ -465,7 +457,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             d={"role": "user", "content":q}
             if self.tab_id in chatHistory:
                 if d not in chatHistory[self.tab_id]:
-                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+                    chatHistory[self.tab_id] += [f"<|user|>\n{q} <|end|>" ]
 
 
     def SetException(self, message):
@@ -494,7 +486,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             #code='print(1223)'
             chat=apc.chats[self.tab_id]
             prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
-            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+            chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>" ]
 
             questionHistory[self.tab_id].append(question)
             currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
@@ -517,7 +509,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         rs=ResponseStreamer()
         out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
         if out:
-            chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+            chatHistory[tab_id].append("<|assistant|>\n{out} <|end|>") 
         pub.sendMessage('stop_progress')
         log('Done.')
         set_status('Done.')        
@@ -576,7 +568,7 @@ class MyNotebookCodePanel(wx.Panel):
                 
         self.codeCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.codeCtrl.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
+        python_keywords = '``` python str int self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
 
         self.codeCtrl.SetKeyWords(0, python_keywords)
         # Set Python styles
@@ -899,7 +891,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         chat=   apc.chats[tab_id]
         chatHistory[self.tab_id]=[]
         #pp(chat)
-        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+        chatHistory[self.tab_id]= []
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
         model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
         self.chat_type=chat.chat_type
@@ -935,7 +927,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             currentModel[self.tab_id]=DEFAULT_MODEL
 
             chat=apc.chats[tab_id]
-            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            chatHistory[self.tab_id]= []
          
 
 
@@ -966,7 +958,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             #e()
             self.tabs[self.tab_id]=dict(q=apc.chats[tab_id].question)
             chat=apc.chats[tab_id]
-            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            chatHistory[self.tab_id]= []
             questionHistory[self.tab_id]=[]
             currentModel[self.tab_id]=DEFAULT_MODEL
 
@@ -1012,7 +1004,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             d={"role": "user", "content":q}
             if self.tab_id in chatHistory:
                 if d not in chatHistory[self.tab_id]:
-                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+                    chatHistory[self.tab_id] += [f"<|user|>\n{q} <|end|>" ]
 
 
     def SetException(self, message):
@@ -1038,7 +1030,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             pub.sendMessage('start_progress')
             chat=apc.chats[self.tab_id]
             prompt=self.evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
-            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+            chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>"  ]
 
             questionHistory[self.tab_id].append(question)
             currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
@@ -1061,7 +1053,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         rs=ResponseStreamer()
         out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
         if out:
-            chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+            chatHistory[tab_id].append(f"<|assistant|>\n{out} <|end|>" ) 
         pub.sendMessage('stop_progress')
         log('Done.')
         set_status('Done.')  

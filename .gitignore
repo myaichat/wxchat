@@ -2,3 +2,4 @@ cuda
 directml
 .huggingface
 myenv
+*.pyc

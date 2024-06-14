@@ -21,14 +21,14 @@ templates:
       chat_type: 'Chat'
       name: 'Hist'
       history: true
-      question: 'How many Python versions are there?'
+      question: 'list  new python syntax features with code samples'
     Copilot:
     - vendor: 'Microsoft'
       chat_type: 'Copilot'
       name: 'Python Copilot'
       system: SYSTEM_CHATTY
       question: 'What can I improve in this Python code?'
-      default_file: 'phy3_copilot.py'
+      default_file: 'include\Common.py'
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with General questions. numerate options in answer."
@@ -63,9 +63,8 @@ templates:
         You are a chatbot that assists with anwering questions about 
         code included or adding new features
       FIX_CODE: |
-        Code to fix: {params.code}
-        Question: "{params.input}"
-        Answer:
+        {params.input}: 
+        {params.code}        
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

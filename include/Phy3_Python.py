@@ -1,3 +1,8 @@
+import onnxruntime_genai as og
+
+import argparse
+import time
+
 import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
@@ -7,6 +12,7 @@ from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
 from include.fmt import fmt
+
 
 import include.config.init_config as init_config 
 apc = init_config.apc
@@ -22,7 +28,7 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 
 
 
-class ResponseStreamer:
+class _ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         
@@ -33,6 +39,7 @@ class ResponseStreamer:
     def stream_response(self, prompt, chatHistory, receiveing_tab_id, model):
         # Create a chat completion request with streaming enabled
         #pp(chatHistory)
+        pub.sendMessage('scroll_output',message=receiveing_tab_id)
         try:
             try:
                 response = self.client.chat.completions.create(
@@ -83,6 +90,124 @@ class ResponseStreamer:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)
+
+class ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        
+
+        # Initialize the client
+        self.client = openai.OpenAI()
+
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id, model):
+        out=[]
+        chat=apc.chats[receiveing_tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True)
+        
+        chat.do_sample=chat.get('do_sample', False)
+        chat.max_length=chat.get('max_length', 2048)
+        chat.min_length=chat.get('min_length', 1)
+        chat.top_p=chat.get('top_p', 1)
+        chat.top_k=chat.get('top_k', 50)
+        chat.temperature=chat.get('temperature', 1)
+        chat.repetition_penalty=chat.get('repetition_penalty', 1)
+
+        chat.model='directml\directml-int4-awq-block-128'
+        if chat.verbose: print("Loading model...")
+        if chat.timings:
+            started_timestamp = 0
+            first_token_timestamp = 0
+
+        model = og.Model(f'{chat.model}')
+        if chat.verbose: print("Model loaded")
+        tokenizer = og.Tokenizer(model)
+        tokenizer_stream = tokenizer.create_stream()
+        if chat.verbose: print("Tokenizer created")
+        if chat.verbose: print()
+        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+        
+        # Set the max length to something sensible by default, unless it is specified by the user,
+        # since otherwise it will be set to the entire context length
+        if 'max_length' not in search_options:
+            search_options['max_length'] = 2048
+
+        chat_template = '''<|user|>
+list python versions numereted by index <|end|>
+<|assistant|>
+ 1. Python 2.7
+2. Python 3.6
+3. Python 3.7
+4. Python 3.8
+5. Python 3.9
+6. Python 3.10 <|end|>
+<|user|>\n{input} <|end|>
+<|assistant|>'''
+
+        # Keep asking for input prompts in a loop
+        if 1:
+            text = chatHistory
+            pp(chatHistory[-1]['content'])
+            #e()
+            if chat.timings: started_timestamp = time.time()
+
+            # If there is a chat template, use it
+            text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
+            #pp(text)
+            #e()
+            prompt = f'{chat_template.format(input=text)}'
+            #pp(prompt)
+            #e()
+            input_tokens = tokenizer.encode(prompt)
+
+            params = og.GeneratorParams(model)
+            params.set_search_options(**search_options)
+            params.input_ids = input_tokens
+            generator = og.Generator(model, params)
+            if chat.verbose: print("Generator created")
+
+            if chat.verbose: print("Running generation loop ...")
+            if chat.timings:
+                first = True
+                new_tokens = []
+
+            print()
+            print("Output: ", end='', flush=True)
+
+            try:
+                while not generator.is_done():
+                    generator.compute_logits()
+                    generator.generate_next_token()
+                    if chat.timings:
+                        if first:
+                            first_token_timestamp = time.time()
+                            first = False
+
+                    new_token = generator.get_next_tokens()[0]
+                    chunk=tokenizer_stream.decode(new_token)
+                    out.append(chunk)
+                    #print(chunk, end='', flush=True)
+                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
+                    time.sleep(.0001)
+                    if chat.timings: new_tokens.append(new_token)
+            except KeyboardInterrupt:
+                print("  --control+c pressed, aborting generation--")
+            print()
+            print()
+
+            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
+            del generator
+
+            if chat.timings:
+                prompt_time = first_token_timestamp - started_timestamp
+                run_time = time.time() - first_token_timestamp
+                print(f"Prompt length: {len(input_tokens)}, New tokens: {len(new_tokens)}, Time to first: {(prompt_time):.2f}s, Prompt tokens per second: {len(input_tokens)/prompt_time:.2f} tps, New tokens per second: {len(new_tokens)/run_time:.2f} tps")
+        
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
 
 class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
@@ -594,6 +719,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         GetClassName.__init__(self)
         NewChat.__init__(self)
         Scroll_Handlet.__init__(self)
+        self.SetWrapMode(stc.STC_WRAP_WORD)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
         python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
@@ -632,6 +758,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
     def AskQuestion(self):
         pass  # Implement if needed
     def IsTextInvisible(self):
+
         last_position = self.GetTextLength()
         line_number = self.LineFromPosition(last_position)
         first_visible_line = self.GetFirstVisibleLine()
@@ -643,10 +770,14 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
     def _AddOutput(self, message):
         self.AppendText(message)
         if self.IsTextInvisible():
-
+            #print('Scrolling to the end')
             if self.scrolled:
             #self.answer_output.MakeCellVisible(i, 0)
         
+                self.GotoPos(self.GetTextLength())
+        else:
+            if 1: #self.scrolled:
+            # print('Not scrolling to the end')
                 self.GotoPos(self.GetTextLength())
 class _Gpt4_Copilot_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent, tab_id):

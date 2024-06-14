@@ -13,9 +13,15 @@ templates:
     Chat:
     - vendor: 'Microsoft'
       chat_type: 'Chat'
-      name: 'General'
+      name: 'no-Hist'
+      history: false
       question: 'How many Python versions are there?'
 
+    - vendor: 'Microsoft'
+      chat_type: 'Chat'
+      name: 'Hist'
+      history: true
+      question: 'How many Python versions are there?'
     Copilot:
     - vendor: 'Microsoft'
       chat_type: 'Copilot'

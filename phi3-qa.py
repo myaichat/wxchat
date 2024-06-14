@@ -1,5 +1,4 @@
 import onnxruntime_genai as og
-from pprint import pprint as pp
 import argparse
 import time
 
@@ -10,16 +9,13 @@ def main(args):
         first_token_timestamp = 0
 
     model = og.Model(f'{args.model}')
-    print("Model loaded", args.model)
-    #return
     if args.verbose: print("Model loaded")
     tokenizer = og.Tokenizer(model)
     tokenizer_stream = tokenizer.create_stream()
     if args.verbose: print("Tokenizer created")
     if args.verbose: print()
     search_options = {name:getattr(args, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in args}
-    pp(search_options)
-    return
+    
     # Set the max length to something sensible by default, unless it is specified by the user,
     # since otherwise it will be set to the entire context length
     if 'max_length' not in search_options:

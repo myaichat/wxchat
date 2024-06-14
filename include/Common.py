@@ -125,7 +125,9 @@ class Scroll_Handlet:
         self.scrolled=False
         self.previous_scroll_pos=self.GetScrollPos(wx.VERTICAL)        
         #self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
-
+        pub.subscribe(self.OnScroll, 'scroll_output')
+    def OnScroll(self, message):
+        self.scrolled=True
     def on_scroll(self, event):
         current_scroll_pos = self.GetScrollPos(wx.VERTICAL)
 

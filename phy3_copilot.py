@@ -1,6 +1,11 @@
 #
 #try: https://ai.azure.com/explore/models/Phi-3-vision-128k-instruct/version/1/registry/azureml
 # 
+import onnxruntime_genai as og
+
+import argparse
+import time
+
 import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
@@ -13,6 +18,10 @@ from datetime import datetime
 import os, subprocess, yaml, sys
 import wx.stc as stc
 from PIL import Image as PILImage
+
+
+
+
 
 import include.config.init_config as init_config 
 

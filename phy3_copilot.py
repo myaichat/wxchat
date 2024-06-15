@@ -51,12 +51,13 @@ apc.all_chats=all_chats=dict2()
 apc.all_system_templates= all_system_templates=dict2()
 
 from include.Phy3_Python import Microsoft_Chat_InputPanel, \
-Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel, Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel
+    Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 
 from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
     Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
 
-
+#print('Microsoft_ChatDisplayNotebookPanel' in globals())
+#e()
 
 #templates = d2d2(dict(Chat={}, Copilot={}))
 default_chat_template='SYSTEM'
@@ -322,14 +323,16 @@ class VendorNotebook(wx.Notebook):
         else:
             display_panel = f'{chat.vendor}_ChatDisplayNotebookPanel'
             try:
-                assert display_panel in globals().keys()
+                #assert display_panel in globals()
                 cls = globals()[display_panel]
                 self.chatDisplay_notebook = cls(self, self.GetPageCount(), self.ws_name)
                 #print(f'Adding {chat.vendor}_ChatDisplayNotebookPanel panel:', display_panel)
                 self.chatDisplay_notebook.AddTab(chat)
                 #self.chatDisplay_notebook.SetFocus()
-            except AssertionError:
-                raise AssertionError(f"Display class '{display_panel}' does not exist.")
+            except :
+                print('Microsoft_ChatDisplayNotebookPanel' in globals())
+                raise
+                #raise AssertionError(f"Display class '{display_panel}' does not exist.")
             self.AddPage(self.chatDisplay_notebook, title)
             self.SetSelection(self.GetPageCount() - 1)
 

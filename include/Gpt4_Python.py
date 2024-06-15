@@ -84,6 +84,139 @@ class ResponseStreamer:
 
         return ''.join(out)
 
+class Gpt4_Copilot_DisplayPanel(wx.Panel):
+    def __init__(self, parent, tab_id, chat):
+        super(Gpt4_Copilot_DisplayPanel, self).__init__(parent)
+        apc.chats[tab_id]=chat
+        # Create a splitter window
+        self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
+        #splitter = wx.SplitterWindow(self, style = wx.SP_3D| wx.SP_LIVE_UPDATE)
+        self.tab_id=tab_id
+
+        # Initialize the notebook_panel and logPanel
+        self.notebook_panel=notebook_panel = MyNotebookCodePanel(self.copilot_splitter, tab_id)
+        notebook_panel.SetMinSize((-1, 50))
+        #notebook_panel.SetMinSize((800, -1))
+        self.chatPanel = _Gpt4_Copilot_DisplayPanel(self.copilot_splitter, tab_id)
+        self.chatPanel.SetMinSize((-1, 50))
+
+        # Add notebook panel and log panel to the splitter window
+        #self.splitter.AppendWindow(notebook_panel)
+        #self.splitter.AppendWindow(self.logPanel)
+        self.copilot_splitter.SplitVertically( self.chatPanel, notebook_panel) 
+        #print(111, self.GetSize().GetWidth() // 2)
+        self.copilot_splitter.SetSashPosition(500)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.copilot_splitter, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+
+        # Set initial sash positions
+        #
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+    def GetCode(self, tab_id):
+        assert tab_id==self.tab_id, self.__class__.__name__
+        return self.notebook_panel.codeCtrl.GetText()
+    def OnResize(self, event):
+        # Adjust the sash position to keep the vertical splitter size constant
+        width, height = self.GetSize()
+        self.copilot_splitter.SetSashPosition(width // 2)
+        event.Skip()        
+
+                         
+class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
+    def __init__(self, parent):
+        super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
+        GetClassName.__init__(self)
+        NewChat.__init__(self)
+        Scroll_Handlet.__init__(self)
+        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.SetWrapMode(stc.STC_WRAP_WORD)
+
+        self.SetLexer(stc.STC_LEX_PYTHON)
+        text_keywords = 'nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
+        self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
+        
+        self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
+        #self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        #self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
+        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+
+        self.SetKeyWords(0, text_keywords)
+
+        # Set face
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        #pub.subscribe(self.AddOutput, 'chat_output')
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+
+    def OnResize(self, event):
+        self.Refresh()
+        event.Skip()
+
+    def _OnCharHook(self, event):
+        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
+            self.AskQuestion()
+        else:
+            event.Skip()
+
+    def AskQuestion(self):
+        pass  # Implement if needed
+    def IsTextInvisible(self):
+        last_position = self.GetTextLength()
+        line_number = self.LineFromPosition(last_position)
+        first_visible_line = self.GetFirstVisibleLine()
+        lines_on_screen = self.LinesOnScreen()
+        return not (first_visible_line <= line_number < first_visible_line + lines_on_screen)
+
+    def AddOutput(self, message):
+        wx.CallAfter(self._AddOutput, message)
+    def _AddOutput(self, message):
+        self.AppendText(message)
+        if self.IsTextInvisible():
+
+            if self.scrolled:
+            #self.answer_output.MakeCellVisible(i, 0)
+        
+                self.GotoPos(self.GetTextLength())
+
+        
+
+class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
+    def __init__(self, parent, tab_id, chat):
+        StyledTextDisplay.__init__(self,parent)
+        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+
+        self.SetFont(font) 
+        self.tab_id=tab_id
+
+        pub.subscribe(self.AddChatOutput, 'chat_output')
+        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+    def IsTabVisible(self):
+        # Get the parent notebook
+        parent_notebook = self.GetParent()
+
+        # Check if the current page is the selected page in the parent notebook
+        return parent_notebook.GetPage(parent_notebook.GetSelection()) == self
+            
+    def AddChatOutput(self, message, tab_id):
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
+        #print('Chat', tab_id, self.IsTabVisible())
+        if self.tab_id==tab_id:
+            #start_pos = self.GetLastPosition()
+            if 1: #for line in message.splitlines():
+
+                wx.CallAfter(self.AddOutput, message)
+                
+                #end_pos = self.chatDisplay.GetLastPosition()
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))        
+    def OnShowTabId(self):
+        print('show_tab_id', self.tab_id)
+
+             
 class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
         super(Gpt4_ChatDisplayNotebookPanel, self).__init__(parent)

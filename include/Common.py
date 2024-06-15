@@ -1,4 +1,5 @@
 import wx
+import sys, traceback
 from pubsub import pub
 from include.fmt import fmt
 from pprint import pprint as pp 

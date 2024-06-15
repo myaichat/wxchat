@@ -3,3 +3,6 @@ directml
 .huggingface
 myenv
 *.pyc
+cuda-fp16
+cuda_myenv
+cuda_myenv

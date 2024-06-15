@@ -18,7 +18,10 @@ import include.config.init_config as init_config
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
-DEFAULT_MODEL  = 'gpt-4o'
+
+DEFAULT_MODEL  = 'directml\directml-int4-awq-block-128'
+#DEFAULT_MODEL  = 'cuda-fp16'
+
 dir_path = 'template'
 openai.api_key = os.getenv("OPENAI_API_KEY")
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -112,19 +115,19 @@ class ResponseStreamer:
         chat.top_k=chat.get('top_k', 50)
         chat.temperature=chat.get('temperature', 1)
         chat.repetition_penalty=chat.get('repetition_penalty', 1)
-
-        chat.model='directml\directml-int4-awq-block-128'
-        if chat.verbose: print("Loading model...")
+        
+        chat.model=chat.get('model', DEFAULT_MODEL)
+        if chat.verbose: log("Loading model...")
         if chat.timings:
             started_timestamp = 0
             first_token_timestamp = 0
 
         model = og.Model(f'{chat.model}')
-        if chat.verbose: print("Model loaded")
+        if chat.verbose: log("Model loaded")
         tokenizer = og.Tokenizer(model)
         tokenizer_stream = tokenizer.create_stream()
-        if chat.verbose: print("Tokenizer created")
-        if chat.verbose: print()
+        if chat.verbose: log("Tokenizer created")
+        #if chat.verbose: print()
         search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
         
         # Set the max length to something sensible by default, unless it is specified by the user,
@@ -148,7 +151,7 @@ class ResponseStreamer:
             #pp(text)
             #e()
             prompt = f'{chat_template.format(input=text)}'
-            pp(prompt)
+            #pp(prompt)
             #e()
             input_tokens = tokenizer.encode(prompt)
 
@@ -156,15 +159,15 @@ class ResponseStreamer:
             params.set_search_options(**search_options)
             params.input_ids = input_tokens
             generator = og.Generator(model, params)
-            if chat.verbose: print("Generator created")
+            if chat.verbose: log("Generator created")
 
-            if chat.verbose: print("Running generation loop ...")
+            #if chat.verbose: print("Running generation loop ...")
             if chat.timings:
                 first = True
                 new_tokens = []
 
-            print()
-            print("Output: ", end='', flush=True)
+            #print()
+            #print("Output: ", end='', flush=True)
 
             try:
                 while not generator.is_done():
@@ -182,10 +185,17 @@ class ResponseStreamer:
                     pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
                     time.sleep(.0001)
                     if chat.timings: new_tokens.append(new_token)
+            except Exception as ex:
+                log(format_stacktrace(), 'red')
+                #stop progress
+                pub.sendMessage('stop_progress')
+            
+
+                raise
             except KeyboardInterrupt:
                 print("  --control+c pressed, aborting generation--")
-            print()
-            print()
+            #print()
+            #print()
 
             # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
             del generator
@@ -193,7 +203,7 @@ class ResponseStreamer:
             if chat.timings:
                 prompt_time = first_token_timestamp - started_timestamp
                 run_time = time.time() - first_token_timestamp
-                print(f"Prompt length: {len(input_tokens)}, New tokens: {len(new_tokens)}, Time to first: {(prompt_time):.2f}s, Prompt tokens per second: {len(input_tokens)/prompt_time:.2f} tps, New tokens per second: {len(new_tokens)/run_time:.2f} tps")
+                log(f"Prompt length: {len(input_tokens)}, New tokens: {len(new_tokens)}, Time to first: {(prompt_time):.2f}s, Prompt tokens per second: {len(input_tokens)/prompt_time:.2f} tps, New tokens per second: {len(new_tokens)/run_time:.2f} tps")
         
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
@@ -368,7 +378,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         chatHistory[self.tab_id]=[]
         chatHistory[self.tab_id]= []
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        model_names = [DEFAULT_MODEL]  # Add more model names as needed
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
         self.model_dropdown.SetValue(DEFAULT_MODEL)
         
@@ -427,12 +437,9 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             currentModel[self.tab_id]=DEFAULT_MODEL        
     def OnModelChange(self, event):
         # Get the selected model
-        selected_model = self.model_dropdown.GetValue()
+        chat=   apc.chats[self.tab_id]
+        chat.model= self.model_dropdown.GetValue()
 
-        # Print the selected model
-        #print(f"Selected model: {selected_model}")
-
-        # You can add more code here to do something with the selected model
 
         # Continue processing the event
         event.Skip()
@@ -568,7 +575,7 @@ class MyNotebookCodePanel(wx.Panel):
                 
         self.codeCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.codeCtrl.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = '``` python str int self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
+        python_keywords = 'bool python str int self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
 
         self.codeCtrl.SetKeyWords(0, python_keywords)
         # Set Python styles
@@ -897,7 +904,8 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         self.chat_type=chat.chat_type
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
         self.model_dropdown.SetValue(DEFAULT_MODEL)
-        
+        self.clearButton = wx.Button(self, label='Reset')
+        self.clearButton.Bind(wx.EVT_BUTTON, self.onClearHistoryButton)        
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
         
@@ -916,6 +924,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.clearButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
@@ -946,6 +955,14 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+
+    def onClearHistoryButton(self, event):
+        self.clearHistory()
+
+    def clearHistory(self):
+        chatHistory[self.tab_id]= []
+        log('Chat history cleared.')
+
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
@@ -975,7 +992,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         selected_model = self.model_dropdown.GetValue()
 
         # Print the selected model
-        print(f"Selected model: {selected_model}")
+        #print(f"Selected model: {selected_model}")
 
         # You can add more code here to do something with the selected model
 
@@ -986,8 +1003,8 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         global currentModel
         if message in self.tabs:
             assert self.chat_type==message[1]
-            print('Chat restoring', message)
-            pp(self.tabs[message])
+            #print('Chat restoring', message)
+            #pp(self.tabs[message])
             self.inputCtrl.SetValue(self.tabs[message]['q'])
             
             self.model_dropdown.SetValue(currentModel[message])

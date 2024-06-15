@@ -53,6 +53,8 @@ apc.all_system_templates= all_system_templates=dict2()
 from include.Phy3_Python import Microsoft_Chat_InputPanel, \
 Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel, Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel
 
+from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
+    Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
 
 
 
@@ -724,7 +726,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Phy-3 Vision')
+        self.frame = MyFrame(f'Phi-3-mini-4k-instruct Copilot')
         return True
 
 if __name__ == '__main__':

@@ -237,6 +237,128 @@ class PausePanel(wx.Panel,PauseHandlet):
         
         
 class Base_InputPanel:
+    def AddButtons(self, h_sizer):
+        if 1: #second row
+            chat=apc.chats[self.tab_id] 
+            self.do_sample_dropdown = wx.ComboBox(self, choices=['True', 'False'], style=wx.CB_READONLY)
+            self.do_sample_dropdown.SetValue('False')  # Default value
+            self.do_sample_dropdown.Bind(wx.EVT_COMBOBOX, self.OnDoSampleChange)
+            chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
+        
+            self.max_length_dropdown = wx.ComboBox(self, choices=['512', '1024', '2048', '4096'], style=wx.CB_READONLY)
+            self.max_length_dropdown.SetValue('2048')  # Default value
+            self.max_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxLengthChange)
+            chat.max_length = int(self.max_length_dropdown.GetValue())
+
+            self.min_length_dropdown = wx.ComboBox(self, choices=['1', '512', '1024', '2048', '4096'], style=wx.CB_READONLY)
+            self.min_length_dropdown.SetValue('1')  # Default value
+            self.min_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMinLengthChange)
+            chat.min_length = int(self.min_length_dropdown.GetValue()  )
+
+            self.top_p_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0',  '1.1',], style=wx.CB_READONLY)
+            self.top_p_dropdown.SetValue('1.0')  # Default value
+            self.top_p_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopPChange)
+            chat.top_p = float(self.top_p_dropdown.GetValue()  )
+            #top_k
+            self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '50',  '75',  '100',  '150',], style=wx.CB_READONLY)
+            self.top_k_dropdown.SetValue('50')  # Default value
+            self.top_k_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopKChange)
+            chat.top_k = int(self.top_k_dropdown.GetValue()  )     
+
+            self.temp_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0',  '2.0', '5.0', '10.0', '50.0'], style=wx.CB_READONLY)
+            self.temp_dropdown.SetValue('1.0')  # Default value
+            self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
+            chat.temperature = float(self.temp_dropdown.GetValue()  )  
+            #repetition_penalty
+            self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['1.0',  '1.1',  '1.2',  '1.3',  '1.4',  '1.5',  '1.6',  '1.7',  '1.8',  '1.9',  '2.0',  '2.1',], style=wx.CB_READONLY)
+            self.repetition_penalty_dropdown.SetValue('1.0')  # Default value
+            self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
+            chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )             
+
+            h_sizer.Add(self.do_sample_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.max_length_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.min_length_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.top_p_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.top_k_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.temp_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer.Add(self.repetition_penalty_dropdown, 0, wx.ALIGN_CENTER)
+
+    def OnDoSampleChange(self, event):
+        # Get the selected do_sample value
+        selected_do_sample = self.do_sample_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.do_sample = (selected_do_sample == 'True')
+        print('OnDoSampleChange',selected_do_sample, self.tab_id)
+        # Continue processing the event
+        event.Skip()
+    def OnMaxLengthChange(self, event):
+        # Get the selected do_sample value
+        selected_max_length = self.max_length_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.max_length = int(selected_max_length )
+        print('OnMaxLengthChange',selected_max_length, self.tab_id)
+        # Continue processing the event
+        event.Skip()
+    def OnMinLengthChange(self, event):
+        # Get the selected do_sample value
+        selected_min_length = self.min_length_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.min_length = int(selected_min_length )
+
+        # Continue processing the event
+        event.Skip()     
+    def OnTopPChange(self, event):
+        # Get the selected do_sample value
+        selected_top_p = self.top_p_dropdown.GetValue()
+        print('OnTopPChange',selected_top_p, self.tab_id)
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.top_p = float(selected_top_p )
+
+        # Continue processing the event
+        pp(chat)
+        print(apc.chats)
+        event.Skip()        
+    def OnTopKChange(self, event):
+        # Get the selected do_sample value
+        selected_top_k = self.top_k_dropdown.GetValue()
+        print('OnTopKChange',selected_top_k, self.tab_id)
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        
+        chat.top_k = int(selected_top_k )
+
+        # Continue processing the event
+        event.Skip()
+
+    def OnTempChange(self, event):
+        # Get the selected do_sample value
+        selected_temp = self.temp_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.temperature = float(selected_temp )
+
+
+        # Continue processing the event
+        event.Skip()    
+    def OnRepetitionPenaltyChange(self, event):
+        # Get the selected do_sample value
+        selected_repetition_penalty = self.repetition_penalty_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.repetition_penalty = float(selected_repetition_penalty )
+
+        # Continue processing the event
+        event.Skip()
+
     def Base_OnAskQuestion(self):
         self.pause_panel.pause_output(False)
         self.pause_panel.stop_output(False)   
@@ -244,3 +366,82 @@ class Base_InputPanel:
         #a = f"{ss}"
         a=eval('f"""'+ss+'"""')
         return a 
+    def RestoreQuestionForTabId(self, tab_id):
+        self.tab_id=tab_id
+        message=tab_id
+        chat=apc.chats[message]
+        pp(chat)
+        print('RestoreQuestionForTabId', chat)
+        if message in self.tabs:
+            assert self.chat_type==message[1]
+            #print('Chat restoring', message)
+            #pp(self.tabs[message])
+            self.inputCtrl.SetValue(self.tabs[message]['q'])
+            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
+            self.model_dropdown.SetValue(apc.currentModel[message])
+            #self.tab_id=message
+            #self.q_tab_id=message
+            #self.inputCtrl.SetSelection(0, -1)
+            self.inputCtrl.SetFocus()
+            #print('Restored', message)
+            
+            #chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
+            #chat.max_length = int(self.max_length_dropdown.GetValue() )
+            
+            #chat.min_length = int(self.min_length_dropdown.GetValue() )
+            #chat.top_p = float(self.top_p_dropdown.GetValue() )
+            #chat.top_k = float(self.top_k_dropdown.GetValue() )
+            #chat.temperature = float(self.temp_dropdown.GetValue() )
+            #chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue() )
+            
+            print(message, self.tab_id)
+            #pp(self.tabs)
+        
+            if chat.get('max_length', None):
+                self.max_length_dropdown.SetValue(str(chat.max_length)) 
+            else:
+                chat.max_length = int(self.max_length_dropdown.GetValue())  
+
+
+            if chat.get('min_length', None):
+                self.min_length_dropdown.SetValue(str(chat.min_length))
+            else:
+                chat.min_length = int(self.min_length_dropdown.GetValue())
+
+
+            if chat.get('top_p', None):
+                
+                self.top_p_dropdown.SetValue(str(chat.top_p))
+                
+                #wx.MessageBox(f"top_p {chat.top_p} {self.top_p_dropdown.GetValue()}", "top_p"   )
+            else:
+                chat.top_p= float(self.top_p_dropdown.GetValue())
+
+            
+            if chat.get('top_k', None):
+                self.top_k_dropdown.SetValue(str(chat.top_k))
+            else:
+                chat.top_k = int(self.top_k_dropdown.GetValue())
+
+
+            if chat.get('temperature', None):
+                self.temp_dropdown.SetValue(str(chat.temperature))
+            else:
+                chat.temperature = float(self.temp_dropdown.GetValue())
+
+
+
+            if chat.get('repetition_penalty', None):
+                self.repetition_penalty_dropdown.SetValue(str(chat.repetition_penalty))
+            else:
+                chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue())
+
+            if chat.get('do_sample', None) is not None:
+                
+                val = 'True' if chat.do_sample else 'False'
+                self.do_sample_dropdown.SetValue(val)
+            else:
+                chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
+    
+
+            #self.max_length_dropdown.SetValue(str(chat.get('max_length', 2048)))    

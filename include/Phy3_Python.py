@@ -11,7 +11,7 @@ import os, openai
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
-from include.fmt import fmt
+from include.fmt import fmt, pfmt, pfmtd, fmtd
 
 
 import include.config.init_config as init_config 
@@ -95,52 +95,72 @@ class _ResponseStreamer:
         return ''.join(out)
 
 class ResponseStreamer:
-    def __init__(self):
+    def __init__(self,chat, model):
         # Set your OpenAI API key here
-        
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True) 
+        if chat.verbose: log("Loading model...")
+        self.model = og.Model(f'{model}')
+        if chat.verbose: log("Model loaded")
+        self.tokenizer = og.Tokenizer(self.model)
+        self.tokenizer_stream = self.tokenizer.create_stream()  
+        if chat.verbose: log("Tokenizer created")  
 
-        # Initialize the client
-        self.client = openai.OpenAI()
 
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id, model):
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id):
         out=[]
         chat=apc.chats[receiveing_tab_id]
+
+        self.receiveing_tab_id=receiveing_tab_id
+        chat=apc.chats[receiveing_tab_id]
         chat.verbose=chat.get('verbose', True)
-        chat.timings=chat.get('timings', True)
-        
-        chat.do_sample=chat.get('do_sample', False)
-        chat.max_length=chat.get('max_length', 2048*2)
-        chat.min_length=chat.get('min_length', 1)
-        chat.top_p=chat.get('top_p', 1)
-        chat.top_k=chat.get('top_k', 50)
-        chat.temperature=chat.get('temperature', 1)
-        chat.repetition_penalty=chat.get('repetition_penalty', 1)
-        
+        chat.timings=chat.get('timings', True)    
+        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
+        assert chat.max_length,chat.max_length
+        assert chat.min_length,chat.min_length
+        assert chat.top_p is not None,chat.top_p
+        assert chat.top_k,chat.top_k
+        assert chat.temperature is not None,chat.temperature
+        assert chat.repetition_penalty is not None,chat.repetition_penalty
         chat.model=chat.get('model', DEFAULT_MODEL)
-        if chat.verbose: log("Loading model...")
+        
+
+    
+        
+
+        #chat.max_length=chat.get('max_length', 2048*2)
+
+        #chat.temperature=chat.get('temperature', 1)
+        #chat.repetition_penalty=chat.get('repetition_penalty', 1)
+        
+        
+        
         if chat.timings:
             started_timestamp = 0
             first_token_timestamp = 0
 
-        model = og.Model(f'{chat.model}')
-        if chat.verbose: log("Model loaded")
-        tokenizer = og.Tokenizer(model)
-        tokenizer_stream = tokenizer.create_stream()
-        if chat.verbose: log("Tokenizer created")
+
+        
         #if chat.verbose: print()
         search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
-        
+        slog=fmtd([search_options], [])
+        print(slog)
+        log(slog)
+        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
         # Set the max length to something sensible by default, unless it is specified by the user,
         # since otherwise it will be set to the entire context length
-        if 'max_length' not in search_options:
-            search_options['max_length'] = 4096
-        #pp(search_options)
-        #e()
+        assert 'max_length'  in search_options
+        assert 'min_length'  in search_options
+        assert 'top_p'  in search_options
+        assert 'top_k'  in search_options
+        assert 'temperature'  in search_options
+        assert 'repetition_penalty'  in search_options
+
         chat_template = '''{input}
 <|assistant|>'''
 
         # Keep asking for input prompts in a loop
-        if 1:
+        try:
             text = '\n'.join(chatHistory)
             #pp(chatHistory)
             #e()
@@ -151,14 +171,15 @@ class ResponseStreamer:
             #pp(text)
             #e()
             prompt = f'{chat_template.format(input=text)}'
+            pfmt([[prompt]], ['Prompt'])
             #pp(prompt)
             #e()
-            input_tokens = tokenizer.encode(prompt)
+            input_tokens = self.tokenizer.encode(prompt)
 
-            params = og.GeneratorParams(model)
+            params = og.GeneratorParams(self.model)
             params.set_search_options(**search_options)
             params.input_ids = input_tokens
-            generator = og.Generator(model, params)
+            generator = og.Generator(self.model, params)
             if chat.verbose: log("Generator created")
 
             #if chat.verbose: print("Running generation loop ...")
@@ -169,7 +190,7 @@ class ResponseStreamer:
             #print()
             #print("Output: ", end='', flush=True)
 
-            try:
+            if 1:
                 while not generator.is_done():
                     generator.compute_logits()
                     generator.generate_next_token()
@@ -179,23 +200,13 @@ class ResponseStreamer:
                             first = False
 
                     new_token = generator.get_next_tokens()[0]
-                    chunk=tokenizer_stream.decode(new_token)
+                    chunk=self.tokenizer_stream.decode(new_token)
                     out.append(chunk)
                     #print(chunk, end='', flush=True)
+                    
                     pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
                     time.sleep(.0001)
                     if chat.timings: new_tokens.append(new_token)
-            except Exception as ex:
-                log(format_stacktrace(), 'red')
-                #stop progress
-                pub.sendMessage('stop_progress')
-            
-
-                raise
-            except KeyboardInterrupt:
-                print("  --control+c pressed, aborting generation--")
-            #print()
-            #print()
 
             # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
             del generator
@@ -203,8 +214,18 @@ class ResponseStreamer:
             if chat.timings:
                 prompt_time = first_token_timestamp - started_timestamp
                 run_time = time.time() - first_token_timestamp
-                log(f"Prompt length: {len(input_tokens)}, New tokens: {len(new_tokens)}, Time to first: {(prompt_time):.2f}s, Prompt tokens per second: {len(input_tokens)/prompt_time:.2f} tps, New tokens per second: {len(new_tokens)/run_time:.2f} tps")
-        
+                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
+                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
+                log(fmtd([stats], []))
+                
+                pub.sendMessage('chat_output', message=f'\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
+        except:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
+
+            pub.sendMessage('stop_progress')
+            return ''
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
@@ -276,16 +297,19 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
             # print('Not scrolling to the end')
                 self.GotoPos(self.GetTextLength())
 class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
+    subscribed=False
     def __init__(self, parent, tab_id, chat):
         StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
         self.SetFont(font) 
         self.tab_id=tab_id
-
         pub.subscribe(self.AddChatOutput, 'chat_output')
-        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
-        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+        if not Microsoft_Chat_DisplayPanel.subscribed:
+            
+            #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+            pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+            Microsoft_Chat_DisplayPanel.subscribed=True
     def IsTabVisible(self):
         # Get the parent notebook
         parent_notebook = self.GetParent()
@@ -296,6 +320,7 @@ class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
     def AddChatOutput(self, message, tab_id):
         #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
         #print('Chat', tab_id, self.IsTabVisible())
+        #print('AddChatOutput',tab_id, )
         if self.tab_id==tab_id:
             #start_pos = self.GetLastPosition()
             if 1: #for line in message.splitlines():
@@ -310,8 +335,9 @@ class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
              
 
 class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+    subscribed=False
     def __init__(self, parent, tab_id):
-        global chatHistory,  currentQuestion, currentModel
+        global chatHistory,  currentQuestion
         super(Microsoft_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
@@ -319,6 +345,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         self.tab_id=tab_id
         chat=   apc.chats[tab_id]
         chatHistory[self.tab_id]=[]
+        self.rs={}
         #pp(chat)
         chatHistory[self.tab_id]= []
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
@@ -336,7 +363,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
 
-
+        v_sizer = wx.BoxSizer(wx.VERTICAL)
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
@@ -347,6 +374,11 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.clearButton, 0, wx.ALIGN_CENTER)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel.AddButtons(self, h_sizer)
+
+        v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
+        v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
@@ -355,7 +387,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            apc.currentModel[self.tab_id]=DEFAULT_MODEL
 
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= []
@@ -366,17 +398,21 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(v_sizer, 0, wx.EXPAND)
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
         self.receiveing_tab_id=0
-
-        pub.subscribe(self.SetException, 'fix_exception')
-        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
-        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-        pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        if not Microsoft_Chat_InputPanel.subscribed:
+            pub.subscribe(self.SetException, 'fix_exception')
+            pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+            #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+            #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+            #pub.subscribe(self.SetTabId, 'set_tab_id')
+            Microsoft_Chat_InputPanel.subscribed=True   
         wx.CallAfter(self.inputCtrl.SetFocus)
+
+
 
     def onClearHistoryButton(self, event):
         self.clearHistory()
@@ -385,11 +421,11 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         chatHistory[self.tab_id]= []
         log('Chat history cleared.')
 
-    def SetTabId(self, tab_id):
+    def _SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
     def SetChatDefaults(self, tab_id):
-        global chatHistory, questionHistory, currentModel
+        global chatHistory, questionHistory
         if tab_id ==self.tab_id:
             assert self.chat_type==tab_id[1]
             
@@ -399,13 +435,13 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= []
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            apc.currentModel[self.tab_id]=DEFAULT_MODEL
 
 
-    def _SetTabId(self, tab_id):
-        global chatHistory, questionHistory, currentModel
+    def SetTabId(self, tab_id):
+        global chatHistory, questionHistory
         self.tab_id=tab_id
-      
+        print('Chat SetTabId', tab_id)
         return self
 
                       
@@ -421,24 +457,12 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, message):
-        global currentModel
-        if message in self.tabs:
-            assert self.chat_type==message[1]
-            #print('Chat restoring', message)
-            #pp(self.tabs[message])
-            self.inputCtrl.SetValue(self.tabs[message]['q'])
-            
-            self.model_dropdown.SetValue(currentModel[message])
-            self.tab_id=message
-            #self.q_tab_id=message
-            #self.inputCtrl.SetSelection(0, -1)
-            self.inputCtrl.SetFocus()
+
     def _SaveQuestionForTabId(self, message):
-        global currentModel
+        
         q=self.inputCtrl.GetValue()
         self.tabs[message]=dict(q=q)
-        currentModel[message]=self.model_dropdown.GetValue()
+        apc.currentModel[message]=self.model_dropdown.GetValue()
         if 0:
             d={"role": "user", "content":q}
             if self.tab_id in chatHistory:
@@ -453,7 +477,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         #print('Ask button clicked')
         self.AskQuestion()
     def AskQuestion(self):
-        global chatHistory, questionHistory, currentQuestion,currentModel
+        global chatHistory, questionHistory, currentQuestion
         # Get the content of the StyledTextCtrl
         #print('current tab_id', self.q_tab_id)
         
@@ -469,11 +493,15 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             pub.sendMessage('start_progress')
             chat=apc.chats[self.tab_id]
             prompt=self.evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
-            chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>"  ]
+            if chat.history:
+
+                chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>"  ]
+            else:
+                chatHistory[self.tab_id] = [f"<|user|>\n{prompt} <|end|>"  ]
 
             questionHistory[self.tab_id].append(question)
             currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
-            currentModel[self.tab_id]=self.model_dropdown.GetValue()
+            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
             header=fmt([[prompt]], ['User Question'])
@@ -484,15 +512,26 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             
             
             self.askButton.Disable()
-            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
-
-    def stream_response(self, prompt, chatHistory, tab_id, model):
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id)).start()
+    def Get_ResponseStreamer(self, tab_id, model):
+        rs_id=(tab_id, model)
+        if rs_id in self.rs:
+            return self.rs[rs_id]
+        else:
+            rs=ResponseStreamer(apc.chats[tab_id], model)
+            self.rs[rs_id]=rs
+            return rs
+        
+    def stream_response(self, prompt, chatHistory, tab_id):
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
-        rs=ResponseStreamer()
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        chat=apc.chats[tab_id]
+        rs=self.Get_ResponseStreamer(tab_id, model=self.model_dropdown.GetValue())
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id)
+        chat=apc.chats[tab_id]
         if out:
-            chatHistory[tab_id].append(f"<|assistant|>\n{out} <|end|>" ) 
+            if chat.history:
+                chatHistory[tab_id].append(f"<|assistant|>\n{out} <|end|>" ) 
         pub.sendMessage('stop_progress')
         log('Done.')
         set_status('Done.')  
@@ -537,6 +576,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         pub.sendMessage('log', message=f'{message}', color=color)
 
 class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
+    subscribed=False
     def __init__(self, parent, vendor_tab_id, ws_name):
         super(Microsoft_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
@@ -551,10 +591,13 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
         self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
-        pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
-        pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
-        pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
-        pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
+        if not Microsoft_ChatDisplayNotebookPanel.subscribed:
+            
+            pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
+            pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
+            pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
+            pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
+            Microsoft_ChatDisplayNotebookPanel.subscribed=True
     def get_active_chat_panel(self):
         active_chat_tab_index = self.chat_notebook.GetSelection()
         if active_chat_tab_index == wx.NOT_FOUND:
@@ -578,12 +621,13 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
                 active_tab_id = active_chat_panel.tab_id
                 #print('OnWorkspaceTabChanged', message, self.vendor_tab_id, self.ws_name, active_tab_id)
             if 1:
-                pub.sendMessage('restore_question_for_tab_id', message=active_tab_id)
+                #pub.sendMessage('restore_question_for_tab_id', tab_id=active_tab_id)
 
                 assert active_tab_id in apc.chats
                 chat=apc.chats[active_tab_id]
                 print('swapping', active_tab_id )
-                pub.sendMessage('swap_input_panel', chat=chat,tab_id=active_tab_id)
+
+                pub.sendMessage('swap_input_panel', tab_id=active_tab_id)
                             
 
     def OnVendorspaceTabChanging(self, message):
@@ -633,13 +677,14 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
             #print('display_panel', display_panel)
             try:
                 assert display_panel in globals()
-                print(f'\t\tAdding {chat.workspace} "{chat.chat_type}" panel:', display_panel)
+                print(f'\t\tAddTab: Adding {chat.workspace} "{chat.chat_type}" panel:', display_panel)
                 cls= globals()[display_panel]
-                # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+                # Microsoft_Chat_DisplayPanel/ Microsoft_Copilot_DisplayPanel
                 chatDisplay = cls (chat_notebook, tab_id=tab_id, chat=chat)
                 #chatDisplay.SetFocus()
                 if 1:
-                    pub.sendMessage('swap_input_panel', chat=chat, tab_id=tab_id)
+                    apc.chats[tab_id]=chat
+                    pub.sendMessage('swap_input_panel',  tab_id=tab_id)
             except AssertionError:
                 print(f"Display class '{display_panel}' does not exist.")
                 raise
@@ -675,13 +720,14 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
         current_chatDisplay = nb.GetPage(newtabIndex)
         tab_id=current_chatDisplay.tab_id
         #print('OnPageChanged 222', tab_id)
-        pub.sendMessage('restore_question_for_tab_id', message=tab_id)
+        #pub.sendMessage('restore_question_for_tab_id', tab_id=tab_id)
         current_chatDisplay = nb.GetPage(newtabIndex)
         #pp(current_chatDisplay.tab_id)
         #e()
+        print(tab_id, tab_id in apc.chats)
         if tab_id in apc.chats:
             chat=apc.chats[tab_id]
-            pub.sendMessage('swap_input_panel', chat=chat,tab_id=tab_id)
+            pub.sendMessage('swap_input_panel', tab_id=tab_id)
         # Continue processing the event
         event.Skip()          
 
@@ -691,8 +737,9 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
         return self.GetPageCount() - 1
 
 class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+    subscribed=False
     def __init__(self, parent, tab_id):
-        global chatHistory,  currentQuestion, currentModel
+        global chatHistory,  currentQuestion
         super(Microsoft_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
@@ -713,7 +760,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
 
-
+        v_sizer = wx.BoxSizer(wx.VERTICAL)
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
@@ -722,35 +769,45 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
+
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel.AddButtons(self, h_sizer)
+
+        v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
+        v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
+    
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
             q= apc.chats[self.tab_id].question
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            apc.currentModel[self.tab_id]=DEFAULT_MODEL
             chatHistory[self.tab_id]= []
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(v_sizer, 0, wx.EXPAND)
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
         self.receiveing_tab_id=0
-
-        #pub.subscribe(self.SetException, 'fix_exception')
-        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
-        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-        pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        if not Microsoft_Copilot_InputPanel.subscribed:
+                
+            #pub.subscribe(self.SetException, 'fix_exception')
+            pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+            #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+            #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+            Microsoft_Copilot_InputPanel.subscribed=True
+            
         wx.CallAfter(self.inputCtrl.SetFocus)
-    def SetTabId(self, tab_id):
+    def _SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask copilot {tab_id}:')
     def SetChatDefaults(self, tab_id):
-        global chatHistory, questionHistory, currentModel
+        global chatHistory, questionHistory
         if tab_id ==self.tab_id:
             assert self.chat_type==tab_id[1]
             chat=apc.chats[tab_id]
@@ -759,7 +816,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             self.tabs[self.tab_id]=dict(q=chat.question)
             chatHistory[self.tab_id]= []
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL        
+            apc.currentModel[self.tab_id]=DEFAULT_MODEL        
     def OnModelChange(self, event):
         # Get the selected model
         chat=   apc.chats[self.tab_id]
@@ -769,22 +826,12 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, message):
-        global currentModel
-        tab_id=message
-        if tab_id in self.tabs:
-            self.inputCtrl.SetValue(self.tabs[message]['q'])
-            
-            self.model_dropdown.SetValue(currentModel[message])
-            self.tab_id=message
-            #self.q_tab_id=message
-            #self.inputCtrl.SetSelection(0, -1)
-            self.inputCtrl.SetFocus()
+
     def _SaveQuestionForTabId(self, message):
-        global currentModel
+        
         q=self.inputCtrl.GetValue()
         self.tabs[message]=dict(q=q)
-        currentModel[message]=self.model_dropdown.GetValue()
+        apc.currentModel[message]=self.model_dropdown.GetValue()
         if 0:
             d={"role": "user", "content":q}
             if self.tab_id in chatHistory:
@@ -799,7 +846,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
         #print('Ask button clicked')
         self.AskQuestion()
     def AskQuestion(self):
-        global chatHistory, questionHistory, currentQuestion,currentModel
+        global chatHistory, questionHistory, currentQuestion
         # Get the content of the StyledTextCtrl
         #print('current tab_id', self.q_tab_id)
         #pub.sendMessage('show_tab_id')
@@ -822,7 +869,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
 
             questionHistory[self.tab_id].append(question)
             currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
-            currentModel[self.tab_id]=self.model_dropdown.GetValue()
+            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
             header=fmt([[question]], ['User Question'])
@@ -833,13 +880,14 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
             #pub.sendMessage('chat_output', message=f'{prompt}\n')
             
             #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id)).start()
 
-    def stream_response(self, prompt, chatHistory, tab_id, model):
+    def stream_response(self, prompt, chatHistory, tab_id):
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
-        rs=ResponseStreamer()
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        chat=apc.chats[tab_id]
+        rs=ResponseStreamer(chat, model=self.model_dropdown.GetValue())
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id)
         if out:
             chatHistory[tab_id].append("<|assistant|>\n{out} <|end|>") 
         pub.sendMessage('stop_progress')
@@ -886,6 +934,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
 
   
 class MyNotebookCodePanel(wx.Panel):
+    subscribed=False
     def __init__(self, parent, tab_id):
         super(MyNotebookCodePanel, self).__init__(parent)
         
@@ -955,8 +1004,11 @@ class MyNotebookCodePanel(wx.Panel):
 
         self.SetSizer(sizer)
         self.Layout()
-        pub.subscribe(self.ExecuteFile, 'execute')
-        pub.subscribe(self.OnSaveFile, 'save_file')
+        if not MyNotebookCodePanel.subscribed:
+
+            pub.subscribe(self.ExecuteFile, 'execute')
+            pub.subscribe(self.OnSaveFile, 'save_file')
+            MyNotebookCodePanel.subscribed=True
 
     def OnSaveFile(self):
         #print('Saving file...')
@@ -1075,6 +1127,7 @@ class Microsoft_Copilot_DisplayPanel(wx.Panel):
         self.copilot_splitter.SetSashPosition(width // 2)
         event.Skip()   
 class Copilot_DisplayPanel(StyledTextDisplay):
+    subscribed=False
     def __init__(self, parent, tab_id):
         StyledTextDisplay.__init__(self,parent)
         
@@ -1083,9 +1136,11 @@ class Copilot_DisplayPanel(StyledTextDisplay):
         self.SetFont(font) 
      
         self.tab_id=tab_id
-        pub.subscribe(self.AddChatOutput, 'chat_output')
-        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
-        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+        if not Copilot_DisplayPanel.subscribed:
+            pub.subscribe(self.AddChatOutput, 'chat_output')
+            #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+            pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+            Copilot_DisplayPanel.subscribed=True
     def IsTabVisible(self):
         # Get the parent notebook
         parent_notebook = self.GetParent().GetParent().GetParent()

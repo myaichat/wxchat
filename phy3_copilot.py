@@ -36,7 +36,7 @@ apc.chatHistory = chatHistory={}
 
 apc.questionHistory = questionHistory={}
 apc.currentQuestion = currentQuestion={}
-apc.currentModel   = currentModel={}
+apc.currentModel   = {}
 
 
 
@@ -194,6 +194,7 @@ class NewChatDialog(wx.Dialog):
 
 
 class LogPanel(wx.Panel):
+    subscribed = False
     def __init__(self, parent):
         super(LogPanel, self).__init__(parent)
         self.logCtrl = wx.TextCtrl(self, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_RICH2)
@@ -203,9 +204,12 @@ class LogPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.logCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
-        pub.subscribe(self.AddLog, 'log')
-        pub.subscribe(self.AddOutput, 'output')
-        pub.subscribe(self.AddException, 'exception')
+        if not LogPanel.subscribed:
+       
+            pub.subscribe(self.AddLog, 'log')
+            pub.subscribe(self.AddOutput, 'output')
+            pub.subscribe(self.AddException, 'exception')
+            LogPanel.subscribed = True
 
     def AddLog(self, message, color=None):
         if not color:
@@ -253,15 +257,19 @@ class LogPanel(wx.Panel):
 
 #GPT4 Vendor Display Panel
 class VendorNotebook(wx.Notebook):
+    subscribed = False
     def __init__(self, parent,ws_name, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.NB_LEFT, name=wx.NotebookNameStr):
         super().__init__(parent, id, pos, size, style, name)      
         
         self.ws_name = ws_name
-        pub.subscribe(self.AddTab, 'add_chat')
+        
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
-        pub.subscribe(self.AddDefaultTabs, 'add_default_tabs')
+        if not VendorNotebook.subscribed:
+            pub.subscribe(self.AddDefaultTabs, 'add_default_tabs')
+            pub.subscribe(self.AddTab, 'add_chat')
+            VendorNotebook.subscribed = True
 
     def OnMouseMotion(self, event):
         position = event.GetPosition()
@@ -339,6 +347,7 @@ class VendorNotebook(wx.Notebook):
 
 
 class WorkspacePanel(wx.Panel,NewChat):
+    subscribed = False
     def __init__(self, parent, ws_name):
         super(WorkspacePanel, self).__init__(parent)
         self.h_splitter = h_splitter=wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -353,7 +362,9 @@ class WorkspacePanel(wx.Panel,NewChat):
             #DUMMY chatInput - 
             # SwapInputPanel will replace this with the actual chatInput
             chat=all_chats[self.ws_name][0]
-            self.SwapInputPanel(chat, (chat.workspace,chat.chat_type, chat.vendor,0,0), resplit=False)
+            tab_id=(chat.workspace,chat.chat_type, chat.vendor,0,0)
+            apc.chats[tab_id]=chat
+            self.SwapInputPanel(tab_id , resplit=False)
         
         if 0:
             self.chatInput = Gpt4_Chat_InputPanel(v_splitter, tab_id=(self.ws_name,0,0))
@@ -377,12 +388,15 @@ class WorkspacePanel(wx.Panel,NewChat):
 
         self.chatInput.SetFocus()
         self.Bind(wx.EVT_SIZE, self.OnResize)
-        if 1:
+        if not WorkspacePanel.subscribed:
             pub.subscribe(self.SwapInputPanel, 'swap_input_panel')
+            WorkspacePanel.subscribed = True
 
-    def SwapInputPanel(self, chat, tab_id, resplit=True):
+    def SwapInputPanel(self,  tab_id, resplit=True):
+        print('SwapInputPanel', tab_id)
         #parent = self.GetParent()
-        apc.chats[tab_id]=chat
+        #apc.chats[tab_id]=chat
+        chat=apc.chats[tab_id]
         #print('SwapInputPanel', chat.chat_type)
         v_splitter = self.v_splitter
         if resplit:
@@ -398,7 +412,9 @@ class WorkspacePanel(wx.Panel,NewChat):
         if input_id in self.chatInputs:
             self.chatInput=self.chatInputs[input_id]
             #print(self.chatInput, tab_id)
-            self.chatInput.SetTabId(tab_id)
+            #self.chatInput.SetTabId(tab_id)
+            self.chatInput.tab_id=tab_id
+            self.chatInput.RestoreQuestionForTabId(tab_id)
         else:
             if 0:
                 if chat.chat_type == 'Chat':
@@ -413,7 +429,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             #print('display_panel', display_panel)
             try:
                 
-                print(f'\t\tAdding {chat.workspace} "{chat.chat_type}" panel:', chatInput_panel)
+                print(f'\t\tWorkspace|resplit[{resplit}]: Adding {chat.workspace} "{chat.chat_type}" panel:', chatInput_panel)
                 assert chatInput_panel in globals(), f"Display class '{chatInput_panel}' does not exist."
                 cls= globals()[chatInput_panel]
                 # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
@@ -431,6 +447,8 @@ class WorkspacePanel(wx.Panel,NewChat):
 
             self.chatInputs[input_id]=self.chatInput
         #print('SwapInputPanel', self.chatInputs.keys())
+        
+ 
         if resplit:
             v_splitter.SplitVertically(self.chatInput, self.logPanel)
             #self.chatInput.SetFocus()
@@ -521,7 +539,7 @@ class Workspace(wx.Panel):
 class MyFrame(wx.Frame, NewChat):
     def __init__(self, title):
         global apc
-        super(MyFrame, self).__init__(None, title=title, size=(800, 800))
+        super(MyFrame, self).__init__(None, title=title, size=(1400, 1000))
         apc.chats={}
         apc.chat_panels={}
         self.workspace = apc.workspace = Workspace(self)

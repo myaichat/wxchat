@@ -97,7 +97,7 @@ class Gpt4_Copilot_DisplayPanel(wx.Panel):
         self.notebook_panel=notebook_panel = MyNotebookCodePanel(self.copilot_splitter, tab_id)
         notebook_panel.SetMinSize((-1, 50))
         #notebook_panel.SetMinSize((800, -1))
-        self.chatPanel = _Gpt4_Copilot_DisplayPanel(self.copilot_splitter, tab_id)
+        self.chatPanel = Copilot_DisplayPanel(self.copilot_splitter, tab_id)
         self.chatPanel.SetMinSize((-1, 50))
 
         # Add notebook panel and log panel to the splitter window
@@ -259,7 +259,7 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
                 active_tab_id = active_chat_panel.tab_id
                 #print('OnWorkspaceTabChanged', message, self.vendor_tab_id, self.ws_name, active_tab_id)
             if 1:
-                pub.sendMessage('restore_question_for_tab_id', message=active_tab_id)
+                pub.sendMessage('restore_question_for_tab_id', tab_id=active_tab_id)
 
                 assert active_tab_id in apc.chats
                 chat=apc.chats[active_tab_id]
@@ -320,7 +320,7 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
                 chatDisplay = cls (chat_notebook, tab_id=tab_id, chat=chat)
                 #chatDisplay.SetFocus()
                 if 1:
-                    pub.sendMessage('swap_input_panel', chat=chat, tab_id=tab_id)
+                    pub.sendMessage('swap_input_panel',  tab_id=tab_id)
             except AssertionError:
                 #raise AssertionError(f"Display class '{display_panel}' does not exist.")
                 raise
@@ -356,13 +356,13 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
         current_chatDisplay = nb.GetPage(newtabIndex)
         tab_id=current_chatDisplay.tab_id
         #print('OnPageChanged 222', tab_id)
-        pub.sendMessage('restore_question_for_tab_id', message=tab_id)
+        pub.sendMessage('restore_question_for_tab_id', tab_id=tab_id)
         current_chatDisplay = nb.GetPage(newtabIndex)
         #pp(current_chatDisplay.tab_id)
         #e()
         if tab_id in apc.chats:
             chat=apc.chats[tab_id]
-            pub.sendMessage('swap_input_panel', chat=chat,tab_id=tab_id)
+            pub.sendMessage('swap_input_panel', tab_id=tab_id)
         # Continue processing the event
         event.Skip()          
 
@@ -453,12 +453,15 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, message):
+    def RestoreQuestionForTabId(self, tab_id):
+        message=tab_id
+        
         global currentModel
         tab_id=message
         if tab_id in self.tabs:
+            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
             self.inputCtrl.SetValue(self.tabs[message]['q'])
-            
+            assert self.chat_type==message[1]
             self.model_dropdown.SetValue(currentModel[message])
             self.tab_id=message
             #self.q_tab_id=message
@@ -781,7 +784,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
             #self.answer_output.MakeCellVisible(i, 0)
         
                 self.GotoPos(self.GetTextLength())
-class _Gpt4_Copilot_DisplayPanel(StyledTextDisplay):
+class Copilot_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent, tab_id):
         StyledTextDisplay.__init__(self,parent)
         
@@ -828,7 +831,7 @@ class Gpt4_Copilot_DisplayPanel(wx.Panel):
         self.notebook_panel=notebook_panel = MyNotebookCodePanel(self.copilot_splitter, tab_id)
         notebook_panel.SetMinSize((-1, 50))
         #notebook_panel.SetMinSize((800, -1))
-        self.chatPanel = _Gpt4_Copilot_DisplayPanel(self.copilot_splitter, tab_id)
+        self.chatPanel = Copilot_DisplayPanel(self.copilot_splitter, tab_id)
         self.chatPanel.SetMinSize((-1, 50))
 
         # Add notebook panel and log panel to the splitter window
@@ -992,9 +995,12 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, message):
+    def RestoreQuestionForTabId(self, tab_id):
+        message=tab_id
+        
         global currentModel
-        if message in self.tabs:
+        if message  in self.tabs:
+            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
             assert self.chat_type==message[1]
             print('Chat restoring', message)
             pp(self.tabs[message])
@@ -1005,6 +1011,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
             #self.q_tab_id=message
             #self.inputCtrl.SetSelection(0, -1)
             self.inputCtrl.SetFocus()
+        
     def _SaveQuestionForTabId(self, message):
         global currentModel
         q=self.inputCtrl.GetValue()

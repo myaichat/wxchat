@@ -191,6 +191,7 @@ class ResponseStreamer:
             #print("Output: ", end='', flush=True)
 
             if 1:
+                idx=0
                 while not generator.is_done():
                     generator.compute_logits()
                     generator.generate_next_token()
@@ -205,8 +206,11 @@ class ResponseStreamer:
                     #print(chunk, end='', flush=True)
                     
                     pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
-                    time.sleep(.0001)
+                    if idx%10==0:
+                        time.sleep(.0001)
+                        idx=0
                     if chat.timings: new_tokens.append(new_token)
+                    idx+=1
 
             # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
             del generator
@@ -374,7 +378,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
   
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.clearButton, 0, wx.ALIGN_CENTER)
-        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        h_sizer = wx.BoxSizer(wx.VERTICAL)
         Base_InputPanel.AddButtons(self, h_sizer)
 
         v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)

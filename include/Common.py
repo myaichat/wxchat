@@ -271,7 +271,7 @@ class Base_InputPanel:
             self.do_sample_dropdown.Bind(wx.EVT_COMBOBOX, self.OnDoSampleChange)
             chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
         
-            self.max_length_dropdown = wx.ComboBox(self, choices=['512', '1024', '2048', '4096'], style=wx.CB_READONLY)
+            self.max_length_dropdown = wx.ComboBox(self, choices=['512', '768','1024','1536', '2048', '4096', str(1024* 10), str(1024* 20), str(1024* 40)], style=wx.CB_READONLY)
             self.max_length_dropdown.SetValue('2048')  # Default value
             self.max_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxLengthChange)
             chat.max_length = int(self.max_length_dropdown.GetValue())
@@ -297,7 +297,7 @@ class Base_InputPanel:
             chat.temperature = float(self.temp_dropdown.GetValue()  )  
             #repetition_penalty
             self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['1.0',  '1.1',  '1.2',  '1.3',  '1.4',  '1.5',  '1.6',  '1.7',  '1.8',  '1.9',  '2.0',  '2.1','2.5','3.0','5.0','10.0',], style=wx.CB_READONLY)
-            self.repetition_penalty_dropdown.SetValue('1.2')  # Default value
+            self.repetition_penalty_dropdown.SetValue('1.1')  # Default value
             self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
             chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )             
 

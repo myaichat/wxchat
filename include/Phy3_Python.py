@@ -18,9 +18,11 @@ import include.config.init_config as init_config
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
-
-DEFAULT_MODEL  = 'directml\directml-int4-awq-block-128'
+DEFAULT_MODEL  = r'mini_dml_4k\directml\directml-int4-awq-block-128'
+DEFAULT_MODEL  = r'mini_dml_128k\directml\directml-int4-awq-block-128'
 #DEFAULT_MODEL  = 'cuda-fp16'
+DEFAULT_MODEL  = r'medium_dml_4k\directml-int4-awq-block-128'
+DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
 
 dir_path = 'template'
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -177,6 +179,7 @@ class ResponseStreamer:
             input_tokens = self.tokenizer.encode(prompt)
 
             params = og.GeneratorParams(self.model)
+            #params.try_graph_capture_with_max_batch_size(10)
             params.set_search_options(**search_options)
             params.input_ids = input_tokens
             generator = og.Generator(self.model, params)
@@ -480,6 +483,9 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         # Code to execute when the Ask button is clicked
         #print('Ask button clicked')
         self.AskQuestion()
+    def split_text_into_chunks(self, text, chunk_size=80):
+        # Splits the text into chunks of specified size
+        return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]        
     def AskQuestion(self):
         global chatHistory, questionHistory, currentQuestion
         # Get the content of the StyledTextCtrl
@@ -508,7 +514,17 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
             apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
-            header=fmt([[prompt]], ['User Question'])
+
+
+            # Example usage
+            
+            chunks = self.split_text_into_chunks(prompt, 80)
+
+            for chunk in chunks:
+                print(chunk)
+
+
+            header=fmt([['\n'.join(chunks)]], ['User Question'])
             # DO NOT REMOVE THIS LINE
             print(header)
             pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)

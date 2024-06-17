@@ -23,6 +23,8 @@ DEFAULT_MODEL  = r'mini_dml_128k\directml\directml-int4-awq-block-128'
 #DEFAULT_MODEL  = 'cuda-fp16'
 DEFAULT_MODEL  = r'medium_dml_4k\directml-int4-awq-block-128'
 DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
+model_list=[r'mini_dml_4k\directml\directml-int4-awq-block-128', r'mini_dml_128k\directml\directml-int4-awq-block-128', 
+            r'medium_dml_4k\directml-int4-awq-block-128', r'medium_dml_128k\directml-int4-awq-block-128']
 
 dir_path = 'template'
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -356,9 +358,9 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         #pp(chat)
         chatHistory[self.tab_id]= []
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        #model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
         self.chat_type=chat.chat_type
-        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
+        self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
         self.model_dropdown.SetValue(DEFAULT_MODEL)
         self.clearButton = wx.Button(self, label='Reset')
         self.clearButton.Bind(wx.EVT_BUTTON, self.onClearHistoryButton)        

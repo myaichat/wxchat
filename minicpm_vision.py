@@ -50,12 +50,14 @@ from include.Common import *
 apc.all_templates=all_templates=dict2()
 apc.all_chats=all_chats=dict2()
 apc.all_system_templates= all_system_templates=dict2()
+if 0:
+    from include.Phy3_Python import Microsoft_Chat_InputPanel, \
+        Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 
-from include.Phy3_Python import Microsoft_Chat_InputPanel, \
-    Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
+    from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
+        Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
 
-from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
-    Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
+from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -748,7 +750,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Phi-3 ONNX Copilot')
+        self.frame = MyFrame(f'MiniCPM Vision')
         return True
 
 if __name__ == '__main__':

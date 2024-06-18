@@ -1,35 +1,54 @@
 templates:
   workspace:
 
-      name: 'Python'
-      vendor: 'Gpt4'
+      name: 'MiniCPM'
+      vendor: 'OpenBNB'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    Gpt4:
+    OpenBNB:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
-    Chat:
-    - vendor: 'Gpt4'
-      chat_type: 'Chat'
-      name: 'General'
-      question: 'How many Python versions are there?'
 
     Copilot:
-    - vendor: 'Gpt4'
+    - vendor: 'OpenBNB'
       chat_type: 'Copilot'
-      name: 'Python Copilot'
-      system: SYSTEM_CHATTY
-      question: 'What can I improve in this Python code?'
-     
+      name: 'Paste 1'
+      history: false
+      system: 'DESCRIBE_IMAGE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+    - vendor: 'OpenBNB'
+      chat_type: 'Copilot'
+      name: 'Paste 2'
+      num_of_images: 2
+      history: false
+      system: 'DESCRIBE_IMAGE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+      model_id: "microsoft/Phi-3-vision-128k-instruct" 
+
+      
   System:
     Chat:
       SYSTEM: "You are a chatbot that assists with General questions. numerate options in answer."
       PROMPT: |
-        Question: "{params.question}"
-        Answer: 
+        {params.question}        
     Copilot:
+      DESCRIBE_IMAGE: |
+        {params.input}     
       SYSTEM: |
         You are a chatbot that assists with anwering questions about code included or adding new features 
         and debugging scripts written using wxPython. 
@@ -57,9 +76,8 @@ templates:
         You are a chatbot that assists with anwering questions about 
         code included or adding new features
       FIX_CODE: |
-        Code to fix: {params.code}
-        Question: "{params.input}"
-        Answer:
+        {params.input}: 
+        {params.code}        
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"

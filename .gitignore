@@ -10,3 +10,6 @@ myenv
 cuda-fp16
 cuda_myenv
 cuda_myenv
+MiniCPM-V
+.cache
+cache

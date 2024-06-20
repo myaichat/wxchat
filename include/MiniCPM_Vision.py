@@ -7,10 +7,12 @@ import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
-import os, sys,openai   
+import os, sys  
+from transformers import AutoModelForCausalLM, AutoTokenizer 
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
+from include.Common_MiniCPM import Base_InputPanel_MiniCPM
 from include.fmt import fmt, pfmt, pfmtd, fmtd
 from PIL import Image as PILImage
 e=sys.exit
@@ -19,39 +21,52 @@ apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
-DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
-model_list=[r'mini_dml_4k\directml\directml-int4-awq-block-128', r'mini_dml_128k\directml\directml-int4-awq-block-128', 
-            r'medium_dml_4k\directml-int4-awq-block-128', r'medium_dml_128k\directml-int4-awq-block-128']
+#DEFAULT_MODEL  = "openbmb/MiniCPM-Llama3-V-2_5"
+model_list=["openbmb/MiniCPM-Llama3-V-2_5","openbmb/MiniCPM-Llama3-V-2_5-int4"]
 
 dir_path = 'template'
-openai.api_key = os.getenv("OPENAI_API_KEY")
+
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
 questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
-
-
+import torch
+print('Device name:', torch.cuda.get_device_properties('cuda').name)
+print('FlashAttention available:', torch.backends.cuda.flash_sdp_enabled())
 
 class VisionResponseStreamer:
-    def __init__(self, model_id):
+    def __init__(self):
         # Set your OpenAI API key here
-        from transformers import AutoModelForCausalLM, AutoTokenizer 
+        self.model={}
+        self.tokenizer={}
+
+    def get_model(self, model_id):
+        if model_id not in self.model:
+            model=AutoModelForCausalLM.from_pretrained(
+                model_id, 
+                cache_dir="./cache",
+                trust_remote_code=True ,
+                low_cpu_mem_usage=True
+                #torch_dtype=torch.float16
+            ) #.to("cuda")
+            if next(model.parameters()).is_cuda:
+                print('Model is already on cuda')
+            else:
+                model.to("cuda")
+            self.model[model_id] = model
+        return self.model[model_id]
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+            self.tokenizer[model_id] = AutoTokenizer.from_pretrained(
+                model_id, 
+                cache_dir="./cache",
+                trust_remote_code=True
+            )
+        return self.tokenizer[model_id]
+            
 
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            "openbmb/MiniCPM-Llama3-V-2_5", 
-            cache_dir="./cache",
-            trust_remote_code=True
-        ).to("cuda")
-
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            "openbmb/MiniCPM-Llama3-V-2_5", 
-            cache_dir="./cache",
-            trust_remote_code=True
-        )
-
-
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id, max_new_tokens, image_path):
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
         #pp(chatHistory)
         from PIL import Image 
@@ -60,8 +75,8 @@ class VisionResponseStreamer:
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
 
-        pp(chatHistory)
-        pp(prompt)
+        #pp(chatHistory)
+        #pp(prompt)
         #e()
         
     
@@ -81,67 +96,82 @@ class VisionResponseStreamer:
             #print(fmt([[f'Images']], []) )
             #pp(images)
             
-            if 0:
-                msgs = []
-                system_prompt = 'Answer in detail.'
-                prompt = 'Caption this two images'
-                tgt_path = [
-                    'Art\\0_3.jpeg',
-                    'Art\\0_1.png',
-                # 'Art\\0_2.png',
-                    
-                    ]
-                if system_prompt: 
-                    msgs.append(dict(type='text', value=system_prompt))
-                if isinstance(tgt_path, list):
-                    msgs.extend([dict(type='image', value=p) for p in tgt_path])
-                else:
-                    msgs = [dict(type='image', value=tgt_path)]
-
-
-                content = []
-                for x in msgs:
-                    if x['type'] == 'text':
-                        content.append(x['value'])
-                    elif x['type'] == 'image':
-                        image = Image.open(x['value']).convert('RGB')
-                        content.append(image)
+        
             msgs = [{'role': 'user', 'content': content}]
 
-            pp(msgs)
+            #pp(msgs)
+            search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'beam_width', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+            assert 'max_length'  in search_options
+            assert 'beam_width'  in search_options
+            assert 'top_p'  in search_options
+            assert 'top_k'  in search_options
+            assert 'temperature'  in search_options
+            assert 'repetition_penalty'  in search_options
+            
+            if chat.do_sample:
+                search_options['sampling']=True
+                search_options['num_beams']=6
+                
+            else:
+                search_options['beam_search']=True
+                search_options['num_beams']=search_options['beam_width']
+                
+                del     search_options['temperature']
+                del     search_options['top_p']
+                 
+            search_options['max_tokens']= search_options['max_length'] 
+            #search_options['min_tokens']= search_options['min_length'] 
+            #search_options['best_of']= 5
+            #pp(search_options)
+            #pp(chat)
+
+            system_prompt=chat.system_prompt
+            
+            #print(system_prompt)
+            #pp(chat)
+            #pp(all_system_templates)
+            #
+
+            
             #e()
-            ret = self.model.chat(
+            tokenizer=self.get_tokenizer(chat.model)    
+            model=self.get_model(chat.model)
+            res = model.chat(
                 msgs=msgs,
                 context=None,
                 image=None,
-                tokenizer=self.tokenizer,
-                vision_hidden_states=None,
-                max_new_tokens=1024,
-                min_new_tokens=512,
-                top_p= 0.8,
-                top_k= 100,
+                tokenizer=tokenizer,
+                #vision_hidden_states=None,
+                max_new_tokens=4096,
+                min_new_tokens=1024,
+                #top_p= 0.8,
+                #top_k= 100,
                 
-                do_sample= True,
-                repetition_penalty= 1.05,        
-                sampling=True,
-                max_inp_length=2048,        
-                temperature=1.0  
+                #do_sample= True,
+                #repetition_penalty= 1.05,        
+                #sampling=True,
+                max_inp_length=2048,   
+                #system_prompt='add ukrainian essence to each description' ,     
+                #how many images are there to describe? describe all of them in english
+                #system_prompt='add pinup art essence to each description' 
+                #system_prompt='give detailed description in english' ,
+                system_prompt=system_prompt,
+                #is there a second image?  creatively mix it's description with first image description in english
+                #create detailed description that blends the content of both pictures in english
+                #temperature=1.0  
+                stream=True,
+                **search_options
             )
-            
-
-            print(ret)
-            
-            out.append(ret)
-           
             header=fmt([[f'System Answer']],[])
-            
-            print(header)
-            print(ret)
-            print('receiveing_tab_id:', receiveing_tab_id)
-            pub.sendMessage('chat_output', message=f'{header}\n{ret}\n', tab_id=receiveing_tab_id)
-            #print(content, receiveing_tab_id)
-            #pub.sendMessage('chat_output', message=f'{header}\nFiles: {len(image_path)}\n\n{ret}', tab_id=receiveing_tab_id)
-            
+            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+            generated_text = ""
+            for new_text in res:
+                generated_text += new_text
+                out.append(new_text)
+                #print(new_text, flush=True, end='')
+                pub.sendMessage('chat_output', message=f'{new_text}', tab_id=receiveing_tab_id)
+                
+                
         except Exception as e:
             log(f'Error in stream_response', 'red')
             log(format_stacktrace(), 'red')
@@ -153,7 +183,7 @@ class VisionResponseStreamer:
 
         return ''.join(out)
     
-class ResponseStreamer:
+class _ResponseStreamer:
     def __init__(self,chat, model):
         # Set your OpenAI API key here
         chat.verbose=chat.get('verbose', True)
@@ -177,7 +207,7 @@ class ResponseStreamer:
         chat.timings=chat.get('timings', True)    
         assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
         assert chat.max_length,chat.max_length
-        assert chat.min_length,chat.min_length
+        assert chat.beam_width,chat.beam_width
         assert chat.top_p is not None,chat.top_p
         assert chat.top_k,chat.top_k
         assert chat.temperature is not None,chat.temperature
@@ -202,7 +232,7 @@ class ResponseStreamer:
 
         
         #if chat.verbose: print()
-        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'beam_width', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
         slog=fmtd([search_options], [])
         print(slog)
         log(slog)
@@ -210,7 +240,7 @@ class ResponseStreamer:
         # Set the max length to something sensible by default, unless it is specified by the user,
         # since otherwise it will be set to the entire context length
         assert 'max_length'  in search_options
-        assert 'min_length'  in search_options
+        assert 'beam_width'  in search_options
         assert 'top_p'  in search_options
         assert 'top_k'  in search_options
         assert 'temperature'  in search_options
@@ -304,7 +334,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         self.SetWrapMode(stc.STC_WRAP_WORD)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
+        python_keywords = 'woman pinup pin-up nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
 
 
         self.SetKeyWords(0, python_keywords)
@@ -636,10 +666,11 @@ class Copilot_DisplayPanel(StyledTextDisplay):
         if 1: #not Copilot_DisplayPanel.subscribed:
                 
             pub.subscribe(self.AddChatOutput, 'chat_output')
-            print('#' * 20, self.tab_id, 'subscribing to chat_output')
+            #print('#' * 20, self.tab_id, 'subscribing to chat_output')
             Copilot_DisplayPanel.subscribed=True 
         else:
-            print('-' * 20, 'Already subscribed', self.tab_id)
+            pass
+            #print('-' * 20, 'Already subscribed', self.tab_id)
             #print('Copilot_DisplayPanel passing on subscription', self.tab_id)       
     def IsTabVisible(self):
         # Get the parent notebook
@@ -648,7 +679,7 @@ class Copilot_DisplayPanel(StyledTextDisplay):
         # Check if the current page is the selected page in the parent notebook
         return parent_notebook.GetPage(parent_notebook.GetSelection())       
     def AddChatOutput(self, message, tab_id):
-        print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
         #print('Copilot',  self.IsTabVisible(), self.tab_id)
         if self.tab_id==tab_id:
             #start_pos = self.GetLastPosition()
@@ -858,7 +889,7 @@ class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
         current_chatDisplay = nb.GetPage(newtabIndex)
         #pp(current_chatDisplay.tab_id)
         #e()
-        print(tab_id, tab_id in apc.chats)
+        #print(tab_id, tab_id in apc.chats)
         if tab_id in apc.chats:
             chat=apc.chats[tab_id]
             pub.sendMessage('swap_input_panel', tab_id=tab_id)
@@ -870,7 +901,7 @@ class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_MiniCPM):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -885,21 +916,22 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         chatHistory[self.tab_id]=[]
         #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask Phy-3 {tab_id}:')
-        if 0:
-            model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        if 1:
+            model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-            self.model_dropdown.SetValue(DEFAULT_MODEL)
+            self.model_dropdown.SetValue(model_list[0])
             
             self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
+            chat.model = self.model_dropdown.GetValue()
 
-        if 1:       
+        if 0:       
             max_new_tokens_values = ["256", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
             # Create a ComboBox for max_new_tokens
             self.max_new_tokens_dropdown = wx.ComboBox(self, choices=max_new_tokens_values, style=wx.CB_READONLY)
             self.max_new_tokens_dropdown.SetValue("2048")  # Default value
             chat.max_new_tokens = "2048"
             self.max_new_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxNewTokensChange)
-        if 1:       
+        if 0:       
             temp_vals = ["0", "0.2", "0.4", "0.6", "0.8", "1", "2", "5"]
             # Create a ComboBox for max_new_tokens
             self.temp_dropdown = wx.ComboBox(self, choices=temp_vals, style=wx.CB_READONLY)
@@ -916,14 +948,19 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         self.randomButton = wx.Button(self, label='Rand', size=(40, 25))
         self.randomButton.Bind(wx.EVT_BUTTON, self.onRandomButton)    
 
-        self.numOfTabsCtrl = wx.TextCtrl(self, value="1", size=(40, 25))
-        self.tabsButton = wx.Button(self, label='Tabs', size=(40, 25))
-        self.tabsButton.Bind(wx.EVT_BUTTON, self.onTabsButton)
+        self.sysButton = wx.Button(self, label='Sys', size=(40, 25))
+        self.sysButton.Bind(wx.EVT_BUTTON, self.onSysButton)
 
+        if 0:
+            self.numOfTabsCtrl = wx.TextCtrl(self, value="1", size=(40, 25))
+            self.tabsButton = wx.Button(self, label='Tabs', size=(40, 25))
+            self.tabsButton.Bind(wx.EVT_BUTTON, self.onTabsButton)
+        v_sizer = wx.BoxSizer(wx.VERTICAL)
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
-        askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.max_new_tokens_dropdown, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.temp_dropdown, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.askLabel, 0, wx.ALIGN_LEFT)
+        askSizer.Add(self.model_dropdown, 0, wx.ALIGN_LEFT)
+        #askSizer.Add(self.max_new_tokens_dropdown, 0, wx.ALIGN_CENTER)
+        #askSizer.Add(self.temp_dropdown, 0, wx.ALIGN_CENTER)
         if 0:
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
@@ -931,23 +968,23 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.numOfTabsCtrl, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.sysButton, 0, wx.ALIGN_CENTER)
+        #askSizer.Add(self.numOfTabsCtrl, 0, wx.ALIGN_CENTER)
+        #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
+        
+
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_MiniCPM.AddButtons(self, h_sizer)
+
+        v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
+        v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
+
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
-        if 1:
-            q= apc.chats[self.tab_id].question
-            self.tabs[self.tab_id]=dict(q=q)
-            questionHistory[self.tab_id]=[q]
-            currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=DEFAULT_MODEL
 
-            #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
-
-        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(v_sizer, 0, wx.EXPAND)
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
@@ -959,7 +996,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
         if  not  hasattr(apc, 'vrs'):
-            apc.vrs=VisionResponseStreamer(DEFAULT_MODEL) # model=self.model_dropdown.GetValue())
+            apc.vrs=VisionResponseStreamer() # model=self.model_dropdown.GetValue())
         if not OpenBNB_Copilot_InputPanel.subscribed:
                 
             #pub.subscribe(self.SetException, 'fix_exception')
@@ -967,7 +1004,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
             #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
             #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
             OpenBNB_Copilot_InputPanel.subscribed=True
-
+        
     def onTabsButton(self, event):
         try:
             num_of_tabs = int(self.numOfTabsCtrl.GetValue())
@@ -984,7 +1021,11 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         dialog = ChatHistoryDialog(self, self.tab_id, chatHistory)
         dialog.ShowModal()
         dialog.Destroy()
-        
+    def onSysButton(self, event):
+        global chatHistory
+        dialog = ShowSystemPrompts(self, self.tab_id, chatHistory)
+        dialog.ShowModal()
+        dialog.Destroy()        
     def OnMaxNewTokensChange(self, event):
         # This method will be called when the selection changes
         selected_value = self.max_new_tokens_dropdown.GetValue()
@@ -1004,24 +1045,38 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:
+            print('@'*30, 'Setting chat defaults', tab_id)
             assert self.chat_type==tab_id[1]
             chat=apc.chats[tab_id]
-  
+            if 0:
 
-            self.tabs[self.tab_id]=dict(q=chat.question)
-            #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
-            questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL 
-            chatHistory[self.tab_id]=[]       
+                self.tabs[self.tab_id]=dict(q=chat.question)
+                #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+                questionHistory[self.tab_id]=[]
+                currentModel[self.tab_id]=self.model_dropdown.GetValue() 
+                chatHistory[self.tab_id]=[]    
+            if 1:
+                q= apc.chats[self.tab_id].question
+                self.tabs[self.tab_id]=dict(q=q)
+                questionHistory[self.tab_id]=[q]
+                currentQuestion[self.tab_id]=0
+                currentModel[self.tab_id]=self.model_dropdown.GetValue()
+                chatHistory[self.tab_id]=[]  
+                #chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
+            self.RestoreQuestionForTabId(tab_id)
+            self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
+
+
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
 
-
+        chat=apc.chats[self.tab_id]
+        chat.model = selected_model
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, message):
+    def _RestoreQuestionForTabId(self, message):
         global currentModel
         tab_id=message
         if tab_id in self.tabs:
@@ -1064,7 +1119,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
                 #code=???
                 chatDisplay=apc.chat_panels[self.tab_id]
                 image_path=chatDisplay.GetImagePath(self.tab_id)
-                pp(image_path)
+                #pp(image_path)
                 
                 assert image_path,chatDisplay
                 #print(888, chatDisplay.__class__.__name__)
@@ -1073,9 +1128,9 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
                 
 
                 #question=question.replace('\n', ' ')
-                system= chat.get('system', 'DESCRIBE_IMAGE')
-                prompt=self.evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(image_id=1, input=question))
-                pp(prompt)
+                user_prompt= 'DESCRIBE_IMAGE'
+                prompt=evaluate(all_system_templates[chat.workspace].Copilot[user_prompt], dict2( input=question))
+                #pp(prompt)
                 payload =[{"role": "user", "content": prompt}] 
 
 
@@ -1088,13 +1143,13 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
 
                 # DO NOT REMOVE THIS LINE
                 chat.temp_val = chat.get('temp_val',"1")
-                header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}|{chat.temp_val}']],[])
+                #header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}|{chat.temp_val}']],[])
                 
-                print(header)
-                print(question)
+                #print(header)
+                #print(question)
                 #pub.sendMessage('chat_output', message=f'{header}\nFiles: {len(image_path)}\n\n{question}\n', tab_id=self.tab_id)
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
-                pp(image_path)
+                #pp(image_path)
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
                 for i, fn in enumerate(image_path):
                     if not fn:
@@ -1103,10 +1158,16 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
                         return
                     log(fn)
                 import random  
-                pp(image_path)
+                #pp(image_path)
                 if 1:
                     random.shuffle(image_path)
-                pp(image_path)
+                #pp(image_path)
+                if 'system_prompt' not in chat:
+                    system= chat.get('system', 'SYSTEM')
+                    num_oi=str(chat.num_of_images)
+                    chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(num_of_images=num_oi))
+                    pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
+                    #print(system_prompt)
 
                 threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()
         except Exception as e:
@@ -1118,12 +1179,12 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         global chatHistory, questionHistory, currentQuestion,currentModel
         self.receiveing_tab_id=tab_id
         
-        print(1111, keep_history)
+        #print(1111, keep_history)
         chatHistory[self.tab_id] += payload
         if keep_history:
             payload=chatHistory[self.tab_id]
 
-        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, int(self.max_new_tokens_dropdown.GetValue()) ,image_path)
+        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, image_path)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
             self.image_id +=1
@@ -1169,7 +1230,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         
         pub.sendMessage('log', message=f'{message}', color=color)
 
-class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_MiniCPM):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion
@@ -1185,7 +1246,7 @@ class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
         #model_names = [DEFAULT_MODEL]  # Add more model names as needed
         self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(DEFAULT_MODEL)
+        self.model_dropdown.SetValue(self.model_dropdown.GetValue())
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -1204,7 +1265,7 @@ class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
 
 
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel.AddButtons(self, h_sizer)
+        Base_InputPanel_MiniCPM.AddButtons(self, h_sizer)
 
         v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
         v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1215,7 +1276,7 @@ class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            apc.currentModel[self.tab_id]=DEFAULT_MODEL
+            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
             chatHistory[self.tab_id]= []
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
@@ -1249,7 +1310,7 @@ class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             self.tabs[self.tab_id]=dict(q=chat.question)
             chatHistory[self.tab_id]= []
             questionHistory[self.tab_id]=[]
-            apc.currentModel[self.tab_id]=DEFAULT_MODEL        
+            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()        
     def OnModelChange(self, event):
         # Get the selected model
         chat=   apc.chats[self.tab_id]
@@ -1297,7 +1358,7 @@ class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             #print(888, chatDisplay.__class__.__name__)
             #code='print(1223)'
             chat=apc.chats[self.tab_id]
-            prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
+            prompt=evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
             chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>" ]
 
             questionHistory[self.tab_id].append(question)

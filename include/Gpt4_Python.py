@@ -504,7 +504,7 @@ class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
             #print(888, chatDisplay.__class__.__name__)
             #code='print(1223)'
             chat=apc.chats[self.tab_id]
-            prompt=self.evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
+            prompt=evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
             chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
 
             questionHistory[self.tab_id].append(question)
@@ -1046,7 +1046,7 @@ class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
             self.log(f'Asking question: {question}')
             pub.sendMessage('start_progress')
             chat=apc.chats[self.tab_id]
-            prompt=self.evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
+            prompt=evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
             chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
 
             questionHistory[self.tab_id].append(question)

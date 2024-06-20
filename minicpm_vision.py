@@ -1,6 +1,6 @@
 #
 #try: https://ai.azure.com/explore/models/Phi-3-vision-128k-instruct/version/1/registry/azureml
-# 
+# https://inference.readthedocs.io/en/latest/models/model_abilities/vision.html
 #import onnxruntime_genai as og
 
 import argparse
@@ -53,7 +53,7 @@ apc.all_system_templates= all_system_templates=dict2()
 if 0:
     from include.Phy3_Python import Microsoft_Chat_InputPanel, \
         Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
-
+if 1:
     from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
         Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
 
@@ -396,7 +396,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             WorkspacePanel.subscribed = True
 
     def SwapInputPanel(self,  tab_id, resplit=True):
-        print('SwapInputPanel', tab_id)
+        print('SwapInputPanel 111', tab_id)
         #parent = self.GetParent()
         #apc.chats[tab_id]=chat
         chat=apc.chats[tab_id]
@@ -449,6 +449,9 @@ class WorkspacePanel(wx.Panel,NewChat):
                 raise
 
             self.chatInputs[input_id]=self.chatInput
+            #self.chatInput.tab_id=tab_id
+            
+            self.chatInput.RestoreQuestionForTabId(tab_id)
         #print('SwapInputPanel', self.chatInputs.keys())
         
  
@@ -559,20 +562,23 @@ class MyFrame(wx.Frame, NewChat):
 
         self.Show()
         self.AddMenuBar()
-        self.statusBar = self.CreateStatusBar(2)
+        self.statusBar = self.CreateStatusBar(3)
         self.statusBar.SetStatusText('Ready')
+        self.statusBar.SetStatusText('System', 1)
         #pub.subscribe(self.SetStatusText, 'set_status')
         #pub.subscribe(self.SetStatusText, 'log')
         self.progressBar = wx.Gauge(self.statusBar, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
-        self.statusBar.SetStatusWidths([-1, 200])
+        self.statusBar.SetStatusWidths([50, -1,200])
         
-        rect = self.statusBar.GetFieldRect(1)
+        rect = self.statusBar.GetFieldRect(2)
         self.progressBar.SetPosition((rect.x, rect.y))
         self.progressBar.SetSize((rect.width, rect.height))  
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)   
         pub.subscribe(self.StartProgress, 'start_progress')  
         pub.subscribe(self.StopProgress, 'stop_progress') 
+        pub.subscribe(self.SetSystemPrompt, 'set_system_prompt')
+        self.system_prompt={} 
         if 0:
             apc.conda_env=get_current_conda_env()
             print(apc.conda_env)
@@ -588,6 +594,9 @@ class MyFrame(wx.Frame, NewChat):
         #self.workspace.set_focus_on_last_tab()
         #self.workspace.workspace_notebook.SetSelection(0)
         #self.workspace.workspace_notebook.SetSelection(1)
+    def SetSystemPrompt(self, message,tab_id):
+        self.system_prompt[tab_id]=message
+        self.statusBar.SetStatusText(message, 1)    
     def SetStatus(self, message):
         self.statusBar.SetStatusText(message, 0)
     def StartProgress(self):

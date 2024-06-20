@@ -5,381 +5,11 @@ from include.fmt import fmt
 from pprint import pprint as pp 
 import include.config.init_config as init_config 
 apc = init_config.apc
-import wx.html
-
-def evaluate(ss, params):
-    #a = f"{ss}"
-    a=eval('f"""'+ss+'"""')
-    return a 
-
-class dict2(dict):                                                              
-    def __setitem__(self, key, value):
-        super(dict2, self).__setitem__(key, value)
-        #print(f"Set {key} to {value}")
-    def __init__(self, *args, **kwargs):                                               
-        super(dict2, self).__init__(*args,  **kwargs)                                     
-
-    def __setattr__(self, key, value):                                          
-        self[key] = value                                                       
-
-    def __dir__(self):                                                          
-        return self.keys()                                                      
-
-    def __getattr__(self, key):                                                 
-        try:                                                                    
-            return self[key]                                                    
-        except KeyError:                                                        
-            raise AttributeError(key)                                           
-
-    def __setstate__(self, state):                                              
-        pass 
-
-def d2d2(d):
-    out=dict2()
-    for k, v in d.items():
-        if type(v) in [dict]:
-            out[k]= d2d2(v)
-        else:
-            out[k]=v
-    return out
-
-class AttrDict(object):
-    def __init__(self, adict):
-        self.__dict__.update(adict)
-
-def log(message, color=None):
-    pub.sendMessage('log', message=message, color=color)
-def set_status(message):
-    pub.sendMessage('set_status', message=message)
-def format_stacktrace():
-    parts = ["Traceback (most recent call last):\n"]
-    parts.extend(traceback.format_stack(limit=25))
-    parts.extend(traceback.format_exception(*sys.exc_info())[1:])
-    return "".join(parts)
-
-class NewChat(object):
-    def __init__(self):
-        if 1:
-            accel_tbl = wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('N'), wx.ID_NEW)])
-
-            # Set the accelerator table for chatInput
-            self.SetAcceleratorTable(accel_tbl)
-
-            # Bind the event to the handler
-            self.Bind(wx.EVT_MENU, self.OnNewChat, id=wx.ID_NEW)
-        #pub.subscribe(self.OnDefaultChat, 'adddefault_chat')
-    def OnNewChat(self, event):
-        dialog = NewChatDialog(self, title="New Chat")
-        if dialog.ShowModal() == wx.ID_OK:
-            vendor=dialog.vendor.GetStringSelection()
-            chat_type_str = dialog.chat_type.GetStringSelection()
-            chat_type =chat_type_str
-            name = dialog.name.GetValue()
-            system = dialog.system.GetValue()
-            chatName = name
-            chat=AttrDict(dict(vendor=vendor, chat_type=chat_type, name=name, system=system))
-            #pp(chat.__dict__)
-            
-            print(fmt([[f"New chat: {name}"]], ['New Chat']))
-            pub.sendMessage('log', message=f'New chat name: {name}')
-            pub.sendMessage('add_chat', chat=chat)
-        dialog.Destroy()        
-class GetClassName:
-    def __init__(self):
-        self.Bind(wx.EVT_CONTEXT_MENU, self.OnRightClick)
-    def OnRightClick(self, event):
-        # Create a popup menu
-        menu = wx.Menu()
-        
-        # Add a menu item to the popup menu
-        current_class_name=self.__class__.__name__
-        item = menu.Append(wx.ID_ANY, current_class_name)
-
-        pname=self.GetParent().__class__.__name__
-        parent_item = menu.Append(wx.ID_ANY, pname)
-        
-        # Bind the menu item to an event handler
-        self.Bind(wx.EVT_MENU, lambda event, name=current_class_name: self.OnCopyName(event, name), item)
-        self.Bind(wx.EVT_MENU, lambda event, name=pname: self.OnCopyName(event, name), parent_item)
-
-        
-        # Show the popup menu
-        self.PopupMenu(menu)
-        
-        # Destroy the menu after it's used
-        menu.Destroy()
-
-    def OnCopyName(self, event, name):
-        # Create a data object for the clipboard
-        data_object = wx.TextDataObject()
-
-        # Set the class name into the data object
-        
-        data_object.SetText(name)
-
-        # Copy the text to the clipboard
-        if wx.TheClipboard.Open():
-            wx.TheClipboard.SetData(data_object)
-            wx.TheClipboard.Close()
-        else:
-            wx.MessageBox('Unable to open the clipboard', 'Error', wx.OK | wx.ICON_ERROR)
-
-class Scroll_Handlet:
-    def __init__(self):
-        self.Bind(wx.EVT_SCROLLWIN, self.on_scroll)
-
-        self.Bind(wx.EVT_KEY_DOWN, self.on_key_down)
-        self.scrolled=False
-        self.previous_scroll_pos=self.GetScrollPos(wx.VERTICAL)        
-        #self.Bind(wx.EVT_MOUSEWHEEL, self.OnMouseWheel)
-        pub.subscribe(self.OnScroll, 'scroll_output')
-    def OnScroll(self, message):
-        self.scrolled=True
-    def on_scroll(self, event):
-        current_scroll_pos = self.GetScrollPos(wx.VERTICAL)
-
-        # If the current scroll position is greater than the previous scroll position,
-        # you've scrolled down
-        if current_scroll_pos > self.previous_scroll_pos:
-            self.scrolled = True
-        # If the current scroll position is less than the previous scroll position,
-        # you've scrolled up
-        elif current_scroll_pos < self.previous_scroll_pos:
-            self.scrolled = False
-
-        # Update the previous scroll position
-        self.previous_scroll_pos = current_scroll_pos
-        event.Skip()
-
-    def on_key_down(self, event):
-        if event.GetKeyCode() in [ wx.WXK_PAGEDOWN]:
-            self.scrolled = True
-        if event.GetKeyCode() in [wx.WXK_PAGEUP]:
-            self.scrolled = False    
-        if event.ControlDown() and event.GetKeyCode() == ord('P'):
-            if self.pause_output:
-                self.resume_answer(self.pause_button)
-            else:
-                self.pause_output = True
-                #print('Paused')    
-                self.statusbar.SetStatusText('Paused')            
-        event.Skip()    
-class PauseHandlet:
-    def __init__(self,tab_id):
-        self.tab_id=tab_id
-
-        #print('-------------setting PauseHandlet', self.tab_id)
-        apc.pause_output[self.tab_id]=[False]
-        apc.stop_output[self.tab_id]=[False]
-        pub.subscribe(self.SetPause, 'pause_output')
-        pub.subscribe(self.SetStop, 'stop_output')
-    def pause_output(self,on_off=None):
-        if on_off is not None:
-            apc.pause_output[self.tab_id][0]=on_off
-        else:
-            return apc.pause_output[self.tab_id][0]
-
-    def stop_output(self,on_off=None):
-        if on_off is not None:
-            apc.stop_output[self.tab_id][0]=on_off
-            if on_off:
-                self.stop_button.Disable()
-            else:
-                self.stop_button.Enable()
-                self.pause_button.Enable()
-        else:
-            return apc.stop_output[self.tab_id][0]
-    
-    def on_pause(self, event):
-        print('\nPause\n')
-        if not self.stop_output():
-            self.pause_output(not self.pause_output())
-
-            if  self.pause_output():
-                #self.statusBar.SetStatusText('Paused')
-                pub.sendMessage('set_status', message='Paused')
-                event.GetEventObject().SetLabel('Resume')
-            else:
-                #self.statusBar.SetStatusText('Resumed')
-                pub.sendMessage('set_status', message='Resumed')
-                event.GetEventObject().SetLabel('Pause')
-                #self.resume_answer(event.GetEventObject())  
-    def on_stop(self, event):
-        print('\nStop\n')
-        #self.stop_output(not self.stop_output())
-        self.stop_output(True)
-        if  1: #self.stop_output():
-            #self.statusBar.SetStatusText('Stopped')
-            pub.sendMessage('set_status', message='Stopped')
-            #event.GetEventObject().SetLabel('Start')
-            self.pause_button.Disable()
-            self.stop_button.Disable()
-        if 0:
-            #self.statusBar.SetStatusText('Started')
-
-            pub.sendMessage('set_status', message='Started')
-            event.GetEventObject().SetLabel('Stop')
-            self.pause_button.Enable()
-            self.pause_button.SetLabel('Pause')
-    def SetPause(self, message):
-        self.pause_output = message
-    def SetStop(self, message):
-        self.stop_output = message
-
-class PausePanel(wx.Panel,PauseHandlet):
-    def __init__(self, parent, tab_id):
-        super(PausePanel, self).__init__(parent)
-        PauseHandlet.__init__(self, tab_id)
-        self.pause_button = wx.Button(self, label="Pause", size=(40, -1))
-        self.stop_button = wx.Button(self, label="Stop", size=(40, -1))
-        self.pause_button.Bind(wx.EVT_BUTTON, self.on_pause)
-        self.stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.pause_button, 0, wx.ALL)
-        sizer.Add(self.stop_button, 0, wx.ALL)
-        self.SetSizer(sizer)
-        self.stop_button.Disable()
-        self.pause_button.Disable()
-        
-class HtmlToolTip(wx.Frame):
-    def __init__(self, parent, html_content):
-        super(HtmlToolTip, self).__init__(parent, style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.FRAME_TOOL_WINDOW)
-        html_window = wx.html.HtmlWindow(self)
-        html_window.SetPage(html_content)
-        self.SetSize((300, 200))  # Adjust size as needed
-        self.Layout()
-
-class HtmlDialog(wx.Dialog):
-    def __init__(self, parent, title, html_content):
-        super(HtmlDialog, self).__init__(parent, title=title, size=(600, 800))
-        self.html_window = wx.html.HtmlWindow(self)
-        self.html_window.SetPage(html_content)
-        self.initializeUI()
-        self.Centre(wx.BOTH)  # Center the dialog on its parent
-
-    def initializeUI(self):
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.html_window, 1, wx.EXPAND | wx.ALL, 5)
-        self.SetSizer(sizer)
-        self.Layout()
-class Base_InputPanel:
-    def Base_OnAskQuestion(self):
-        self.pause_panel.pause_output(False)
-        self.pause_panel.stop_output(False)   
 
 
+from include.Common import Base_InputPanel, HtmlDialog
 
-class ShowSystemPrompts(wx.Dialog):
-    def __init__(self, parent, tab_id, chat_history):
-        super(ShowSystemPrompts, self).__init__(parent, title="Chat History", size=(600, 400))
-        self.tab_id = tab_id
-        self.chat_history = chat_history
-        
-        # Create the ListCtrl
-        self.listCtrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
-        
-        # Add columns
-        self.listCtrl.InsertColumn(0, 'Name', width=100)
-        self.listCtrl.InsertColumn(1, 'Content', width=450)
-        
-        # Populate the ListCtrl with chat history
-        self.populate_list_ctrl()
-        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_MULTILINE, size=(580, 100))  # Adjust size and style as needed
-        
-        # Create a close button
-        useButton = wx.Button(self, label="Use Prompt")
-        useButton.Bind(wx.EVT_BUTTON, self.on_use)        
-        closeButton = wx.Button(self, label="Close")
-        closeButton.Bind(wx.EVT_BUTTON, self.on_close)
-        
-        # Layout
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.listCtrl, 1, wx.EXPAND | wx.ALL, 10)
-        sizer.Add(self.inputCtrl, 0, wx.EXPAND | wx.ALL, 10) 
-        
-        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        h_sizer.AddStretchSpacer(1)
-        h_sizer.Add(useButton, 0, wx.ALL, 10)
-        h_sizer.Add(closeButton, 0,  wx.ALL, 10)
-        sizer.Add(h_sizer, 0, wx.EXPAND | wx.ALL, 10) 
-
-        self.SetSizer(sizer)
-        # Bind the event for row selection
-        self.listCtrl.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_row_click)
-        
-        # Bind the event for double click or Enter key
-        self.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_row_activated)        
-
-    def on_row_click(self, event):
-        # Get the selected row index
-        selected_index = event.Index
-        
-        # Get the content of the selected row
-        role = self.listCtrl.GetItemText(selected_index, col=0)
-        content = self.listCtrl.GetItemText(selected_index, col=1)
-        self.inputCtrl.SetValue(content)
-        # Process the row click
-        # For example, show the content in a message dialog
-        #wx.MessageBox(f"Role: {role}\nContent: {content}", "Row Clicked")
-
-    def on_row_activated(self, event):
-        # This method will be called when a row is double-clicked or Enter key is pressed on a row
-        self.on_row_click(event)
-        
-    def populate_list_ctrl(self):
-        chat= apc.chats[self.tab_id]
-
-        for name, content in apc.all_system_templates[chat.workspace].Copilot.items():
-            
-            index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), name)
-            prompt=evaluate(content, dict2( input=chat.question, num_of_images=chat.num_of_images))
-            self.listCtrl.SetItem(index, 1, prompt)            
-
-    def on_use(self, event):
-        chat=apc.chats[self.tab_id]
-        print(self.inputCtrl.GetValue())
-        chat.system_prompt=self.inputCtrl.GetValue()
-        pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
-        self.Close() 
-    def on_close(self, event):
-        self.Close()         
-
-class ChatHistoryDialog(wx.Dialog):
-    def __init__(self, parent, tab_id, chat_history):
-        super(ChatHistoryDialog, self).__init__(parent, title="Chat History", size=(600, 400))
-        self.tab_id = tab_id
-        self.chat_history = chat_history
-        
-        # Create the ListCtrl
-        self.listCtrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
-        
-        # Add columns
-        self.listCtrl.InsertColumn(0, 'Role', width=100)
-        self.listCtrl.InsertColumn(1, 'Content', width=450)
-        
-        # Populate the ListCtrl with chat history
-        self.populate_list_ctrl()
-        
-        # Create a close button
-        closeButton = wx.Button(self, label="Close")
-        closeButton.Bind(wx.EVT_BUTTON, self.on_close)
-        
-        # Layout
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.listCtrl, 1, wx.EXPAND | wx.ALL, 10)
-        sizer.Add(closeButton, 0, wx.ALIGN_CENTER | wx.ALL, 10)
-        
-        self.SetSizer(sizer)
-        
-    def populate_list_ctrl(self):
-        for entry in self.chat_history[self.tab_id]:
-            index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), entry['role'])
-            self.listCtrl.SetItem(index, 1, entry['content'])
-    
-    def on_close(self, event):
-        self.Close() 
-
-class Base_InputPanel_Phi3(Base_InputPanel):
+class Base_InputPanel_MiniCPM(Base_InputPanel):
     def AddButtons(self, v_sizer):
         if 1: #second row
 
@@ -387,20 +17,23 @@ class Base_InputPanel_Phi3(Base_InputPanel):
 
             h_sizer_1 = wx.BoxSizer(wx.HORIZONTAL)
             chat=apc.chats[self.tab_id] 
-            self.do_sample_dropdown = wx.ComboBox(self, choices=['True', 'False'], style=wx.CB_READONLY)
-            self.do_sample_dropdown.SetValue('False')  # Default value
-            self.do_sample_dropdown.Bind(wx.EVT_COMBOBOX, self.OnDoSampleChange)
-            chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
+            self.search_type_dropdown = wx.ComboBox(self, choices=['Beam Search', 'Sampling'], style=wx.CB_READONLY)
+            self.search_type_dropdown.SetValue('Beam Search')  # Default value
+            self.search_type_dropdown.Bind(wx.EVT_COMBOBOX, self.OnSearchTypeChange)
+            chat.do_sample = (self.search_type_dropdown.GetValue() == 'Sampling')
+
+            self.beam_width_dropdown = wx.ComboBox(self, choices=['1', '2', '3',  '5', '10', '20', '50', '75', '100'], style=wx.CB_READONLY)
+            self.beam_width_dropdown.SetValue('5')  # Default value
+            self.beam_width_dropdown.Bind(wx.EVT_COMBOBOX, self.OnBeamWidthChange)
+            chat.beam_width = int(self.beam_width_dropdown.GetValue()  )
+
         
             self.max_length_dropdown = wx.ComboBox(self, choices=['512', '768','1024','1536', '2048', '4096', str(1024* 10), str(1024* 20), str(1024* 40)], style=wx.CB_READONLY)
             self.max_length_dropdown.SetValue('2048')  # Default value
             self.max_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxLengthChange)
             chat.max_length = int(self.max_length_dropdown.GetValue())
 
-            self.min_length_dropdown = wx.ComboBox(self, choices=['1', '512', '1024', '2048', '4096'], style=wx.CB_READONLY)
-            self.min_length_dropdown.SetValue('1')  # Default value
-            self.min_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMinLengthChange)
-            chat.min_length = int(self.min_length_dropdown.GetValue()  )
+
 
             self.top_p_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0',  '1.1',], style=wx.CB_READONLY)
             self.top_p_dropdown.SetValue('0.9')  # Default value
@@ -417,127 +50,167 @@ class Base_InputPanel_Phi3(Base_InputPanel):
             self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
             chat.temperature = float(self.temp_dropdown.GetValue()  )  
             #repetition_penalty
-            self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['1.0',  '1.1',  '1.2',  '1.3',  '1.4',  '1.5',  '1.6',  '1.7',  '1.8',  '1.9',  '2.0',  '2.1','2.5','3.0','5.0','10.0',], style=wx.CB_READONLY)
-            self.repetition_penalty_dropdown.SetValue('1.1')  # Default value
+            self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['1.0',  '1.05', '1.1',  '1.2',  '1.3',  '1.4',  '1.5',  '1.6',  '1.7',  '1.8',  '1.9',  '2.0',  '2.1','2.5','3.0','5.0','10.0',], style=wx.CB_READONLY)
+            self.repetition_penalty_dropdown.SetValue('1.05')  # Default value
             self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
             chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )             
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="do_sample")
+            dos = wx.StaticText(self, label="search type")
             dos.html_content="""<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Increasing Artfulness with do_sample=True</title>
+    <title>Search Strategies: Beam Search and Sampling</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        p {
+            margin-bottom: 10px;
+        }
+        ul {
+            margin-bottom: 20px;
+        }
+        .highlight {
+            color: #e74c3c;
+        }
+    </style>
 </head>
 <body>
-    <h1>Increasing Artfulness with do_sample=True</h1>
-    
-    <p>When <code>do_sample=true</code>, the model uses stochastic decoding methods such as sampling with temperature, top-p, or top-k sampling. Here are several strategies to increase the artfulness of the output:</p>
-    
-    <h2>Strategies:</h2>
-    
-    <h3>1. Adjust Temperature:</h3>
-    <ul>
-        <li><strong>Description:</strong> Increasing the temperature value increases the randomness of the predictions, leading to more creative and diverse outputs.</li>
-        <li><strong>Example:</strong> Set <code>temperature=1.2</code> for more creativity.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2
-}
-    </pre>
+    <h1>Search Strategies: Beam Search and Sampling</h1>
 
-    <h3>2. Adjust Top-p (Nucleus Sampling):</h3>
+    <h2>Beam Search</h2>
     <ul>
-        <li><strong>Description:</strong> Top-p sampling considers the smallest set of tokens whose cumulative probability exceeds the threshold p. Lowering top-p can make the output more focused, while increasing it can make it more diverse.</li>
-        <li><strong>Example:</strong> Set <code>top_p=0.9</code> to balance creativity and coherence.
-        </li>
+        <li><span class="highlight">Deterministic:</span> Beam search is a deterministic algorithm that maintains multiple candidate sequences (beams) at each step, selecting the most probable ones based on their cumulative probabilities.</li>
+        <li><span class="highlight">Beam Width:</span> The number of beams (candidate sequences) is specified by a parameter called beam width. A larger beam width allows the algorithm to explore more possibilities but increases computational complexity.</li>
+        <li><span class="highlight">Pruning:</span> At each step, beam search generates possible next tokens for each beam and retains only the top-k sequences based on their probabilities, where k is the beam width.</li>
+        <li><span class="highlight">Balancing Exploration and Efficiency:</span> Beam search strikes a balance between greedy search (which only considers the most probable next step) and exhaustive search (which considers all possible sequences), making it a good trade-off for many applications.</li>
+        <li><span class="highlight">Higher Quality Sequences:</span> Often produces higher quality and more coherent sequences compared to greedy search.</li>
     </ul>
-    <pre>
-{
-  "do_sample": true,
-  "top_p": 0.9
-}
-    </pre>
 
-    <h3>3. Adjust Top-k:</h3>
+    <h2>Sampling</h2>
     <ul>
-        <li><strong>Description:</strong> Top-k sampling considers only the top k tokens. Increasing the value of k allows the model to consider a broader range of tokens, increasing diversity.</li>
-        <li><strong>Example:</strong> Set <code>top_k=100</code> for more diverse outputs.
-        </li>
+        <li><span class="highlight">Stochastic:</span> Sampling introduces randomness into the generation process by selecting the next token based on a probability distribution.</li>
+        <li><span class="highlight">Exploration:</span> Sampling can explore a wider variety of possible sequences, potentially leading to more diverse outputs.</li>
+        <li><span class="highlight">Temperature:</span> The temperature parameter can be adjusted to control the randomness. A higher temperature results in more random choices, while a lower temperature makes the model more deterministic.</li>
+        <li><span class="highlight">Diversity vs. Coherence:</span> While sampling can produce more diverse sequences, it may sometimes result in less coherent or lower quality outputs compared to beam search.</li>
+        <li><span class="highlight">Use Cases:</span> Sampling is useful in creative applications, such as poetry generation or dialogue systems, where diversity is valued over strict coherence.</li>
     </ul>
-    <pre>
-{
-  "do_sample": true,
-  "top_k": 100
-}
-    </pre>
 
-    <h3>4. Combine Strategies:</h3>
+    <h2>When to Use Each Strategy</h2>
     <ul>
-        <li><strong>Description:</strong> Combining temperature, top-p, and top-k adjustments can amplify their effects, leading to even more artful and creative outputs.</li>
-        <li><strong>Example:</strong> Use a combination of these parameters for maximum creativity.
-        </li>
+        <li><span class="highlight">Beam Search:</span> Use beam search when you need high-quality, coherent sequences, such as in machine translation, summarization, or other tasks where precision is critical.</li>
+        <li><span class="highlight">Sampling:</span> Use sampling when diversity and creativity are more important than strict coherence, such as in creative writing, story generation, or generating multiple potential responses in a chatbot.</li>
     </ul>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2,
-  "top_p": 0.9,
-  "top_k": 100
-}
-    </pre>
 
-    <h3>5. Apply Repetition Penalty:</h3>
+    <h2>Example</h2>
+    <p>Consider generating a sentence with a sequence-to-sequence model.</p>
+    <h3>Beam Search:</h3>
     <ul>
-        <li><strong>Description:</strong> Using a repetition penalty discourages the model from repeating the same phrases or words, promoting more varied and interesting outputs.</li>
-        <li><strong>Example:</strong> Set <code>repetition_penalty=1.2</code>.
-        </li>
+        <li>Beam width = 3</li>
+        <li>Step 1: Generate the top 3 probable words for the first position.</li>
+        <li>Step 2: For each of the 3 sequences, generate the top 3 probable words for the next position.</li>
+        <li>Step 3: Keep the top 3 sequences based on their cumulative probabilities and repeat until the end-of-sequence token.</li>
     </ul>
-    <pre>
-{
-  "do_sample": true,
-  "repetition_penalty": 1.2
-}
-    </pre>
 
-    <h3>6. Adjust Length Penalty:</h3>
+    <h3>Sampling:</h3>
     <ul>
-        <li><strong>Description:</strong> Tuning the length penalty can influence the length of the output, which can indirectly affect its creativity. A lower length penalty encourages longer outputs, while a higher penalty favors shorter ones.</li>
-        <li><strong>Example:</strong> Set <code>length_penalty=0.8</code> for longer, potentially more creative outputs.
-        </li>
+        <li>Temperature = 1.0 (default)</li>
+        <li>Step 1: Generate the first word by sampling from the probability distribution of possible words.</li>
+        <li>Step 2: Generate the next word by sampling from the probability distribution conditioned on the first word.</li>
+        <li>Step 3: Continue sampling words until the end-of-sequence token.</li>
     </ul>
-    <pre>
-{
-  "do_sample": true,
-  "length_penalty": 0.8
-}
-    </pre>
 
-    <h2>Example Configuration Combining Multiple Strategies:</h2>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2,
-  "top_p": 0.9,
-  "top_k": 100,
-  "repetition_penalty": 1.2,
-  "length_penalty": 0.8
-}
-    </pre>
-    
+    <p>Both strategies have their strengths and are chosen based on the specific requirements of the task at hand.</p>
 </body>
 </html>
+
 
 """        
             dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
             sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.do_sample_dropdown, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.search_type_dropdown, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
+
+
+
+
+            sizer_0 = wx.BoxSizer(wx.VERTICAL)
+            dos = wx.StaticText(self, label="beam_width")
+            dos.html_content ="""<!DOCTYPE html>
+<html>
+<head>
+    <title>Beam Width Ranges Explained</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        p {
+            margin-bottom: 10px;
+        }
+        ul {
+            margin-bottom: 20px;
+        }
+        .highlight {
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <h1>Beam Width Ranges Explained</h1>
+    <p>Beam width is a crucial parameter in beam search that determines the number of beams (candidate sequences) maintained at each step of the search process. The choice of beam width affects the balance between exploration of different possible sequences and the computational efficiency of the algorithm.</p>
+
+    <h2>Small Beam Width (e.g., 1-5)</h2>
+    <ul>
+        <li><span class="highlight">Efficiency:</span> A smaller beam width requires less computational power and memory, making it faster and more efficient.</li>
+        <li><span class="highlight">Limited Exploration:</span> With fewer beams, the search explores a narrower set of sequences, which may lead to suboptimal results, especially for complex tasks.</li>
+        <li><span class="highlight">Greedy Behavior:</span> When the beam width is very small, the search can behave similarly to a greedy search, focusing on the most probable sequences at each step without considering alternatives.</li>
+    </ul>
+
+    <h2>Medium Beam Width (e.g., 5-20)</h2>
+    <ul>
+        <li><span class="highlight">Balanced Performance:</span> A medium beam width provides a good balance between exploration and computational efficiency, allowing for a more thorough search without excessive resource usage.</li>
+        <li><span class="highlight">Improved Quality:</span> By considering more candidate sequences, the search is more likely to find higher quality and more coherent sequences.</li>
+        <li><span class="highlight">Common Choice:</span> This range is often used in practice for tasks like machine translation and text summarization, where both quality and efficiency are important.</li>
+    </ul>
+
+    <h2>Large Beam Width (e.g., 20-100+)</h2>
+    <ul>
+        <li><span class="highlight">Extensive Exploration:</span> A larger beam width allows for a much broader exploration of possible sequences, increasing the chances of finding the optimal sequence.</li>
+        <li><span class="highlight">High Computational Cost:</span> The increased number of beams requires significantly more computational power and memory, making the search process slower and more resource-intensive.</li>
+        <li><span class="highlight">Diminishing Returns:</span> Beyond a certain point, increasing the beam width further may result in only marginal improvements in sequence quality, as the most probable sequences are already being considered.</li>
+    </ul>
+
+    <h2>Choosing the Right Beam Width</h2>
+    <p>The optimal beam width depends on the specific task and the available computational resources. Here are some general guidelines:</p>
+    <ul>
+        <li>For <span class="highlight">simple tasks</span> or when <span class="highlight">computational resources are limited</span>, a smaller beam width (1-5) can be sufficient.</li>
+        <li>For <span class="highlight">more complex tasks</span> where quality is important, a medium beam width (5-20) is a good starting point.</li>
+        <li>For <span class="highlight">high-stakes applications</span> where finding the best possible sequence is critical, and <span class="highlight">ample resources are available</span>, a larger beam width (20-100+) can be used.</li>
+    </ul>
+
+    <p>Experimentation and tuning are often necessary to find the best beam width for a given application, as it involves trade-offs between quality and efficiency.</p>
+</body>
+</html>
+
+"""   
+
+            # Modify the event binding to use a lambda function
+            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))            
+            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.beam_width_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
+
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
             dos = wx.StaticText(self, label="max_len")
@@ -545,13 +218,6 @@ class Base_InputPanel_Phi3(Base_InputPanel):
             sizer_0.Add(self.max_length_dropdown, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
-
-            sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="min_len")
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.min_length_dropdown, 0, wx.ALIGN_CENTER)
-            h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
-                   
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
             dos = wx.StaticText(self, label="top_k")
             dos.html_content ="""<!DOCTYPE html>
@@ -977,14 +643,15 @@ enhancing the quality and coherence of the generated text.
         if self.tooltip:
             self.tooltip.Destroy()
             self.tooltip = None  # Reset the tooltip attribute to None
-    def OnDoSampleChange(self, event):
+    def OnSearchTypeChange(self, event):
         # Get the selected do_sample value
-        selected_do_sample = self.do_sample_dropdown.GetValue()
+        selected_do_sample = self.search_type_dropdown.GetValue()
 
         # Print the selected model
         chat = apc.chats[self.tab_id]
-        chat.do_sample = (selected_do_sample == 'True')
-        print('OnDoSampleChange',selected_do_sample, self.tab_id)
+        #chat.do_sample = (selected_do_sample == 'True')
+        chat.do_sample = (selected_do_sample == 'Sampling')
+        print('OnSearchTypeChange',selected_do_sample, self.tab_id)
         # Continue processing the event
         event.Skip()
     def OnMaxLengthChange(self, event):
@@ -997,14 +664,14 @@ enhancing the quality and coherence of the generated text.
         print('OnMaxLengthChange',selected_max_length, self.tab_id)
         # Continue processing the event
         event.Skip()
-    def OnMinLengthChange(self, event):
+    def OnBeamWidthChange(self, event):
         # Get the selected do_sample value
-        selected_min_length = self.min_length_dropdown.GetValue()
+        selected_val = self.beam_width_dropdown.GetValue()
 
         # Print the selected model
         chat = apc.chats[self.tab_id]
-        chat.min_length = int(selected_min_length )
-
+        chat.beam_width = int(selected_val )
+        print('OnMaxLengthChange',selected_val, self.tab_id)
         # Continue processing the event
         event.Skip()     
     def OnTopPChange(self, event):
@@ -1067,6 +734,7 @@ enhancing the quality and coherence of the generated text.
             self.inputCtrl.SetValue(self.tabs[message]['q'])
             print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
             self.model_dropdown.SetValue(apc.currentModel[message])
+            chat.model = self.model_dropdown.GetValue()
             #self.tab_id=message
             #self.q_tab_id=message
             #self.inputCtrl.SetSelection(0, -1)
@@ -1091,10 +759,10 @@ enhancing the quality and coherence of the generated text.
                 chat.max_length = int(self.max_length_dropdown.GetValue())  
 
 
-            if chat.get('min_length', None):
-                self.min_length_dropdown.SetValue(str(chat.min_length))
+            if chat.get('beam_width', None):
+                self.beam_width_dropdown.SetValue(str(chat.beam_width))
             else:
-                chat.min_length = int(self.min_length_dropdown.GetValue())
+                chat.beam_width = int(self.beam_width_dropdown.GetValue())
 
 
             if chat.get('top_p', None):
@@ -1124,12 +792,14 @@ enhancing the quality and coherence of the generated text.
             else:
                 chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue())
 
-            if chat.get('do_sample', None) is not None:
+            if chat.get('search_type', None) is not None:
                 
-                val = 'True' if chat.do_sample else 'False'
-                self.do_sample_dropdown.SetValue(val)
+                val = 'Sampling' if chat.do_sample else 'Beam Search'
+                self.search_type_dropdown.SetValue(val)
             else:
-                chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
+                chat.do_sample = (self.search_type_dropdown.GetValue() == 'Sampling')
     
 
             #self.max_length_dropdown.SetValue(str(chat.get('max_length', 2048)))    
+        else:   
+            print('not in self.tabs', message)

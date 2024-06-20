@@ -279,7 +279,7 @@ class Microsoft_Chat_DisplayPanel(StyledTextDisplay):
 
              
 
-class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Phi3):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion
@@ -320,7 +320,7 @@ class Microsoft_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.clearButton, 0, wx.ALIGN_CENTER)
         h_sizer = wx.BoxSizer(wx.VERTICAL)
-        Base_InputPanel.AddButtons(self, h_sizer)
+        Base_InputPanel_Phi3.AddButtons(self, h_sizer)
 
         v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
         v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -694,7 +694,7 @@ class Microsoft_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 
-class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Phi3):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion
@@ -729,7 +729,7 @@ class Microsoft_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPa
 
 
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel.AddButtons(self, h_sizer)
+        Base_InputPanel_Phi3.AddButtons(self, h_sizer)
 
         v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
         v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)

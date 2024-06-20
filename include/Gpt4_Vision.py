@@ -8,12 +8,16 @@ import wx.stc as stc
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
-from os.path import join
- 
+from os.path import join, isfile
+from include.Base_InputPanel_Gpt4 import Base_InputPanel_Gpt4
+import base64
+import requests
+import openai
+
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
-from include.Common_MiniCPM import Base_InputPanel_MiniCPM
+#from include.Common_MiniCPM import Base_InputPanel
 from include.fmt import fmt, pfmt, pfmtd, fmtd
 from PIL import Image as PILImage
 e=sys.exit
@@ -23,7 +27,7 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 #DEFAULT_MODEL  = "openbmb/MiniCPM-Llama3-V-2_5"
-model_list=["openbmb/MiniCPM-Llama3-V-2_5","openbmb/MiniCPM-Llama3-V-2_5-int4"]
+model_list=['gpt-4o', 'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-vision-preview']
 
 dir_path = 'template'
 
@@ -41,137 +45,88 @@ class VisionResponseStreamer:
         self.model={}
         self.tokenizer={}
 
-    def get_model(self, model_id):
-        if model_id not in self.model:
-            model=AutoModelForCausalLM.from_pretrained(
-                model_id, 
-                cache_dir="./cache",
-                trust_remote_code=True ,
-                low_cpu_mem_usage=True
-                #torch_dtype=torch.float16
-            ) #.to("cuda")
-            if next(model.parameters()).is_cuda:
-                print('Model is already on cuda')
-            else:
-                model.to("cuda")
-            self.model[model_id] = model
-        return self.model[model_id]
-    def get_tokenizer(self, model_id):
-        if model_id not in self.tokenizer:
-            self.tokenizer[model_id] = AutoTokenizer.from_pretrained(
-                model_id, 
-                cache_dir="./cache",
-                trust_remote_code=True
-            )
-        return self.tokenizer[model_id]
+
             
 
 
     def stream_response(self, prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
-        #pp(chatHistory)
-        from PIL import Image 
-        import requests 
+       
 
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-
-        #pp(chatHistory)
-        #pp(prompt)
-        #e()
-        
-    
+        header = fmt([[f'Question',chat.model]],[])
+        pub.sendMessage('chat_output', message=f'{header}\n{prompt}\n', tab_id=receiveing_tab_id)
         
 
-        content=[prompt]
-        out = []
+        # OpenAI API Key
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+        # Function to encode the image
+        def encode_image(image_path):
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+
+        # Path to your image
+        images=[]
+        for fn in image_path:
+            
+            if not fn:
+                log(f'No image file not set', 'red')
+                return ''
+            assert isfile(fn)
+            print('appending')
+            print(fn)
+            images.append( {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{encode_image(fn)}"
+                }
+                } ) 
+
+
+
+        # Getting the base64 string
+        #base64_image = encode_image(image_path)
+        headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {openai.api_key}"
+        }
+
+        payload = {
+        "model": chat.model,
+        "messages": [
+            {
+            "role": "user",
+            "content": [
+                {
+                "type": "text",
+                "text": prompt                
+                },
+                *images
+            ]
+            }
+        ],
+        "max_tokens": chat.max_tokens
+        #"min_tokens": chat.min_tokens
+        }
+        out=[]
         try:
-            #images=[]   
-            for fn in image_path:
-                if not fn:
-                    log(f'No image file not set', 'red')
-                    return ''
-                assert isfile(fn)
-                #images.append( Image.open(fn))
-                content.append( Image.open(fn).convert('RGB'))
-            #print(fmt([[f'Images']], []) )
-            #pp(images)
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            #pfmt([[f'System Answer']],[])
+            if 'choices'  in response.json():
+                data=response.json()['choices'][0]
+                message=data['message']
+                content=message['content']
+                usage = response.json()['usage']
+                header=fmt([[f'System Answer']],[])
+                pub.sendMessage('chat_output', message=f'{header}\n{content}', tab_id=receiveing_tab_id)
+                log(f'{usage}', 'blue')
             
-        
-            msgs = [{'role': 'user', 'content': content}]
-
-            #pp(msgs)
-            search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'beam_width', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
-            assert 'max_length'  in search_options
-            assert 'beam_width'  in search_options
-            assert 'top_p'  in search_options
-            assert 'top_k'  in search_options
-            assert 'temperature'  in search_options
-            assert 'repetition_penalty'  in search_options
-            
-            if chat.do_sample:
-                search_options['sampling']=True
-                search_options['num_beams']=6
-                
+                out.append(content)
             else:
-                search_options['beam_search']=True
-                search_options['num_beams']=search_options['beam_width']
-                
-                del     search_options['temperature']
-                del     search_options['top_p']
-                 
-            search_options['max_tokens']= search_options['max_length'] 
-            #search_options['min_tokens']= search_options['min_length'] 
-            #search_options['best_of']= 5
-            #pp(search_options)
-            #pp(chat)
-
-            system_prompt=chat.system_prompt
-            
-            #print(system_prompt)
-            #pp(chat)
-            #pp(all_system_templates)
-            #
-
-            
-            #e()
-            tokenizer=self.get_tokenizer(chat.model)    
-            model=self.get_model(chat.model)
-            res = model.chat(
-                msgs=msgs,
-                context=None,
-                image=None,
-                tokenizer=tokenizer,
-                #vision_hidden_states=None,
-                max_new_tokens=4096,
-                min_new_tokens=1024,
-                #top_p= 0.8,
-                #top_k= 100,
-                
-                #do_sample= True,
-                #repetition_penalty= 1.05,        
-                #sampling=True,
-                max_inp_length=2048,   
-                #system_prompt='add ukrainian essence to each description' ,     
-                #how many images are there to describe? describe all of them in english
-                #system_prompt='add pinup art essence to each description' 
-                #system_prompt='give detailed description in english' ,
-                system_prompt=system_prompt,
-                #is there a second image?  creatively mix it's description with first image description in english
-                #create detailed description that blends the content of both pictures in english
-                #temperature=1.0  
-                stream=True,
-                **search_options
-            )
-            header=fmt([[f'System Answer']],[])
-            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-            generated_text = ""
-            for new_text in res:
-                generated_text += new_text
-                out.append(new_text)
-                #print(new_text, flush=True, end='')
-                pub.sendMessage('chat_output', message=f'{new_text}', tab_id=receiveing_tab_id)
-                
+                log(f'Error in stream_response', 'red')
+                log(f'{response.json()}', 'red')
                 
         except Exception as e:
             log(f'Error in stream_response', 'red')
@@ -184,148 +139,7 @@ class VisionResponseStreamer:
 
         return ''.join(out)
     
-class _ResponseStreamer:
-    def __init__(self,chat, model):
-        # Set your OpenAI API key here
-        chat.verbose=chat.get('verbose', True)
-        chat.timings=chat.get('timings', True) 
-        if chat.verbose: log(f"Loading model '{model}'...")
-        self.model_name=model
-        self.model = og.Model(f'{model}')
-        if chat.verbose: log("Model loaded")
-        self.tokenizer = og.Tokenizer(self.model)
-        self.tokenizer_stream = self.tokenizer.create_stream()  
-        if chat.verbose: log("Tokenizer created")  
 
-
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id):
-        out=[]
-        chat=apc.chats[receiveing_tab_id]
-
-        self.receiveing_tab_id=receiveing_tab_id
-        chat=apc.chats[receiveing_tab_id]
-        chat.verbose=chat.get('verbose', True)
-        chat.timings=chat.get('timings', True)    
-        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
-        assert chat.max_length,chat.max_length
-        assert chat.beam_width,chat.beam_width
-        assert chat.top_p is not None,chat.top_p
-        assert chat.top_k,chat.top_k
-        assert chat.temperature is not None,chat.temperature
-        assert chat.repetition_penalty is not None,chat.repetition_penalty
-        chat.model=chat.get('model', DEFAULT_MODEL)
-        
-
-    
-        
-
-        #chat.max_length=chat.get('max_length', 2048*2)
-
-        #chat.temperature=chat.get('temperature', 1)
-        #chat.repetition_penalty=chat.get('repetition_penalty', 1)
-        
-        
-        
-        if chat.timings:
-            started_timestamp = 0
-            first_token_timestamp = 0
-
-
-        
-        #if chat.verbose: print()
-        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'beam_width', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
-        slog=fmtd([search_options], [])
-        print(slog)
-        log(slog)
-        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
-        # Set the max length to something sensible by default, unless it is specified by the user,
-        # since otherwise it will be set to the entire context length
-        assert 'max_length'  in search_options
-        assert 'beam_width'  in search_options
-        assert 'top_p'  in search_options
-        assert 'top_k'  in search_options
-        assert 'temperature'  in search_options
-        assert 'repetition_penalty'  in search_options
-
-        chat_template = '''{input}
-<|assistant|>'''
-
-        # Keep asking for input prompts in a loop
-        try:
-            text = '\n'.join(chatHistory)
-            #pp(chatHistory)
-            #e()
-            if chat.timings: started_timestamp = time.time()
-
-            # If there is a chat template, use it
-            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
-            #pp(text)
-            #e()
-            prompt = f'{chat_template.format(input=text)}'
-            pfmt([[prompt]], ['Prompt'])
-            #pp(prompt)
-            #e()
-            input_tokens = self.tokenizer.encode(prompt)
-
-            params = og.GeneratorParams(self.model)
-            #params.try_graph_capture_with_max_batch_size(10)
-            params.set_search_options(**search_options)
-            params.input_ids = input_tokens
-            generator = og.Generator(self.model, params)
-            if chat.verbose: log("Generator created")
-
-            #if chat.verbose: print("Running generation loop ...")
-            if chat.timings:
-                first = True
-                new_tokens = []
-
-            #print()
-            #print("Output: ", end='', flush=True)
-            pub.sendMessage('chat_output', message=f'Model:{self.model_name}\n\n', tab_id=receiveing_tab_id)
-            if 1:
-                idx=0
-                while not generator.is_done():
-                    generator.compute_logits()
-                    generator.generate_next_token()
-                    if chat.timings:
-                        if first:
-                            first_token_timestamp = time.time()
-                            first = False
-
-                    new_token = generator.get_next_tokens()[0]
-                    chunk=self.tokenizer_stream.decode(new_token)
-                    out.append(chunk)
-                    #print(chunk, end='', flush=True)
-                    
-                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
-                    if idx%10==0:
-                        time.sleep(.0001)
-                        idx=0
-                    if chat.timings: new_tokens.append(new_token)
-                    idx+=1
-
-            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
-            del generator
-
-            if chat.timings:
-                prompt_time = first_token_timestamp - started_timestamp
-                run_time = time.time() - first_token_timestamp
-                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
-                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
-                log(fmtd([stats], []))
-                
-                #pub.sendMessage('chat_output', message=f'\n\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
-        except:
-            log(f'Error in stream_response', 'red')
-            log(format_stacktrace(), 'red')
-            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
-
-            pub.sendMessage('stop_progress')
-            return ''
-        if out:
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
@@ -696,9 +510,9 @@ class Copilot_DisplayPanel(StyledTextDisplay):
           
 
 
-class OpenBNB_Copilot_DisplayPanel(wx.Panel):
+class Gpt4_Vision_Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(OpenBNB_Copilot_DisplayPanel, self).__init__(parent)
+        super(Gpt4_Vision_Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -741,10 +555,10 @@ class OpenBNB_Copilot_DisplayPanel(wx.Panel):
         event.Skip()        
 
 
-class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
+class Gpt4_Vision_ChatDisplayNotebookPanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(OpenBNB_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Gpt4_Vision_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -757,13 +571,13 @@ class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
         self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
-        if not OpenBNB_ChatDisplayNotebookPanel.subscribed:
+        if not Gpt4_Vision_ChatDisplayNotebookPanel.subscribed:
             
             pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
             pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
             pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
             pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
-            OpenBNB_ChatDisplayNotebookPanel.subscribed=True
+            Gpt4_Vision_ChatDisplayNotebookPanel.subscribed=True
     def get_active_chat_panel(self):
         active_chat_tab_index = self.chat_notebook.GetSelection()
         if active_chat_tab_index == wx.NOT_FOUND:
@@ -841,7 +655,7 @@ class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
         if 1:
             #pp(panels.__dict__)
             #pp(chat.__dict__)
-            display_panel = f'{chat.vendor}_{chat.chat_type}_{panels.chat}'
+            display_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.chat}'
             #print('display_panel', display_panel)
             try:
                 assert display_panel in globals(), display_panel
@@ -904,11 +718,11 @@ class OpenBNB_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_MiniCPM):
+class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Gpt4):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(OpenBNB_Copilot_InputPanel, self).__init__(parent)
+        super(Gpt4_Vision_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -918,7 +732,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
         #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
-        self.askLabel = wx.StaticText(self, label=f'Ask Phy-3 {tab_id}:')
+        self.askLabel = wx.StaticText(self, label=f'Ask Gpt-4-V {tab_id}:')
         if 1:
             model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -967,7 +781,9 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         if 0:
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
-  
+        #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_Gpt4.AddButtons(self, askSizer)
+        #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
@@ -976,11 +792,10 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         
 
-        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_MiniCPM.AddButtons(self, h_sizer)
+
 
         v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
-        v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
+        #v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
 
@@ -1000,13 +815,13 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         wx.CallAfter(self.inputCtrl.SetFocus)
         if  not  hasattr(apc, 'vrs'):
             apc.vrs=VisionResponseStreamer() # model=self.model_dropdown.GetValue())
-        if not OpenBNB_Copilot_InputPanel.subscribed:
+        if not Gpt4_Vision_Copilot_InputPanel.subscribed:
                 
             #pub.subscribe(self.SetException, 'fix_exception')
             pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
             #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
             #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
-            OpenBNB_Copilot_InputPanel.subscribed=True
+            Gpt4_Vision_Copilot_InputPanel.subscribed=True
         
     def onTabsButton(self, event):
         try:
@@ -1048,7 +863,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:
-            print('@'*30, 'Setting chat defaults', tab_id)
+            #print('@'*30, 'Setting chat defaults', tab_id)
             assert self.chat_type==tab_id[1]
             chat=apc.chats[tab_id]
             if 0:
@@ -1139,7 +954,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
 
                 questionHistory[self.tab_id].append(question)
                 currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
-                currentModel[self.tab_id]=chat.model_id
+                currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
                 
@@ -1233,203 +1048,7 @@ class OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPane
         
         pub.sendMessage('log', message=f'{message}', color=color)
 
-class new_OpenBNB_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_MiniCPM):
-    subscribed=False
-    def __init__(self, parent, tab_id):
-        global chatHistory,  currentQuestion
-        super(new_OpenBNB_Copilot_InputPanel, self).__init__(parent)
-        NewChat.__init__(self)
-        GetClassName.__init__(self)
-        self.tabs={}
-        self.tab_id=tab_id
-        chat=   apc.chats[tab_id]
-        self.chat_type=chat.chat_type
-        chatHistory[self.tab_id]=[]
-        chatHistory[self.tab_id]= []
-        self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
-        #model_names = [DEFAULT_MODEL]  # Add more model names as needed
-        self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(self.model_dropdown.GetValue())
-        
-        self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
-        self.askButton = wx.Button(self, label='Ask')
-        self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
-
-
-        v_sizer = wx.BoxSizer(wx.VERTICAL)
-        askSizer = wx.BoxSizer(wx.HORIZONTAL)
-        askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
-        self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
-        askSizer.Add(pause_panel, 0, wx.ALL)
-  
-        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
-
-
-        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_MiniCPM.AddButtons(self, h_sizer)
-
-        v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
-        v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
-    
-        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
-        if 1:
-            q= apc.chats[self.tab_id].question
-            self.tabs[self.tab_id]=dict(q=q)
-            questionHistory[self.tab_id]=[q]
-            currentQuestion[self.tab_id]=0
-            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
-            chatHistory[self.tab_id]= []
-
-        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
-        #self.inputCtrl.SetMinSize((-1, 120))  
-        self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(v_sizer, 0, wx.EXPAND)
-        sizer.Add(self.inputCtrl, 1, wx.EXPAND)
-        self.SetSizer(sizer)
-        self.ex=None
-        self.receiveing_tab_id=0
-        if not new_OpenBNB_Copilot_InputPanel.subscribed:
-                
-            #pub.subscribe(self.SetException, 'fix_exception')
-            pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
-            #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-            #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
-            new_OpenBNB_Copilot_InputPanel.subscribed=True
-            
-        wx.CallAfter(self.inputCtrl.SetFocus)
-    def _SetTabId(self, tab_id):
-        self.tab_id=tab_id
-        self.askLabel.SetLabel(f'Ask copilot {tab_id}:')
-    def SetChatDefaults(self, tab_id):
-        global chatHistory, questionHistory
-        if tab_id ==self.tab_id:
-            assert self.chat_type==tab_id[1]
-            chat=apc.chats[tab_id]
-  
-
-            self.tabs[self.tab_id]=dict(q=chat.question)
-            chatHistory[self.tab_id]= []
-            questionHistory[self.tab_id]=[]
-            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()        
-    def OnModelChange(self, event):
-        # Get the selected model
-        chat=   apc.chats[self.tab_id]
-        chat.model= self.model_dropdown.GetValue()
-
-
-        # Continue processing the event
-        event.Skip()
-
-
-    def _SaveQuestionForTabId(self, message):
-        
-        q=self.inputCtrl.GetValue()
-        self.tabs[message]=dict(q=q)
-        apc.currentModel[message]=self.model_dropdown.GetValue()
-        if 0:
-            d={"role": "user", "content":q}
-            if self.tab_id in chatHistory:
-                if d not in chatHistory[self.tab_id]:
-                    chatHistory[self.tab_id] += [f"<|user|>\n{q} <|end|>" ]
-
-
-    def SetException(self, message):
-        self.ex=message
-    def onAskButton(self, event):
-        # Code to execute when the Ask button is clicked
-        #print('Ask button clicked')
-        self.AskQuestion()
-    def AskQuestion(self):
-        global chatHistory, questionHistory, currentQuestion
-        # Get the content of the StyledTextCtrl
-        #print('current tab_id', self.q_tab_id)
-        #pub.sendMessage('show_tab_id')
-        self.Base_OnAskQuestion()
-        question = self.inputCtrl.GetValue()
-        if not question:
-            self.log('There is no question!', color=wx.RED)
-        else:
-            question = self.inputCtrl.GetValue()
-            self.log(f'Asking question: {question}')
-            pub.sendMessage('start_progress')
-            #code=???
-            chatDisplay=apc.chat_panels[self.tab_id]
-            code=chatDisplay.GetCode(self.tab_id)
-            #print(888, chatDisplay.__class__.__name__)
-            #code='print(1223)'
-            chat=apc.chats[self.tab_id]
-            prompt=evaluate(all_system_templates[chat.workspace].Copilot.FIX_CODE, AttrDict(dict(code=code, input=question)))
-            chatHistory[self.tab_id] += [f"<|user|>\n{prompt} <|end|>" ]
-
-            questionHistory[self.tab_id].append(question)
-            currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
-            apc.currentModel[self.tab_id]=self.model_dropdown.GetValue()
-
-
-            header=fmt([[question]], ['User Question'])
-
-            # DO NOT REMOVE THIS LINE
-            print(header)
-            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)
-            #pub.sendMessage('chat_output', message=f'{prompt}\n')
-            
-            #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id)).start()
-
-    def stream_response(self, prompt, chatHistory, tab_id):
-        # Call stream_response and store the result in out
-        self.receiveing_tab_id=tab_id
-        chat=apc.chats[tab_id]
-        rs=ResponseStreamer(chat, model=self.model_dropdown.GetValue())
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id)
-        if out:
-            chatHistory[tab_id].append("<|assistant|>\n{out} <|end|>") 
-        pub.sendMessage('stop_progress')
-        log('Done.')
-        set_status('Done.')        
-
-    def PrevQuestion(self):
-        qid=currentQuestion[self.tab_id]
-        if qid:
-            q=questionHistory[self.tab_id][qid-1]
-            self.inputCtrl.SetValue(q)
-            self.inputCtrl.SetFocus()
-            currentQuestion[self.tab_id]=qid-1
-        else:
-            self.log('No previous question.', color=wx.RED)
-    def NextQuestion(self):
-        qid=currentQuestion[self.tab_id]
-        if len(questionHistory[self.tab_id])>qid+1:
-            q=questionHistory[self.tab_id][qid+1]
-            self.inputCtrl.SetValue(q)
-            self.inputCtrl.SetFocus()
-            currentQuestion[self.tab_id]=qid+1
-        else:
-            self.log('No next question.', color=wx.RED)
-    def OnCharHook(self, event):
-        if event.ControlDown() and  event.GetKeyCode() == wx.WXK_RETURN:
-            self.AskQuestion()
-        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_RIGHT:
-            log("Ctrl+-> pressed")
-            set_status("Ctrl+-> pressed")
-            self.NextQuestion()
-        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_LEFT:
-            self.log("Ctrl+<- pressed")
-            set_status("Ctrl+<- pressed")
-            self.PrevQuestion()
-                       
-        else:
-            event.Skip()
-
-
-    def log(self, message, color=wx.BLUE):
-        
-        pub.sendMessage('log', message=f'{message}', color=color)
-
-  
 class MyNotebookCodePanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, tab_id):

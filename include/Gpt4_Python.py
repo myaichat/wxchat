@@ -217,9 +217,9 @@ class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
         print('show_tab_id', self.tab_id)
 
              
-class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
+class Gpt4_Python_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Gpt4_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Gpt4_Python_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -243,6 +243,8 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
         return self.chat_notebook.GetPage(active_chat_tab_index)
             
     def OnWorkspaceTabChanging(self, message):
+        print(self.__class__.__name__)
+        print('OnWorkspaceTabChanging', message, self.ws_name)        
         if message==self.ws_name:
             active_chat_panel = self.get_active_chat_panel()
             if active_chat_panel is not None:
@@ -264,7 +266,7 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
                 assert active_tab_id in apc.chats
                 chat=apc.chats[active_tab_id]
                 print('swapping', active_tab_id )
-                pub.sendMessage('swap_input_panel', chat=chat,tab_id=active_tab_id)
+                pub.sendMessage('swap_input_panel', tab_id=active_tab_id)
                             
 
     def OnVendorspaceTabChanging(self, message):
@@ -371,10 +373,10 @@ class Gpt4_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 
-class Gpt4_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
+class Gpt4_Python_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Copilot_InputPanel, self).__init__(parent)
+        super(Gpt4_Python_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -893,10 +895,10 @@ class Gpt4_Chat_DisplayPanel(StyledTextDisplay):
 
              
 
-class Gpt4_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
+class Gpt4_Python_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Chat_InputPanel, self).__init__(parent)
+        super(Gpt4_Python_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}

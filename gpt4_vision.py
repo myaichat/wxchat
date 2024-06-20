@@ -54,10 +54,13 @@ if 0:
     from include.Phy3_Python import Microsoft_Chat_InputPanel, \
         Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 if 1:
-    from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
-        Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
+    from include.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
+        Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Python_Copilot_InputPanel
+if 0:
+    from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
 
-from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
+if 1:
+    from include.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -332,7 +335,7 @@ class VendorNotebook(wx.Notebook):
             #print(f'EXISTING: "{title}" tab [{self.GetPageCount()}] Adding chat tab to existing vendor', page.__class__.__name__)
             page.AddTab(chat)
         else:
-            display_panel = f'{chat.vendor}_ChatDisplayNotebookPanel'
+            display_panel = f'{chat.vendor}_{chat.workspace}_ChatDisplayNotebookPanel'
             try:
                 #assert display_panel in globals()
                 cls = globals()[display_panel]
@@ -428,7 +431,7 @@ class WorkspacePanel(wx.Panel,NewChat):
                     self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
 
 
-            chatInput_panel = f'{chat.vendor}_{chat.chat_type}_{panels.input}'
+            chatInput_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.input}'
             #print('display_panel', display_panel)
             try:
                 
@@ -759,7 +762,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'MiniCPM Vision')
+        self.frame = MyFrame(f'Gpt4 Vision Vision')
         return True
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-#import onnxruntime_genai as og
+
 
 import argparse
 import time, random
@@ -8,6 +8,7 @@ import wx.stc as stc
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
+from os.path import join
 from transformers import AutoModelForCausalLM, AutoTokenizer 
 from pubsub import pub
 from pprint import pprint as pp 

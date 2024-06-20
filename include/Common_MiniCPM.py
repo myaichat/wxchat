@@ -683,8 +683,8 @@ enhancing the quality and coherence of the generated text.
         chat.top_p = float(selected_top_p )
 
         # Continue processing the event
-        pp(chat)
-        print(apc.chats)
+        #pp(chat)
+        #print(apc.chats)
         event.Skip()        
     def OnTopKChange(self, event):
         # Get the selected do_sample value
@@ -725,14 +725,14 @@ enhancing the quality and coherence of the generated text.
         self.tab_id=tab_id
         message=tab_id
         chat=apc.chats[message]
-        pp(chat)
-        print('RestoreQuestionForTabId', chat)
+        #pp(chat)
+        #print('RestoreQuestionForTabId', chat)
         if message in self.tabs:
             assert self.chat_type==message[1]
             #print('Chat restoring', message)
             #pp(self.tabs[message])
             self.inputCtrl.SetValue(self.tabs[message]['q'])
-            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
+            #print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
             self.model_dropdown.SetValue(apc.currentModel[message])
             chat.model = self.model_dropdown.GetValue()
             #self.tab_id=message
@@ -750,7 +750,7 @@ enhancing the quality and coherence of the generated text.
             #chat.temperature = float(self.temp_dropdown.GetValue() )
             #chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue() )
             
-            print(message, self.tab_id)
+            # print(message, self.tab_id)
             #pp(self.tabs)
         
             if chat.get('max_length', None):

@@ -115,7 +115,7 @@ for yfn in yaml_files:
         all_system_templates[data.templates.workspace.name]=data.templates.System
         #break
 
-pp(all_templates.keys())
+#pp(all_templates.keys())
 #e()
 #all_templates=all_templates.Oracle
 apc.default_workspace = list(all_templates.values())[0].templates.workspace

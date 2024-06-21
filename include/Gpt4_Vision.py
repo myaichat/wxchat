@@ -380,7 +380,24 @@ class MyNotebookImagePanel(wx.Panel):
         if not MyNotebookImagePanel.subscribed:
                 
             pub.subscribe(self.load_random_images, 'load_random_images')
-            MyNotebookImagePanel.subscribed=True        
+            MyNotebookImagePanel.subscribed=True  
+        self.notebook.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSE, self.onTabClose)
+    def onTabClose(self, event):
+        # Check if the panel being closed is MyNotebookImagePanel
+        page_index = event.GetSelection()
+        #print(page_index, self.notebook.GetPageCount(), isinstance(self, MyNotebookImagePanel))
+        page = self.notebook.GetPage(page_index)
+        if isinstance(self, MyNotebookImagePanel):
+            # Prevent the tab from closing
+            #dialog asking if want to close
+            dialog=wx.MessageDialog(self, 'Are you sure you want to close this tab?', 'Close Tab', wx.YES_NO | wx.ICON_QUESTION)
+            response = dialog.ShowModal()
+            if response == wx.ID_YES:
+                # Close the tab
+                event.Skip()    
+            else:       
+
+                event.Veto()              
     def get_image_list(self):
         from pathlib import Path
 
@@ -539,15 +556,29 @@ class Gpt4_Vision_Copilot_DisplayPanel(wx.Panel):
         # Set initial sash positions
         #
         self.Bind(wx.EVT_SIZE, self.OnResize)
-    def GetImagePath(self, tab_id):
+    def _GetImagePath(self, tab_id):
         assert tab_id==self.tab_id, self.__class__.__name__
         
         out=[]
         notebook= self.notebook_panel.canvasCtrl
         for canvas in  self.notebook_panel.canvasCtrl:
             out.append(canvas.image_path)
-        return out
+        
+    def GetImagePath(self, tab_id):
+        assert tab_id==self.tab_id, self.__class__.__name__
+        
+        out=[]
+        notebook= self.notebook_panel.notebook
+       
+        page_count = notebook.GetPageCount()
 
+        for page_index in range(page_count):
+            # Get the panel (page) at the current index
+            page = notebook.GetPage(page_index)
+            
+            out.append(page.image_path)
+        return out
+    
     def OnResize(self, event):
         # Adjust the sash position to keep the vertical splitter size constant
         width, height = self.GetSize()
@@ -938,7 +969,7 @@ class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
                 chatDisplay=apc.chat_panels[self.tab_id]
                 image_path=chatDisplay.GetImagePath(self.tab_id)
                 #pp(image_path)
-                
+                #return
                 assert image_path,chatDisplay
                 #print(888, chatDisplay.__class__.__name__)
                 #code='print(1223)'

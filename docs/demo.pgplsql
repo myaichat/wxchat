@@ -1,0 +1,6 @@
+CREATE PROCEDURE sp_result ( result_set INOUT REFCURSOR ) AS 
+$$  BEGIN 
+OPEN result_set FOR SELECT * FROM my_table LIMIT 100; END; 
+$$ LANGUAGE plpgsql; 
+
+BEGIN; CALL sp_result( 'result’ ); FETCH ALL FROM result; END;

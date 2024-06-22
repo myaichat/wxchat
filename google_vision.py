@@ -53,14 +53,17 @@ apc.all_system_templates= all_system_templates=dict2()
 if 0:
     from include.Phy3_Python import Microsoft_Chat_InputPanel, \
         Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
-if 1:
+if 0:
     from include.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
         Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Python_Copilot_InputPanel
 if 0:
     from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
 
-if 1:
+if 0:
     from include.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+
+if 1:
+    from include.Google_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()

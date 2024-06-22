@@ -2,17 +2,17 @@ templates:
   workspace:
 
       name: 'Vision'
-      vendor: 'Gpt4'
+      vendor: 'Google'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    Gpt4:
+    Google:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
 
     Copilot:
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 1'
       history: false
@@ -26,7 +26,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 2'
       num_of_images: 2
@@ -36,17 +36,17 @@ templates:
         Give detailed creative mix of 2 images decription as one (do not split in two images). 
         be as creative and wierd as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 3'
       num_of_images: 3
       history: false
       system: 'SYSTEM_MULTI'
       question:  |
-        Give detailed creative mix of all image decriptions as one (do not split in two images). 
+        Give detailed creative mix of all image decriptions as one 
         be as creative and wierd as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 4'
       num_of_images: 4
@@ -56,7 +56,7 @@ templates:
         Give detailed creative mix of all image decriptions as one (do not split in two images). 
         be as creative and weird as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 5'
       num_of_images: 5
@@ -66,7 +66,7 @@ templates:
         Give detailed creative mix of all image decriptions as one (do not split in two images). 
         be as creative and weird as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 10'
       num_of_images: 10
@@ -76,7 +76,7 @@ templates:
         Give detailed creative mix of all image decriptions as one (do not split in two images). 
         be as creative and weird as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 20'
       num_of_images: 20
@@ -86,7 +86,7 @@ templates:
         Give detailed creative mix of all image decriptions as one (do not split in two images). 
         be as creative and weird as possible. 
 
-    - vendor: 'Gpt4'
+    - vendor: 'Google'
       chat_type: 'Copilot'
       name: 'Paste 30'
       num_of_images: 30
@@ -109,7 +109,8 @@ templates:
       SYSTEM_TWO: |
         you are priovided {params.num_of_images} images. answer in english language
       SYSTEM_MULTI: |
-        you are priovided {params.num_of_images} images. answer in english language        
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible.        
       SECOND: |
         is there a second image?  creatively mix it's description with first image description in english
       BLEND: |

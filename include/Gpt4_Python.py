@@ -2,7 +2,7 @@ import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
-import os, openai   
+#import os, openai   
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
@@ -14,7 +14,7 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 DEFAULT_MODEL  = 'gpt-4o'
 dir_path = 'template'
-openai.api_key = os.getenv("OPENAI_API_KEY")
+#openai.api_key = os.getenv("OPENAI_API_KEY")
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
 questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates

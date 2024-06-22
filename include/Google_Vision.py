@@ -27,7 +27,14 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 #DEFAULT_MODEL  = "openbmb/MiniCPM-Llama3-V-2_5"
-model_list=['gpt-4o', 'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-vision-preview']
+DEFAULT_MODEL='models/gemini-1.5-pro-latest'
+model_list=[#'models/gemini-1.0-pro', 'models/gemini-1.0-pro-001', 'models/gemini-1.0-pro-latest', 
+            #'models/gemini-1.0-pro-vision-latest', 
+            #'models/gemini-1.5-flash', 'models/gemini-1.5-flash-001',
+            'models/gemini-1.5-flash-latest', 
+            #'models/gemini-1.5-pro', 'models/gemini-1.5-pro-001', 
+            #'models/gemini-1.5-pro-latest', 'models/gemini-pro', 'models/gemini-pro-vision', 
+            'models/gemini-pro-vision-latest']
 
 dir_path = 'template'
 
@@ -42,92 +49,74 @@ class VisionResponseStreamer:
         self.model={}
         self.tokenizer={}
 
-
-            
-
-
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id,  image_path):
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
        
-
+        out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
         header = fmt([[f'Question',chat.model]],[])
-        pub.sendMessage('chat_output', message=f'{header}\n{prompt}\n', tab_id=receiveing_tab_id)
-        
+        pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        if 1:
 
-        # OpenAI API Key
-        openai.api_key = os.getenv("OPENAI_API_KEY")
+            import google.generativeai as genai
+            from google.generativeai.types import ContentType
+            from PIL import Image
+            #from IPython.display import display,Markdown
+            import os, sys
+            e=sys.exit
+            from pprint import pprint as pp
+            GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
-        # Function to encode the image
-        def encode_image(image_path):
-            with open(image_path, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode('utf-8')
+           
 
-        # Path to your image
+
+        genai.configure(api_key=GOOGLE_API_KEY)
+
+        model = genai.GenerativeModel(chat.model)
+
         images=[]
-        for fn in image_path:
-            
-            if not fn:
-                log(f'No image file not set', 'red')
-                return ''
-            assert isfile(fn)
-            print('appending')
-            print(fn)
-            images.append( {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{encode_image(fn)}"
-                }
-                } ) 
+        for img in image_path:
+            images.append(Image.open(img))
+       
+        prompt = [text_prompt, *images]
 
+        #response_stream = model.generate_content_async(prompt)
 
+        header=fmt([[f'System Answer']],[])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
 
-        # Getting the base64 string
-        #base64_image = encode_image(image_path)
-        headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {openai.api_key}"
-        }
-
-        payload = {
-        "model": chat.model,
-        "messages": [
-            {
-            "role": "user",
-            "content": [
-                {
-                "type": "text",
-                "text": prompt                
-                },
-                *images
-            ]
-            }
-        ],
-        "max_tokens": chat.max_tokens
-        #"min_tokens": chat.min_tokens
-        }
-        out=[]
         try:
-            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            #pfmt([[f'System Answer']],[])
-            if 'choices'  in response.json():
-                data=response.json()['choices'][0]
-                message=data['message']
-                content=message['content']
-                usage = response.json()['usage']
-                header=fmt([[f'System Answer']],[])
-                pub.sendMessage('chat_output', message=f'{header}\n{content}', tab_id=receiveing_tab_id)
-                log(f'{usage}', 'blue')
+            stream = model.generate_content(prompt, stream=True)
+            for chunk in stream:
+                print(chunk.text, end='', flush=True)
+                out.append(chunk.text)
+                pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+        
             
-                out.append(content)
-            else:
-                log(f'Error in stream_response', 'red')
-                log(f'{response.json()}', 'red')
-                
-        except Exception as e:
+
+        
+        except Exception as e:    
+
+
             log(f'Error in stream_response', 'red')
             log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            # Check candidate safety ratings
+            if hasattr(stream, 'candidates'):
+                for candidate in stream.candidates:
+                    if hasattr(candidate, 'safety_ratings'):
+                        print("Safety ratings:", candidate.safety_ratings)
+                        log("Safety ratings:\n"+str(candidate.safety_ratings), 'red')
+                    else:
+                        print("No safety ratings available.")
+                        log("No safety ratings available.")
+            else:
+                print("No candidates available in the response.")
+                log("No candidates available in the response.")
+            pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
             return ''
         
 
@@ -524,9 +513,9 @@ class Copilot_DisplayPanel(StyledTextDisplay):
           
 
 
-class Gpt4_Vision_Copilot_DisplayPanel(wx.Panel):
+class Google_Vision_Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(Gpt4_Vision_Copilot_DisplayPanel, self).__init__(parent)
+        super(Google_Vision_Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -583,10 +572,10 @@ class Gpt4_Vision_Copilot_DisplayPanel(wx.Panel):
         event.Skip()        
 
 
-class Gpt4_Vision_ChatDisplayNotebookPanel(wx.Panel):
+class Google_Vision_ChatDisplayNotebookPanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Gpt4_Vision_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Google_Vision_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -599,13 +588,13 @@ class Gpt4_Vision_ChatDisplayNotebookPanel(wx.Panel):
         self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
-        if not Gpt4_Vision_ChatDisplayNotebookPanel.subscribed:
+        if not Google_Vision_ChatDisplayNotebookPanel.subscribed:
             
             pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
             pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
             pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
             pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
-            Gpt4_Vision_ChatDisplayNotebookPanel.subscribed=True
+            Google_Vision_ChatDisplayNotebookPanel.subscribed=True
     def get_active_chat_panel(self):
         active_chat_tab_index = self.chat_notebook.GetSelection()
         if active_chat_tab_index == wx.NOT_FOUND:
@@ -746,11 +735,11 @@ class Gpt4_Vision_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Gpt4):
+class Google_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Gpt4):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Gpt4_Vision_Copilot_InputPanel, self).__init__(parent)
+        super(Google_Vision_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -764,7 +753,7 @@ class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         if 1:
             model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-            self.model_dropdown.SetValue(model_list[0])
+            self.model_dropdown.SetValue(DEFAULT_MODEL)
             
             self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
             chat.model = self.model_dropdown.GetValue()
@@ -843,13 +832,13 @@ class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         wx.CallAfter(self.inputCtrl.SetFocus)
         if  not  hasattr(apc, 'vrs'):
             apc.vrs=VisionResponseStreamer() # model=self.model_dropdown.GetValue())
-        if not Gpt4_Vision_Copilot_InputPanel.subscribed:
+        if not Google_Vision_Copilot_InputPanel.subscribed:
                 
             #pub.subscribe(self.SetException, 'fix_exception')
             pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
             #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
             #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
-            Gpt4_Vision_Copilot_InputPanel.subscribed=True
+            Google_Vision_Copilot_InputPanel.subscribed=True
         
     def onTabsButton(self, event):
         try:
@@ -887,7 +876,7 @@ class Gpt4_Vision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         chat.temp_val = selected_value            
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
-        self.askLabel.SetLabel(f'Ask Phy-3 {tab_id}:')
+        self.askLabel.SetLabel(f'Ask Google{tab_id}:')
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:

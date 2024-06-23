@@ -18,7 +18,8 @@ Vision UI using wxpython
 
 ## Youtube
 
-ChatGPT: [All-In_One DB Copilot](https://www.youtube.com/watch?v=DdMXzxL0VBo&t=2s),  [Oracle PL/SQL Copilot](https://www.youtube.com/watch?v=v0Pnl-bAm9c)
+ChatGPT: [All-In_One DB Copilot](https://www.youtube.com/watch?v=DdMXzxL0VBo&t=2s),  [Oracle PL/SQL Copilot](https://www.youtube.com/watch?v=v0Pnl-bAm9c),  [Python Copilot](https://www.youtube.com/watch?v=Yh1_YGSjTVQ&t=14s)
+
 
 
 <br>

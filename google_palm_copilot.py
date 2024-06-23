@@ -587,15 +587,7 @@ class MyFrame(wx.Frame, NewChat):
         pub.subscribe(self.StopProgress, 'stop_progress') 
         pub.subscribe(self.SetSystemPrompt, 'set_system_prompt')
         self.system_prompt={} 
-        if 0:
-            apc.conda_env=get_current_conda_env()
-            print(apc.conda_env)
-            if apc.conda_env.endswith('test'):
-                
-                x, y = self.GetPosition() 
-                self.SetPosition((x+100, y+100))
 
-        
 
         pub.sendMessage('add_default_tabs')
         pub.subscribe(self.SetStatus, 'set_status')

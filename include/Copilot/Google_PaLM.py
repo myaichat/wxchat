@@ -1,4 +1,7 @@
 #https://github.com/google/generative-ai-docs/blob/main/site/en/palm_docs/chat_quickstart.ipynb
+#PALM2: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-chat
+#PALM 2 vertex: https://cloud.google.com/vertex-ai/generative-ai/docs/chat/test-chat-prompts
+
 import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
@@ -13,7 +16,8 @@ import include.config.init_config as init_config
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
-DEFAULT_MODEL  = 'gpt-4o'
+#DEFAULT_MODEL  = 'gpt-4o'
+model_list=['text-bison', 'chat-bison', 'code-bison', 'codechat-bison']
 dir_path = 'template'
 #openai.api_key = os.getenv("OPENAI_API_KEY")
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -114,6 +118,8 @@ class TextGenerationModel_ResponseStreamer:
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
+        pp(receiveing_tab_id)
+        pp(chat)
         #header = fmt([[f'Question']],[])
         #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
         try:
@@ -136,12 +142,12 @@ class TextGenerationModel_ResponseStreamer:
       
         
             parameters = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
-                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
+                "temperature": chat.temperature,  
+                "max_output_tokens": chat.max_tokens, 
+                "top_p": chat.top_p, 
+                "top_k": chat.top_k
             }
-
+            pp(parameters)
             responses = text_generation_model.predict_streaming(prompt=text_prompt, **parameters)
             for chunk in responses:
                 
@@ -203,10 +209,10 @@ class ChatModel_ResponseStreamer:
 
             chat_model = ChatModel.from_pretrained("chat-bison")
             parameters = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
-                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
+                "temperature": chat.temperature,  
+                "max_output_tokens": chat.max_tokens, 
+                "top_p": chat.top_p, 
+                "top_k": chat.top_k
             }
 
             pp(chat)
@@ -284,14 +290,9 @@ class CodeGenerationModel_ResponseStreamer:
 
             code_model = CodeGenerationModel.from_pretrained("code-bison")
             parameters = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-            }
-            parameters2 = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
-                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
+                "temperature": chat.temperature,  
+                "max_output_tokens": chat.max_tokens
+
             }
 
             responses = code_model.predict_streaming(
@@ -356,15 +357,11 @@ class CodeChatModel_ResponseStreamer:
 
             codechat_model  = CodeChatModel.from_pretrained("codechat-bison")
             parameters = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 2048 ,  # Token limit determines the maximum amount of text output.
+                "temperature": chat.temperature,  
+                "max_output_tokens": chat.max_tokens
+
             }
-            parameters2 = {
-                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
-                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
-                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
-            }
+
 
             codechat = codechat_model.start_chat()
 
@@ -587,7 +584,7 @@ class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
                 active_tab_id = active_chat_panel.tab_id
                 #print('OnWorkspaceTabChanged', message, self.vendor_tab_id, self.ws_name, active_tab_id)
             if 1:
-                pub.sendMessage('restore_question_for_tab_id', tab_id=active_tab_id)
+                #pub.sendMessage('restore_question_for_tab_id', tab_id=active_tab_id)
 
                 assert active_tab_id in apc.chats
                 chat=apc.chats[active_tab_id]
@@ -631,7 +628,7 @@ class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
     def AddTab(self, chat):
         chat_notebook=self.chat_notebook
         title=f'{chat.chat_type}: {chat.name}'
-        title=f'{chat.name}/{chat.model_name}'
+        title=f'{chat.name} | {chat.model_name}'
         chatDisplay=None
         tab_id=(chat.workspace, chat.chat_type, chat.vendor,self.vendor_tab_id, chat_notebook.GetPageCount())
         self.tabs[chat_notebook.GetPageCount()]=tab_id
@@ -685,7 +682,7 @@ class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
         current_chatDisplay = nb.GetPage(newtabIndex)
         tab_id=current_chatDisplay.tab_id
         #print('OnPageChanged 222', tab_id)
-        pub.sendMessage('restore_question_for_tab_id', tab_id=tab_id)
+        #pub.sendMessage('restore_question_for_tab_id', tab_id=tab_id)
         current_chatDisplay = nb.GetPage(newtabIndex)
         #pp(current_chatDisplay.tab_id)
         #e()
@@ -713,9 +710,9 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         chatHistory[self.tab_id]=[]
         chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
-        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(DEFAULT_MODEL)
+       
+        self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
+        self.model_dropdown.SetValue(chat.model_name)
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -729,7 +726,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
         self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
         askSizer.Add(pause_panel, 0, wx.ALL)
-  
+        Base_InputPanel_Google_PaLM.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
@@ -738,14 +735,21 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            currentModel[self.tab_id]=chat.model_name
             chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(askSizer, 0, wx.EXPAND)
+        
+        h_sizer = wx.BoxSizer(wx.VERTICAL)
+        Base_InputPanel_Google_PaLM.AddButtons_Level_2(self, h_sizer)
+
+        sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
+        sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
+
+
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
@@ -754,7 +758,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         #pub.subscribe(self.SetException, 'fix_exception')
         pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-        pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
@@ -769,7 +773,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             self.tabs[self.tab_id]=dict(q=chat.question)
             chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL        
+            currentModel[self.tab_id]=chat.model_name        
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
@@ -782,20 +786,6 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, tab_id):
-        message=tab_id
-        
-        global currentModel
-        tab_id=message
-        if tab_id in self.tabs:
-            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
-            self.inputCtrl.SetValue(self.tabs[message]['q'])
-            assert self.chat_type==message[1]
-            self.model_dropdown.SetValue(currentModel[message])
-            self.tab_id=message
-            #self.q_tab_id=message
-            #self.inputCtrl.SetSelection(0, -1)
-            self.inputCtrl.SetFocus()
     def _SaveQuestionForTabId(self, message):
         global currentModel
         q=self.inputCtrl.GetValue()
@@ -1214,10 +1204,10 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         #pp(chat)
         chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        
         self.chat_type=chat.chat_type
-        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(DEFAULT_MODEL)
+        self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
+        self.model_dropdown.SetValue(chat.model_name)
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -1235,7 +1225,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Google_PaLM.AddButtons(self, askSizer)
+        Base_InputPanel_Google_PaLM.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
@@ -1245,7 +1235,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            currentModel[self.tab_id]=chat.model_name
 
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
@@ -1256,7 +1246,14 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(askSizer, 0, wx.EXPAND)
+
+        h_sizer = wx.BoxSizer(wx.VERTICAL)
+        Base_InputPanel_Google_PaLM.AddButtons_Level_2(self, h_sizer)
+
+        sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
+        sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
+
+        
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
@@ -1265,7 +1262,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         pub.subscribe(self.SetException, 'fix_exception')
         pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-        pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
@@ -1281,7 +1278,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=DEFAULT_MODEL
+            currentModel[self.tab_id]=chat.model_name
 
 
     def _SetTabId(self, tab_id):
@@ -1303,22 +1300,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         # Continue processing the event
         event.Skip()
 
-    def RestoreQuestionForTabId(self, tab_id):
-        message=tab_id
-        
-        global currentModel
-        if message  in self.tabs:
-            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
-            assert self.chat_type==message[1]
-            print('Chat restoring', message)
-            pp(self.tabs[message])
-            self.inputCtrl.SetValue(self.tabs[message]['q'])
-            
-            self.model_dropdown.SetValue(currentModel[message])
-            self.tab_id=message
-            #self.q_tab_id=message
-            #self.inputCtrl.SetSelection(0, -1)
-            self.inputCtrl.SetFocus()
+
         
     def _SaveQuestionForTabId(self, message):
         global currentModel

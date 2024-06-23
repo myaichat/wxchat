@@ -40,8 +40,8 @@ templates:
       name: 'Code Chat'
       model_name: 'codechat-bison'
       system: CODE_CHAT
-      question: 'How can I improve this code?'
-      default_file: 'include\Copilot\Google_PaLM.py'
+      question: 'What kind of questions are you trained to answer?'
+
 
 
     Copilot:

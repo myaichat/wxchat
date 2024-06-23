@@ -16,6 +16,7 @@ Vision UI using wxpython
 
 | Vendor   | Model   | Vision | Config | Useage|Info | 
 |------------|------------|------------|------------|------------|------------|
+| Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/gpt4_vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
 | Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
 | OpenBMB| MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
 

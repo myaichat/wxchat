@@ -16,6 +16,9 @@ Vision UI using wxpython
 
 
 
+## Youtube
+
+ChatGPT: [Oracle PL/SQL Copilot](https://www.youtube.com/watch?v=DdMXzxL0VBo&t=2s)
 
 
 ### Every demo starts as an orphan branch

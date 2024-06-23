@@ -24,11 +24,17 @@ ChatGPT Desktop Client: [Multi Chat](https://www.youtube.com/watch?v=iTnSehOSrg8
 
 Voice: [Interview Voice Assistant](https://www.youtube.com/watch?v=tgAFRJ-jb3s&t=4s)
 
-wxPython terminal: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU)
 
 DALEE-3: [Image Generator](https://www.youtube.com/watch?v=QlUF6PXgLOo&t=36s)
 
 ChatGPT streaming chat: [wxPython chat](https://www.youtube.com/watch?v=Jb886h3kZGE&t=643s)
+
+
+wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [Create gist](https://www.youtube.com/watch?v=FFqcDB1Yytw),  [Diagrammer](https://www.youtube.com/watch?v=TdXTu1l2Rz0&t=18s)
+
+
+
+
 
 
 

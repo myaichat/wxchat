@@ -2,6 +2,15 @@
 streaming gptchat api using wxpython
 
 
+
+| Vendor   | Model   | Chat/Copilot |
+|------------|------------|------------|
+| Google AI| PaLM 2| [Source]([URL](https://github.com/myaichat/wxchat/blob/google_palm_copilot/google_palm_copilot.py))|
+
+
+
+### Every demo starts as an orphan branch
+
 git checkout --orphan branchname
 
 git rm -rf .

@@ -1,7 +1,3 @@
-#
-#try: https://ai.azure.com/explore/models/Phi-3-vision-128k-instruct/version/1/registry/azureml
-# https://inference.readthedocs.io/en/latest/models/model_abilities/vision.html
-#import onnxruntime_genai as og
 
 import argparse
 import time

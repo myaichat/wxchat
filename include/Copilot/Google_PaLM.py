@@ -8,7 +8,7 @@ from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
 from include.fmt import fmt
-from include.Base_InputPanel_Google_Copilot import Base_InputPanel_Google_Copilot
+from include.Base_InputPanel_Google_PaLM import Base_InputPanel_Google_PaLM
 import include.config.init_config as init_config 
 apc = init_config.apc
 default_chat_template='SYSTEM'
@@ -254,9 +254,153 @@ class ChatModel_ResponseStreamer:
 
         return ''.join(out)
 
+class CodeGenerationModel_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        #header = fmt([[f'Question']],[])
+        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        try:
+
+      
+      
+
+          
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            import vertexai
+            from vertexai.language_models import CodeGenerationModel
 
 
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
 
+            code_model = CodeGenerationModel.from_pretrained("code-bison")
+            parameters = {
+                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
+                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
+            }
+            parameters2 = {
+                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
+                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
+                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
+                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
+            }
+
+            responses = code_model.predict_streaming(
+                prefix=text_prompt, **parameters)
+
+            for chunk in responses:
+                
+                #print(type(chunk))
+                #pp(chunk)
+                if chunk.text:
+                    print(chunk.text, end='', flush=True)
+                    out.append(chunk.text)
+                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+            
+            
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
+
+class CodeChatModel_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        #header = fmt([[f'Question']],[])
+        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        try:
+
+      
+      
+
+          
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            import vertexai
+            from vertexai.language_models import CodeChatModel
+
+
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+            codechat_model  = CodeChatModel.from_pretrained("codechat-bison")
+            parameters = {
+                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
+                "max_output_tokens": 2048 ,  # Token limit determines the maximum amount of text output.
+            }
+            parameters2 = {
+                "temperature": 0.8,  # Temperature controls the degree of randomness in token selection.
+                "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
+                "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
+                "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
+            }
+
+            codechat = codechat_model.start_chat()
+            if len(text_prompt)>16384:
+                wx.MessageBox('CodeChat model accepts a maximum of 16384 characters. Please reduce the number of characters in the input.', 'Error', wx.OK | wx.ICON_ERROR)
+                return ''
+            responses = codechat.send_message_streaming(
+                message=text_prompt, **parameters)
+   
+
+            for chunk in responses:
+                
+                #print(type(chunk))
+                #pp(chunk)
+                if chunk.text:
+                    print(chunk.text, end='', flush=True)
+                    out.append(chunk.text)
+                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+            
+            
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            raise
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
 
 
 class Gpt4_Copilot_DisplayPanel(wx.Panel):
@@ -359,7 +503,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
 
         
 
-class Google_VertexAI_Chat_DisplayPanel(StyledTextDisplay):
+class Google_PaLM_Chat_DisplayPanel(StyledTextDisplay):
     def __init__(self, parent, tab_id, chat):
         StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -392,9 +536,9 @@ class Google_VertexAI_Chat_DisplayPanel(StyledTextDisplay):
         print('show_tab_id', self.tab_id)
 
              
-class Google_VertexAI_ChatDisplayNotebookPanel(wx.Panel):
+class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Google_VertexAI_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Google_PaLM_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -480,7 +624,7 @@ class Google_VertexAI_ChatDisplayNotebookPanel(wx.Panel):
     def AddTab(self, chat):
         chat_notebook=self.chat_notebook
         title=f'{chat.chat_type}: {chat.name}'
-        title=f'{chat.name}'
+        title=f'{chat.name}/{chat.model_name}'
         chatDisplay=None
         tab_id=(chat.workspace, chat.chat_type, chat.vendor,self.vendor_tab_id, chat_notebook.GetPageCount())
         self.tabs[chat_notebook.GetPageCount()]=tab_id
@@ -549,10 +693,10 @@ class Google_VertexAI_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 
-class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Copilot):
+class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_PaLM):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Google_VertexAI_Copilot_InputPanel, self).__init__(parent)
+        super(Google_PaLM_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -692,7 +836,7 @@ class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_I
 
 
 
-            header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question'])
+            header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question\nAnswer:'])
 
             # DO NOT REMOVE THIS LINE
             print(header)
@@ -1007,9 +1151,9 @@ class Copilot_DisplayPanel(StyledTextDisplay):
 
           
 
-class Google_VertexAI_Copilot_DisplayPanel(wx.Panel):
+class Google_PaLM_Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(Google_VertexAI_Copilot_DisplayPanel, self).__init__(parent)
+        super(Google_PaLM_Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -1049,10 +1193,10 @@ class Google_VertexAI_Copilot_DisplayPanel(wx.Panel):
 
 
 
-class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Copilot):
+class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_PaLM):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Google_VertexAI_Chat_InputPanel, self).__init__(parent)
+        super(Google_PaLM_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -1083,7 +1227,7 @@ class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_Input
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Google_Copilot.AddButtons(self, askSizer)
+        Base_InputPanel_Google_PaLM.AddButtons(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
@@ -1210,7 +1354,7 @@ class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_Input
             currentModel[self.tab_id]=self.model_dropdown.GetValue()
 
 
-            header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question'])
+            header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question\nAnswer:'])
             # DO NOT REMOVE THIS LINE
             print(header)
             pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)

@@ -66,10 +66,9 @@ if 0:
     from include.Vision.Google_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
 
 if 1:
-    from include.Copilot.Google_VertexAI import *
-    #Google_Python_Chat_InputPanel
-    #Google_Python_ChatDisplayNotebookPanel
-    #Google_Python_Copilot_InputPanel
+    from include.Copilot.Google_PaLM import Google_PaLM_ChatDisplayNotebookPanel, \
+    Google_PaLM_ChatDisplayNotebookPanel, Google_PaLM_Chat_InputPanel, Google_PaLM_Copilot_InputPanel
+
     
 
 
@@ -768,7 +767,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Copilot')
+        self.frame = MyFrame(f'Google PaLM Copilot')
         return True
 
 if __name__ == '__main__':

@@ -26,86 +26,6 @@ all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chat
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
 
-'''
-https://www.googlecloudcommunity.com/gc/AI-ML/Trying-to-use-the-chat-history-as-context/m-p/750429/highlight/true
-
-from vertexai.generative_models import GenerativeModel, ChatSession, Content, Part
-
-def __generate_llm_history(self, messages):
-        """
-        Generate the LLM history
-        :param messages: The messages from the DB
-        :return: The history
-        """
-        history = []
-        for message in messages:
-            history.append(Content(role="user", parts=[Part.from_text(message["user_question"])]))
-            history.append(Content(role="model", 
-                        parts=[
-                            Part.from_text(f'{message["bot_response"]}')
-                        ]
-                )
-            )
-        return history
-
-chat_session = ChatSession(model=model, history=history)
-response = chat_session.send_message(prompt, generation_config=parameters)  
-
-
-    return vertex_ai.preview.getGenerativeModel({
-        model: textModel,
-        safetySettings: [
-            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }
-        ],
-    });
-}
-
-https://stackoverflow.com/questions/77178058/how-to-set-safety-parameters-for-text-generation-model-in-google-cloud-vertex-ai
-
-import google.generativeai as palm
-
-completion = palm.generate_text(
-    model=model,
-    prompt=prompt,
-    safety_settings=[
-        {
-            "category": safety_types.HarmCategory.HARM_CATEGORY_DEROGATORY,
-            "threshold": safety_types.HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-            "category": safety_types.HarmCategory.HARM_CATEGORY_VIOLENCE,
-            "threshold": safety_types.HarmBlockThreshold.BLOCK_NONE,
-        },
-    ]
-) 
-
-https://ai.google.dev/gemini-api/docs/safety-settings
-
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-
-model = genai.GenerativeModel(model_name='gemini-1.5-flash')
-response = model.generate_content(
-    ['Do these look store-bought or homemade?', img],
-    safety_settings={
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    }
-)
-Functions https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/function-calling#best-practices
-VertexAI vision
-https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/image-understanding
-Difference between
-Google AI Gemini    and    Vertex AI Generative AI
- API and  Vertex AI Generative AI
-Google Cloud Vertex AI Gemini API
-
-https://cloud.google.com/vertex-ai/generative-ai/docs/migrate/migrate-google-ai
-
-
-'''
 class TextGenerationModel_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
@@ -371,7 +291,7 @@ class CodeChatModel_ResponseStreamer:
             else:
                 prompt=text_prompt
             if len(text_prompt)>16384:
-                wx.MessageBox('CodeChat model accepts a maximum of 16384 characters. Please reduce the number of characters in the input.', 'Error', wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(f'"{chat.model_name}" model accepts a maximum of 16384 characters. Please reduce the number of characters in the input.', 'Error', wx.OK | wx.ICON_ERROR)
                 return ''                
 
             responses = codechat.send_message_streaming(

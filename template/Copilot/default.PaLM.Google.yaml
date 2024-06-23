@@ -34,11 +34,23 @@ templates:
       model_name: 'code-bison'
       question: 'Write a function that checks if a year is a leap year.'
 
+    - vendor: 'Google'
+      chat_type: 'Chat'
+      language_model: 'CodeChatModel'
+      name: 'Code Chat'
+      model_name: 'codechat-bison'
+      system: CODE_CHAT
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_PaLM.py'
+
+
     Copilot:
+
+
     - vendor: 'Google'
       chat_type: 'Copilot'
       language_model: 'CodeChatModel'
-      name: 'Code Chat'
+      name: 'Copilot'
       model_name: 'codechat-bison'
       system: SYSTEM_CHATTY
       question: 'How can I improve this code?'
@@ -50,7 +62,11 @@ templates:
       PROMPT: |
         Question: "{params.question}"
         Answer: 
+      CODE_CHAT: |
+        Question: "{params.question}"
+        Answer:           
     Copilot:
+ 
       SYSTEM: |
         You are a chatbot that assists with anwering questions about code included or adding new features 
         and debugging scripts written using wxPython. 

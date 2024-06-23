@@ -367,11 +367,18 @@ class CodeChatModel_ResponseStreamer:
             }
 
             codechat = codechat_model.start_chat()
+
+            pp(chat)
+            if chat.chat_type=='Chat':
+                prompt=chat.question
+            else:
+                prompt=text_prompt
             if len(text_prompt)>16384:
                 wx.MessageBox('CodeChat model accepts a maximum of 16384 characters. Please reduce the number of characters in the input.', 'Error', wx.OK | wx.ICON_ERROR)
-                return ''
+                return ''                
+
             responses = codechat.send_message_streaming(
-                message=text_prompt, **parameters)
+                message=prompt, **parameters)
    
 
             for chunk in responses:
@@ -844,6 +851,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             #pub.sendMessage('chat_output', message=f'{prompt}\n')
             
             #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
+            chat.question=question
             threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
 
     def stream_response(self, prompt, chatHistory, tab_id, model):
@@ -1361,8 +1369,8 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
             #pub.sendMessage('chat_output', message=f'{prompt}\n')
             if 'system_prompt' not in chat:
                 system= chat.get('system', 'SYSTEM')
-               
-                chat.system_prompt=evaluate(all_system_templates[chat.workspace].Chat[system], dict2())
+                chat.question=question
+                chat.system_prompt=evaluate(all_system_templates[chat.workspace].Chat[system], dict2(question=chat.question))
                 pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)        
             
             self.askButton.Disable()

@@ -23,6 +23,9 @@ ChatGPT Chat/Copilot: [All-In_One DB Copilot](https://www.youtube.com/watch?v=Dd
 ChatGPT Desktop Client: [Multi Chat](https://www.youtube.com/watch?v=iTnSehOSrg8&t=209s)
 
 Voice: [Interview Voice Assistant](https://www.youtube.com/watch?v=tgAFRJ-jb3s&t=4s)
+wxPython terminal: [Rudimentary terminal]([https://www.youtube.com/watch?v=tgAFRJ-jb3s&t=4s](https://www.youtube.com/watch?v=odpbWfRmvDU))
+
+
 
 
 

@@ -1,4 +1,4 @@
-# Google Paml-2 Copilot
+# Google PaLM-2 Copilot
 streaming api using wxpython
 
 

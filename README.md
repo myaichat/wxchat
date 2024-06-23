@@ -1,5 +1,5 @@
 # Chat/Copilot
-Chat/Copilot UI using wxpython
+Chat/Copilot demo UI using wxpython
 
 | Vendor   | Model   | Chat/Copilot | Config | Useage|Info | 
 |------------|------------|------------|------------|------------|------------|
@@ -12,7 +12,7 @@ Chat/Copilot UI using wxpython
 
 
 # Vision
-Vision UI using wxpython
+Vision demo UI using wxpython
 
 | Vendor   | Model   | Vision | Config | Useage|Info | 
 |------------|------------|------------|------------|------------|------------|
@@ -25,7 +25,7 @@ Vision UI using wxpython
 
 
 # Image Generation
-Image Generation UI using wxpython
+Image Generation demo UI using wxpython
 
 | Vendor   | Model   | Image Generation | Config | Useage|Info | 
 |------------|------------|------------|------------|------------|------------|

@@ -1,7 +1,7 @@
 templates:
   workspace:
 
-      name: 'Python'
+      name: 'VertexAI'
       vendor: 'Google'
       chat: 'Chat'
       copilot: 'Copilot'
@@ -13,19 +13,36 @@ templates:
     Chat:
     - vendor: 'Google'
       chat_type: 'Chat'
-      name: 'General'
-      question: 'How many Python versions are there?'
+      language_model: 'TextGenerationModel'
+      name: 'Text'
+      system: 'SYSTEM'
+      question: 'Give me ten interview questions for the role of program manager.'
+
+    - vendor: 'Google'
+      chat_type: 'Chat'
+      language_model: 'ChatModel'
+      name: 'Chat'
+      system: 'SYSTEM_ONE'
+      question: 'How many planets are there in the solar system?'
+
+    - vendor: 'Google'
+      chat_type: 'Chat'
+      language_model: 'CodeGenerationModel'
+      name: 'Code Gen'
+      question: 'Write a function that checks if a year is a leap year.'
 
     Copilot:
     - vendor: 'Google'
       chat_type: 'Copilot'
-      name: 'Python Copilot'
+      language_model: 'CodeChatModel'
+      name: 'Code Chat'
       system: SYSTEM_CHATTY
-      question: 'What can I improve in this Python code?'
-      default_file: 'include\Phy3_Python.py'
+      question: 'Please help write a function to calculate the min of two numbers'
+      default_file: 'include\Copilot\Google_VertexAI.py'
   System:
     Chat:
-      SYSTEM: "You are a chatbot that assists with General questions. numerate options in answer."
+      SYSTEM: "You are general knowledge expert."
+      SYSTEM_ONE: "My name is Miles. You are an astronomer, knowledgeable about the solar system."
       PROMPT: |
         Question: "{params.question}"
         Answer: 

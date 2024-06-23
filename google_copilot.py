@@ -51,19 +51,27 @@ apc.all_templates=all_templates=dict2()
 apc.all_chats=all_chats=dict2()
 apc.all_system_templates= all_system_templates=dict2()
 if 0:
-    from include.Phy3_Python import Microsoft_Chat_InputPanel, \
+    from include.Copilot.Phy3_Python import Microsoft_Chat_InputPanel, \
         Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 if 0:
-    from include.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
+    from include.Copilot.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
         Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Python_Copilot_InputPanel
 if 0:
-    from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
+    from include.Vision.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
 
 if 0:
-    from include.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+    from include.Vision.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+
+if 0:
+    from include.Vision.Google_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
 
 if 1:
-    from include.Google_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
+    from include.Copilot.Google_VertexAI import *
+    #Google_Python_Chat_InputPanel
+    #Google_Python_ChatDisplayNotebookPanel
+    #Google_Python_Copilot_InputPanel
+    
+
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -375,12 +383,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             apc.chats[tab_id]=chat
             self.SwapInputPanel(tab_id , resplit=False)
         
-        if 0:
-            self.chatInput = Gpt4_Chat_InputPanel(v_splitter, tab_id=(self.ws_name,0,0))
-            
-            self.chatInputs[(chat.vendor, chat.chat_type)]=self.chatInput
 
-                
         self.chatInput.SetMinSize((300, 200)) 
         
         self.logPanel = LogPanel(v_splitter)

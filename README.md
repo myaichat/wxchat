@@ -22,6 +22,10 @@ ChatGPT Chat/Copilot: [All-In_One DB Copilot](https://www.youtube.com/watch?v=Dd
 
 ChatGPT Chat: [Multi Chat](https://www.youtube.com/watch?v=iTnSehOSrg8&t=209s)
 
+Voice: [Interview Voice Assistant](https://www.youtube.com/watch?v=tgAFRJ-jb3s&t=4s)
+
+
+
 
 
 

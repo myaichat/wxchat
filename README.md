@@ -5,7 +5,7 @@ Chat/Copilot UI using wxpython
 |------------|------------|------------|------------|------------|------------|
 | Google AI| PaLM 2| [Source](https://github.com/myaichat/wxchat/blob/google_palm_copilot/google_palm_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| []()|[]()|
 | Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_copilot/phi3_copilot.py)| []()| [Medium](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|[CookBook](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|
-| Open AI| gpt-4o| [Source](https://github.com/myaichat/wxchat/blob/feature/poor_mans_copilot/poor_mans/copilot/7d_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medioum](https://medium.com/p/6f03ca3b5569), [YouTube](https://www.youtube.com/watch?v=Yh1_YGSjTVQ&t=14s)|[]()|
+| Open AI| gpt-4o| [Source](https://github.com/myaichat/wxchat/blob/feature/poor_mans_copilot/poor_mans/copilot/7d_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/6f03ca3b5569), [YouTube](https://www.youtube.com/watch?v=Yh1_YGSjTVQ&t=14s)|[]()|
 
 
 

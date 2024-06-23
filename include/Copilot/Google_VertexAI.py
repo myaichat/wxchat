@@ -21,6 +21,46 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
+
+'''
+https://www.googlecloudcommunity.com/gc/AI-ML/Trying-to-use-the-chat-history-as-context/m-p/750429/highlight/true
+
+from vertexai.generative_models import GenerativeModel, ChatSession, Content, Part
+
+def __generate_llm_history(self, messages):
+        """
+        Generate the LLM history
+        :param messages: The messages from the DB
+        :return: The history
+        """
+        history = []
+        for message in messages:
+            history.append(Content(role="user", parts=[Part.from_text(message["user_question"])]))
+            history.append(Content(role="model", 
+                        parts=[
+                            Part.from_text(f'{message["bot_response"]}')
+                        ]
+                )
+            )
+        return history
+
+chat_session = ChatSession(model=model, history=history)
+response = chat_session.send_message(prompt, generation_config=parameters)  
+
+
+    return vertex_ai.preview.getGenerativeModel({
+        model: textModel,
+        safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE }
+        ],
+    });
+}
+
+
+'''
 class TextGenerationModel_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here

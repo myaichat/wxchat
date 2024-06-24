@@ -751,7 +751,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Vertex AI Vision')
+        self.frame = MyFrame(f'Google VertexAI Gemini Vision')
         return True
 
 if __name__ == '__main__':

@@ -7,6 +7,14 @@ import include.config.init_config as init_config
 apc = init_config.apc
 import wx.html
 
+
+
+def split_text_into_chunks( text, chunk_length=80):
+    # Split the text into chunks of specified length
+    chunks = [text[i:i+chunk_length] for i in range(0, len(text), chunk_length)]
+    return chunks
+
+
 def evaluate(ss, params):
     #a = f"{ss}"
     a=eval('f"""'+ss+'"""')

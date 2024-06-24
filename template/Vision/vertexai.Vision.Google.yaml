@@ -53,8 +53,7 @@ templates:
       history: false
       system: 'SYSTEM_MULTI'
       question:  |
-        Give detailed creative mix of all image decriptions as one (do not split in two images). 
-        be as creative and weird as possible. 
+        Give detailed creative mix of all image decriptions as abstract art
 
     - vendor: 'VertexAI'
       chat_type: 'Copilot'
@@ -63,8 +62,7 @@ templates:
       history: false
       system: 'SYSTEM_MULTI'
       question:  |
-        Give detailed creative mix of all image decriptions as one (do not split in two images). 
-        be as creative and weird as possible. 
+        fuse image descriptions into  one abstract art description, do not split into images
 
     - vendor: 'VertexAI'
       chat_type: 'Copilot'

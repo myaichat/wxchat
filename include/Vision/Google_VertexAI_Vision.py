@@ -57,7 +57,8 @@ class VisionResponseStreamer:
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        header = fmt([[f'{text_prompt}Answer:\n']],['Question | '+chat.model])
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
         pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         try:
 
@@ -116,6 +117,11 @@ class VisionResponseStreamer:
                 # Load your PIL image
                 #pil_image = image_path[0]
                 pil_image = PILImage.open(ifn)
+
+                if pil_image.mode == 'RGBA':
+                    pil_image = pil_image.convert('RGB')
+
+                #pil_image.save(buffer, format='JPEG') 
 
                 # Convert the PIL Image to bytes
                 buffer = BytesIO()

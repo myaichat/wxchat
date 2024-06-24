@@ -63,7 +63,7 @@ class TextGenerationModel_ResponseStreamer:
         
             parameters = {
                 "temperature": chat.temperature,  
-                "max_output_tokens": chat.max_tokens, 
+                "max_output_tokens": int(chat.max_tokens), 
                 "top_p": chat.top_p, 
                 "top_k": chat.top_k
             }
@@ -130,7 +130,7 @@ class ChatModel_ResponseStreamer:
             chat_model = ChatModel.from_pretrained("chat-bison")
             parameters = {
                 "temperature": chat.temperature,  
-                "max_output_tokens": chat.max_tokens, 
+                "max_output_tokens": int(chat.max_tokens), 
                 "top_p": chat.top_p, 
                 "top_k": chat.top_k
             }
@@ -211,7 +211,7 @@ class CodeGenerationModel_ResponseStreamer:
             code_model = CodeGenerationModel.from_pretrained("code-bison")
             parameters = {
                 "temperature": chat.temperature,  
-                "max_output_tokens": chat.max_tokens
+                "max_output_tokens": int(chat.max_tokens)
 
             }
 
@@ -278,7 +278,7 @@ class CodeChatModel_ResponseStreamer:
             codechat_model  = CodeChatModel.from_pretrained("codechat-bison")
             parameters = {
                 "temperature": chat.temperature,  
-                "max_output_tokens": chat.max_tokens
+                "max_output_tokens": int(chat.max_tokens)
 
             }
 
@@ -424,12 +424,70 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
             #self.answer_output.MakeCellVisible(i, 0)
         
                 self.GotoPos(self.GetTextLength())
+class code_StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
+    def __init__(self, parent):
+        super(code_StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
+        GetClassName.__init__(self)
+        NewChat.__init__(self)
+        Scroll_Handlet.__init__(self)
+        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        self.SetLexer(stc.STC_LEX_PYTHON)
+        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
 
+
+        self.SetKeyWords(0, python_keywords)
+        # Set Python styles
+        self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
+        self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
+        self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
+        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
+        self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
+        self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
+        self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        # Set face
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
+        #pub.subscribe(self.AddOutput, 'chat_output')
+        self.Bind(wx.EVT_SIZE, self.OnResize)
+
+    def OnResize(self, event):
+        self.Refresh()
+        event.Skip()
+
+    def _OnCharHook(self, event):
+        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
+            self.AskQuestion()
+        else:
+            event.Skip()
+
+    def AskQuestion(self):
+        pass  # Implement if needed
+    def IsTextInvisible(self):
+        last_position = self.GetTextLength()
+        line_number = self.LineFromPosition(last_position)
+        first_visible_line = self.GetFirstVisibleLine()
+        lines_on_screen = self.LinesOnScreen()
+        return not (first_visible_line <= line_number < first_visible_line + lines_on_screen)
+
+    def AddOutput(self, message):
+        wx.CallAfter(self._AddOutput, message)
+    def _AddOutput(self, message):
+        self.AppendText(message)
+        if self.IsTextInvisible():
+
+            if self.scrolled:
+            #self.answer_output.MakeCellVisible(i, 0)
         
+                self.GotoPos(self.GetTextLength())      
 
-class Google_PaLM_Chat_DisplayPanel(StyledTextDisplay):
+class Google_PaLM_Chat_DisplayPanel(code_StyledTextDisplay):
     def __init__(self, parent, tab_id, chat):
-        StyledTextDisplay.__init__(self,parent)
+        code_StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
         self.SetFont(font) 
@@ -975,69 +1033,10 @@ class MyNotebookCodePanel(wx.Panel):
             pub.sendMessage('fix_exception', message=ex)
         else:
             self.output(stdout.decode())
-class code_StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
-    def __init__(self, parent):
-        super(code_StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
-        GetClassName.__init__(self)
-        NewChat.__init__(self)
-        Scroll_Handlet.__init__(self)
-        #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        self.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'self False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with both yield'
 
-
-        self.SetKeyWords(0, python_keywords)
-        # Set Python styles
-        self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
-        self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
-        self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
-        self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
-        self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
-        self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
-        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
-        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
-        self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
-        self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
-        self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
-        self.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")  # Identifiers
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
-        # Set face
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
-        #pub.subscribe(self.AddOutput, 'chat_output')
-        self.Bind(wx.EVT_SIZE, self.OnResize)
-
-    def OnResize(self, event):
-        self.Refresh()
-        event.Skip()
-
-    def _OnCharHook(self, event):
-        if event.ControlDown() and (event.GetKeyCode() == ord('A') or event.GetKeyCode() == wx.WXK_RETURN):
-            self.AskQuestion()
-        else:
-            event.Skip()
-
-    def AskQuestion(self):
-        pass  # Implement if needed
-    def IsTextInvisible(self):
-        last_position = self.GetTextLength()
-        line_number = self.LineFromPosition(last_position)
-        first_visible_line = self.GetFirstVisibleLine()
-        lines_on_screen = self.LinesOnScreen()
-        return not (first_visible_line <= line_number < first_visible_line + lines_on_screen)
-
-    def AddOutput(self, message):
-        wx.CallAfter(self._AddOutput, message)
-    def _AddOutput(self, message):
-        self.AppendText(message)
-        if self.IsTextInvisible():
-
-            if self.scrolled:
-            #self.answer_output.MakeCellVisible(i, 0)
-        
-                self.GotoPos(self.GetTextLength())
-class Copilot_DisplayPanel(StyledTextDisplay):
+class Copilot_DisplayPanel(code_StyledTextDisplay):
     def __init__(self, parent, tab_id):
-        StyledTextDisplay.__init__(self,parent)
+        code_StyledTextDisplay.__init__(self,parent)
         
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 

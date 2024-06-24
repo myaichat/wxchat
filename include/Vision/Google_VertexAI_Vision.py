@@ -66,23 +66,9 @@ class VisionResponseStreamer:
 
             from vertexai import generative_models
             from vertexai.generative_models import Part, Image
-            if 1:
-                from io import BytesIO
-                from PIL import Image as PILImage
-                from vertexai.generative_models import Image as VertexAIImage
-                local_image_path = image_path[0]
-                # Load your PIL image
-                #pil_image = image_path[0]
-                pil_image = PILImage.open(image_path[0])
-
-                # Convert the PIL Image to bytes
-                buffer = BytesIO()
-                pil_image.save(buffer, format='JPEG') #pil_image.format)
-                image_bytes = buffer.getvalue()
-
-                # Assuming VertexAIImage has a method to create an instance from bytes
-                # This is a hypothetical example; you'll need to replace `from_bytes` with the actual method
-                vertex_ai_image = VertexAIImage.from_bytes(image_bytes)
+            from io import BytesIO
+            from PIL import Image as PILImage
+            from vertexai.generative_models import Image as VertexAIImage            
             #return ''
 
             # TODO(developer): Update and un-comment below line
@@ -113,18 +99,38 @@ class VisionResponseStreamer:
                     category=generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
                     threshold=generative_models.HarmBlockThreshold.BLOCK_NONE,
                 ),
-
-
+                generative_models.SafetySetting(
+                    category=generative_models.HarmCategory.HARM_CATEGORY_UNSPECIFIED,
+                    threshold=generative_models.HarmBlockThreshold.BLOCK_NONE,
+                ),
+                generative_models.SafetySetting(
+                    category=generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=generative_models.HarmBlockThreshold.BLOCK_NONE,
+                ),
                 
             ]
+            image_files=[]
+            for ifn in image_path:
 
-           
+                #local_image_path = image_path[0]
+                # Load your PIL image
+                #pil_image = image_path[0]
+                pil_image = PILImage.open(ifn)
 
-            image_file = Part.from_image(vertex_ai_image)
+                # Convert the PIL Image to bytes
+                buffer = BytesIO()
+                pil_image.save(buffer, format='JPEG') #pil_image.format)
+                image_bytes = buffer.getvalue()
+
+                # Assuming VertexAIImage has a method to create an instance from bytes
+                # This is a hypothetical example; you'll need to replace `from_bytes` with the actual method
+                vertex_ai_image = VertexAIImage.from_bytes(image_bytes)
+
+                image_files.append(Part.from_image(vertex_ai_image))
 
             # Generate content
             stream = model.generate_content(
-                [image_file, text_prompt],
+                [*image_files,  text_prompt],
                 generation_config=generation_config,
                 safety_settings=safety_config,
                 stream=True,

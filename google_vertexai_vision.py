@@ -1,7 +1,3 @@
-#
-#try: https://ai.azure.com/explore/models/Phi-3-vision-128k-instruct/version/1/registry/azureml
-# https://inference.readthedocs.io/en/latest/models/model_abilities/vision.html
-#import onnxruntime_genai as og
 
 import argparse
 import time
@@ -51,19 +47,29 @@ apc.all_templates=all_templates=dict2()
 apc.all_chats=all_chats=dict2()
 apc.all_system_templates= all_system_templates=dict2()
 if 0:
-    from include.Phy3_Python import Microsoft_Chat_InputPanel, \
+    from include.Copilot.Phy3_Python import Microsoft_Chat_InputPanel, \
         Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 if 0:
-    from include.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
+    from include.Copilot.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
         Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Python_Copilot_InputPanel
 if 0:
-    from include.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
+    from include.Vision.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
 
 if 0:
-    from include.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+    from include.Vision.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+
+if 0:
+    from include.Vision.Google_GenAI_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
+
+if 0:
+    from include.Copilot.Google_PaLM import Google_PaLM_ChatDisplayNotebookPanel, \
+    Google_PaLM_ChatDisplayNotebookPanel, Google_PaLM_Chat_InputPanel, Google_PaLM_Copilot_InputPanel
 
 if 1:
-    from include.Google_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
+    from include.Vision.Google_VertexAI_Vision import  VertexAI_GoogleVision_ChatDisplayNotebookPanel, \
+        VertexAI_GoogleVision_Copilot_InputPanel, VertexAI_GoogleVision_Copilot_DisplayPanel
+    
+
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -375,12 +381,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             apc.chats[tab_id]=chat
             self.SwapInputPanel(tab_id , resplit=False)
         
-        if 0:
-            self.chatInput = Gpt4_Chat_InputPanel(v_splitter, tab_id=(self.ws_name,0,0))
-            
-            self.chatInputs[(chat.vendor, chat.chat_type)]=self.chatInput
 
-                
         self.chatInput.SetMinSize((300, 200)) 
         
         self.logPanel = LogPanel(v_splitter)
@@ -425,13 +426,6 @@ class WorkspacePanel(wx.Panel,NewChat):
             self.chatInput.tab_id=tab_id
             self.chatInput.RestoreQuestionForTabId(tab_id)
         else:
-            if 0:
-                if chat.chat_type == 'Chat':
-                    #print(f'NEW Gpt4_Chat_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                    self.chatInput = Gpt4_Chat_InputPanel(v_splitter,tab_id=tab_id)
-                else:
-                    #print(f'NEW Gpt4_Copilot_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                    self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
 
 
             chatInput_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.input}'
@@ -585,15 +579,7 @@ class MyFrame(wx.Frame, NewChat):
         pub.subscribe(self.StopProgress, 'stop_progress') 
         pub.subscribe(self.SetSystemPrompt, 'set_system_prompt')
         self.system_prompt={} 
-        if 0:
-            apc.conda_env=get_current_conda_env()
-            print(apc.conda_env)
-            if apc.conda_env.endswith('test'):
-                
-                x, y = self.GetPosition() 
-                self.SetPosition((x+100, y+100))
 
-        
 
         pub.sendMessage('add_default_tabs')
         pub.subscribe(self.SetStatus, 'set_status')
@@ -765,7 +751,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Vision')
+        self.frame = MyFrame(f'Google Vertex AI Vision')
         return True
 
 if __name__ == '__main__':

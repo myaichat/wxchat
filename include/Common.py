@@ -285,7 +285,6 @@ class Base_InputPanel:
             print('not in self.tabs', message)
 
 
-
 class ShowSystemPrompts(wx.Dialog):
     def __init__(self, parent, tab_id, chat_history):
         super(ShowSystemPrompts, self).__init__(parent, title="Chat History", size=(600, 400))
@@ -350,6 +349,12 @@ class ShowSystemPrompts(wx.Dialog):
             
             index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), name)
             prompt=evaluate(content, dict2( input=chat.question, num_of_images=chat.num_of_images))
+            self.listCtrl.SetItem(index, 1, prompt) 
+
+        for name, content in apc.all_system_templates[chat.workspace].Copilot.items():
+            
+            index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), name)
+            prompt=evaluate(content, dict2( input=chat.question, num_of_images=chat.num_of_images))
             self.listCtrl.SetItem(index, 1, prompt)            
 
     def on_use(self, event):
@@ -359,7 +364,7 @@ class ShowSystemPrompts(wx.Dialog):
         pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
         self.Close() 
     def on_close(self, event):
-        self.Close()         
+        self.Close()  
 
 class ChatHistoryDialog(wx.Dialog):
     def __init__(self, parent, tab_id, chat_history):

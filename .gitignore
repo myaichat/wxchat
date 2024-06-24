@@ -6,6 +6,7 @@ medium_dml_128k
 _directml
 .huggingface
 myenv
+pyenv
 *.pyc
 cuda-fp16
 cuda_myenv

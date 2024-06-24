@@ -9,7 +9,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Base_InputPanel_Gpt4 import Base_InputPanel_Gpt4
+from include.Base_InputPanel_Google_VertexAI import Base_InputPanel_Google_VertexAI
 import base64
 import requests
 #import openai
@@ -57,8 +57,8 @@ class VisionResponseStreamer:
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        header = fmt([[f'Question',chat.model]],[])
-        pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        header = fmt([[f'{text_prompt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         try:
 
       
@@ -79,10 +79,10 @@ class VisionResponseStreamer:
             vertexai.init(project=PROJECT_ID, location=LOCATION)
 
             model = generative_models.GenerativeModel(model_name=chat.model)
-
+            #pp(chat)
             # Generation config
             generation_config = generative_models.GenerationConfig(
-                max_output_tokens=2048, temperature=0.4, top_p=1, top_k=32
+                max_output_tokens= int(chat.max_tokens), temperature=float(chat.temperature), top_p=chat.top_p, top_k=chat.top_k
             )
 
             # Safety config
@@ -153,8 +153,8 @@ class VisionResponseStreamer:
             log(format_stacktrace(), 'red')
 
             print(f"An error occurred: {e}")
-
-            return ''
+            raise
+            #return ''
         
 
         if out:
@@ -856,7 +856,7 @@ class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Gpt4):
+class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_VertexAI):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -882,35 +882,37 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         if 0:       
             max_new_tokens_values = ["256", "512", "1024", "2048", "4096", "8192", "16384", "32768"]
             # Create a ComboBox for max_new_tokens
-            self.max_new_tokens_dropdown = wx.ComboBox(self, choices=max_new_tokens_values, style=wx.CB_READONLY)
-            self.max_new_tokens_dropdown.SetValue("2048")  # Default value
+            self.max_tokens_dropdown = wx.ComboBox(self, choices=max_new_tokens_values, style=wx.CB_READONLY)
+            self.max_tokens_dropdown.SetValue("2048")  # Default value
             chat.max_new_tokens = "2048"
-            self.max_new_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxNewTokensChange)
+            self.max_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxNewTokensChange)
         if 0:       
             temp_vals = ["0", "0.2", "0.4", "0.6", "0.8", "1", "2", "5"]
             # Create a ComboBox for max_new_tokens
             self.temp_dropdown = wx.ComboBox(self, choices=temp_vals, style=wx.CB_READONLY)
             self.temp_dropdown.SetValue("1")  # Default value
-            chat.temp_val = "1"
+            chat.temperature =  "1"
             self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
 
         self.askButton = wx.Button(self, label='Ask', size=(40, 25))
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
-        self.historyButton = wx.Button(self, label='Hist', size=(40, 25))
-        self.historyButton.Bind(wx.EVT_BUTTON, self.onHistoryButton)
-        # New Random button
         self.randomButton = wx.Button(self, label='Rand', size=(40, 25))
-        self.randomButton.Bind(wx.EVT_BUTTON, self.onRandomButton)    
+        self.randomButton.Bind(wx.EVT_BUTTON, self.onRandomButton)   
+        if 0:
+            self.historyButton = wx.Button(self, label='Hist', size=(40, 25))
+            self.historyButton.Bind(wx.EVT_BUTTON, self.onHistoryButton)
+            # New Random button
+ 
 
-        self.sysButton = wx.Button(self, label='Sys', size=(40, 25))
-        self.sysButton.Bind(wx.EVT_BUTTON, self.onSysButton)
+            self.sysButton = wx.Button(self, label='Sys', size=(40, 25))
+            self.sysButton.Bind(wx.EVT_BUTTON, self.onSysButton)
 
         if 0:
             self.numOfTabsCtrl = wx.TextCtrl(self, value="1", size=(40, 25))
             self.tabsButton = wx.Button(self, label='Tabs', size=(40, 25))
             self.tabsButton.Bind(wx.EVT_BUTTON, self.onTabsButton)
-        v_sizer = wx.BoxSizer(wx.VERTICAL)
+        
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_LEFT)
         askSizer.Add(self.model_dropdown, 0, wx.ALIGN_LEFT)
@@ -920,27 +922,30 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Gpt4.AddButtons(self, askSizer)
+        Base_InputPanel_Google_VertexAI.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
-        askSizer.Add(self.sysButton, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
+        #askSizer.Add(self.historyButton, 0, wx.ALIGN_CENTER)
+        #
+        #askSizer.Add(self.sysButton, 0, wx.ALIGN_CENTER)
         #askSizer.Add(self.numOfTabsCtrl, 0, wx.ALIGN_CENTER)
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
-        
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_Google_VertexAI.AddButtons_Level_2(self, h_sizer)
+
+        sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
+        sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
 
 
-
-        v_sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
-        #v_sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
 
         #self.inputCtrl.SetMinSize((-1, 120))  
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(v_sizer, 0, wx.EXPAND)
+        #sizer = wx.BoxSizer(wx.VERTICAL)
+        
         sizer.Add(self.inputCtrl, 1, wx.EXPAND)
         self.SetSizer(sizer)
         self.ex=None
@@ -994,7 +999,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         selected_value = self.temp_dropdown.GetValue()
         print(f"Selected temp: {selected_value}")
         chat = apc.chats[self.tab_id]
-        chat.temp_val = selected_value            
+        chat.temperature = selected_value            
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask Google{tab_id}:')
@@ -1098,7 +1103,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
                 
 
                 # DO NOT REMOVE THIS LINE
-                chat.temp_val = chat.get('temp_val',"1")
+                chat.temperature = chat.get('temperature',"1")
                 #header=fmt([[f'User Question|Hist:{chat.history}|{ self.max_new_tokens_dropdown.GetValue()}|{system}|{chat.temp_val}']],[])
                 
                 #print(header)

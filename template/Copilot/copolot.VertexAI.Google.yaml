@@ -13,8 +13,16 @@ templates:
     Chat:
     - vendor: 'Google'
       chat_type: 'Chat'
-      
+      history: 0
       name: 'Text'
+      model_name: 'models/gemini-1.5-pro'
+      system: 'SYSTEM_GENERAL'
+      question: 'List us presidents.'
+
+    - vendor: 'Google'
+      chat_type: 'Chat'
+      history: 1
+      name: 'Text/Hist'
       model_name: 'models/gemini-1.5-pro'
       system: 'SYSTEM_GENERAL'
       question: 'List us presidents.'
@@ -80,7 +88,10 @@ templates:
         [OLD CODE LINES]
         #Change To:
         [NEW CODE LINES]
-        And file line number where change is made.
+        And ' #add this line' for new lines
+        and ' #remove this line' for removed lines
+        and ' #change this line' for changed lines
+
       SYSTEM_CHATTY: |
         You are a chatbot that assists with anwering questions about 
         code included or adding new features 

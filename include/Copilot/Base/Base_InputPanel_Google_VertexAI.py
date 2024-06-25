@@ -143,7 +143,7 @@ class Base_InputPanel_Google_VertexAI(Base_InputPanel):
 
             h_sizer_1 = wx.BoxSizer(wx.HORIZONTAL)
             chat=apc.chats[self.tab_id] 
-            self.max_tokens_dropdown = wx.ComboBox(self, choices=['100', '150','300','450', '600', '750', '1000', '2000', '2048'], style=wx.CB_READONLY)
+            self.max_tokens_dropdown = wx.ComboBox(self, choices=['100', '150','300','450', '600', '750', '1000', '2000', '2048', '4096'], style=wx.CB_READONLY)
             self.max_tokens_dropdown.SetValue('300')  # Default value
             self.max_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxTokensChange)
             chat.max_tokens = int(self.max_tokens_dropdown.GetValue())

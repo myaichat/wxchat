@@ -234,13 +234,12 @@ class History_ResponseStreamer:
             chat2 = model.start_chat(history=history_content)
 
             # Send the message and receive the response
-            response = chat2.send_message(text_prompt)
+            response = chat2.send_message(text_prompt, stream=True)
 
-            # Print and store the response
-            response_text = response.text
-            #print(response_text, end='', flush=True)
-            out.append(response_text)
-            pub.sendMessage('chat_output', message=response_text, tab_id=receiving_tab_id)
+            for chunk in response:
+
+                out.append(chunk.text)
+                pub.sendMessage('chat_output', message=chunk.text   , tab_id=receiving_tab_id)
 
             # Update chat history with the new interaction
             #history_content.append(Content(role="model", parts=[Part.from_text(response_text)]))

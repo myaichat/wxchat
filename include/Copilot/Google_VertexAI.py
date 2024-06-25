@@ -43,7 +43,128 @@ all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chat
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
 
-class ResponseStreamer:
+class NoHistory_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        #pp(receiveing_tab_id)
+        #pp(chat)
+        #header = fmt([[f'Question']],[])
+        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        try:
+
+      
+      
+            import vertexai
+            from vertexai.language_models import TextGenerationModel
+
+
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+            # Load a example model with system instructions
+            from vertexai.generative_models import (
+                GenerationConfig,
+                GenerativeModel,
+                HarmBlockThreshold,
+                HarmCategory,
+                Part,
+            )
+
+            MODEL_ID = chat.model  # @param {type:"string"}
+
+            model = GenerativeModel(MODEL_ID)            
+            example_model = GenerativeModel(
+                MODEL_ID,
+                system_instruction=[
+                    chat.system_prompt
+                    
+                ],
+            )
+
+            # Set model parameters
+            generation_config = GenerationConfig(
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                top_k=float(chat.top_k),
+                candidate_count=1,
+                max_output_tokens=int(chat.max_tokens),
+            )
+
+            # Set safety settings
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            }
+
+            prompt = f"""
+            User input: {text_prompt}
+            Answer:
+            """
+
+            # Set contents to send to the model
+            contents = [prompt]
+
+            # Counts tokens
+            print(example_model.count_tokens(contents))
+
+            # Prompt the model to generate content
+            stream = example_model.generate_content(
+                contents,
+                generation_config=generation_config,
+                safety_settings=safety_settings,
+                stream=True,
+            )
+
+            # Print the model response
+           
+
+            for chunk in stream:
+                print(chunk.text, end='', flush=True)
+                out.append(chunk.text)
+                pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+                
+                if 0 and hasattr(chunk, 'usage_metadata'):
+                    print("Usage Metadata:", chunk.usage_metadata)
+                    print(f"\nFinish reason:\n{chunk.candidates[0].finish_reason}")
+                    print(f"\nSafety settings:\n{chunk.candidates[0].safety_ratings}")                    
+
+
+
+            #print(f'\nUsage metadata:\n{stream.to_dict().get("usage_metadata")}')
+
+
+
+
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
+
+class History_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
@@ -674,7 +795,7 @@ class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_I
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
         chat=apc.chats[tab_id]
-        streamer_name = f'ResponseStreamer'
+        streamer_name = f'NoHistory_ResponseStreamer'
 
         assert streamer_name in globals(), streamer_name
         print(f'\t\Creating streamer:', streamer_name)

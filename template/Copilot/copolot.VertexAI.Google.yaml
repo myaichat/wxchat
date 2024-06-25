@@ -25,7 +25,7 @@ templates:
       name: 'Text/Hist'
       model_name: 'models/gemini-1.5-pro'
       system: 'SYSTEM_GENERAL'
-      question: 'List us presidents.'
+      question: 'List all US presidents.'
 
     - vendor: 'Google'
       chat_type: 'Chat'
@@ -57,8 +57,17 @@ templates:
 
     - vendor: 'Google'
       chat_type: 'Copilot'
-      
+      history: 0
       name: 'Copilot'
+      model_name: 'models/gemini-1.5-pro'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_VertexAI.py'
+
+    - vendor: 'Google'
+      chat_type: 'Copilot'
+      history: 1
+      name: 'Copilot/Hist'
       model_name: 'models/gemini-1.5-pro'
       system: SYSTEM_CHATTY
       question: 'How can I improve this code?'

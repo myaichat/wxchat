@@ -90,6 +90,22 @@ class ShowSystemPrompts_Chat(wx.Dialog):
 
 
 class Base_InputPanel_Google_VertexAI(Base_InputPanel):
+    def get_chat_streamer(self, tab_id, glbs):
+
+        chat=apc.chats[tab_id]
+
+        if chat.get('history',0)==0:
+            streamer_name = f'NoHistory_ResponseStreamer'
+        else:
+            streamer_name = f'History_ResponseStreamer'
+        if streamer_name not in self.rs:
+
+            assert streamer_name in glbs, streamer_name
+            print(f'\t\Creating streamer:', streamer_name)
+            cls= glbs[streamer_name]
+            # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+            self.rs[streamer_name] = cls ()
+        return self.rs[streamer_name]    
     def AddButtons_Level_1(self, h_sizer):
         if 1: #second row
 

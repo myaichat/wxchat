@@ -235,17 +235,18 @@ class History_ResponseStreamer:
 
             # Send the message and receive the response
             response = chat2.send_message(text_prompt, stream=True)
-
+            response_text=[]
             for chunk in response:
 
                 out.append(chunk.text)
+                response_text.append(chunk.text)
                 pub.sendMessage('chat_output', message=chunk.text   , tab_id=receiving_tab_id)
 
             # Update chat history with the new interaction
             #history_content.append(Content(role="model", parts=[Part.from_text(response_text)]))
             self.chat_history[receiving_tab_id].append({
                 'prompt': text_prompt,
-                'response': response_text
+                'response': ''.join(response_text)
             })
 
         except Exception as e:
@@ -676,6 +677,7 @@ class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_I
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+        self.rs={}
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask copilot {tab_id}:')
@@ -772,13 +774,7 @@ class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_I
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
         chat=apc.chats[tab_id]
-        streamer_name = f'NoHistory_ResponseStreamer'
-
-        assert streamer_name in globals(), streamer_name
-        print(f'\t\Creating streamer:', streamer_name)
-        cls= globals()[streamer_name]
-        # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-        rs = cls ()
+        rs = self.get_chat_streamer(tab_id,globals())
 
         #rs=ResponseStreamer()
         out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
@@ -1224,22 +1220,7 @@ class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_Input
                 pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id) 
             self.askButton.Disable()
             threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
-    def get_chat_streamer(self, tab_id):
 
-        chat=apc.chats[tab_id]
-
-        if chat.get('history',0)==0:
-            streamer_name = f'NoHistory_ResponseStreamer'
-        else:
-            streamer_name = f'History_ResponseStreamer'
-        if streamer_name not in self.rs:
-
-            assert streamer_name in globals(), streamer_name
-            print(f'\t\Creating streamer:', streamer_name)
-            cls= globals()[streamer_name]
-            # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-            self.rs[streamer_name] = cls ()
-        return self.rs[streamer_name]
 
     def stream_response(self, prompt, chatHistory, tab_id, model):
         # Call stream_response and store the result in out
@@ -1248,7 +1229,7 @@ class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_Input
 
 
         # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-        rs = self.get_chat_streamer(tab_id)
+        rs = self.get_chat_streamer(tab_id, globals())
         out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 

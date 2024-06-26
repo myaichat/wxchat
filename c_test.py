@@ -1,47 +1,49 @@
 #
-https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/configure-safety-attributes
+#https://github.com/anthropics/anthropic-cookbook/blob/main/multimodal/best_practices_for_vision.ipynb
 
-import vertexai
+import base64
+from anthropic import Anthropic
 
-from vertexai import generative_models
 
-# TODO(developer): Update and un-comment below line
-# project_id = "PROJECT_ID"
+client = Anthropic()
+MODEL_NAME = "claude-3-opus-20240229"
 
-vertexai.init(project=project_id, location="us-central1")
+from PIL import Image
+import io
+import base64
 
-model = generative_models.GenerativeModel(model_name="gemini-1.5-flash-001")
+def get_base64_encoded_image(image_path):
+    # Open the image and convert it to JPEG
+    with Image.open(image_path) as image:
+        with io.BytesIO() as buffer:
+            image.convert('RGB').save(buffer, format="JPEG")
+            binary_data = buffer.getvalue()
+    
+    # Encode the JPEG binary data to base64
+    base_64_encoded_data = base64.b64encode(binary_data)
+    base64_string = base_64_encoded_data.decode('utf-8')
+    return base64_string
 
-# Generation config
-generation_config = generative_models.GenerationConfig(
-    max_output_tokens=2048, temperature=0.4, top_p=1, top_k=32
-)
+#b_data=get_base64_encoded_image("test.jpeg")
+b_data=get_base64_encoded_image("test2.png")
+prompt="""You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.
+Give formal analysis of this artwork? Before providing the answer in <answer> 
+tags, think step by step in <thinking> tags and analyze every part of the image."""
 
-# Safety config
-safety_config = [
-    generative_models.SafetySetting(
-        category=generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    ),
-    generative_models.SafetySetting(
-        category=generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    ),
+message_list = [
+    {
+        "role": 'user',
+        "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b_data}},
+            {"type": "text", "text": prompt}
+        ]
+    }
 ]
 
-image_file = Part.from_uri(
-    "gs://cloud-samples-data/generative-ai/image/scones.jpg", "image/jpeg"
+response = client.messages.create(
+    model=MODEL_NAME,
+    max_tokens=2048,
+    messages=message_list
+    
 )
-
-# Generate content
-responses = model.generate_content(
-    [image_file, "What is in this image?"],
-    generation_config=generation_config,
-    safety_settings=safety_config,
-    stream=True,
-)
-
-text_responses = []
-for response in responses:
-    print(response.text)
-    text_responses.append(response.text)
+print(response.content[0].text)

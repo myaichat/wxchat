@@ -1,0 +1,115 @@
+templates:
+  workspace:
+
+      name: 'AnthropicVision'
+      vendor: 'Claude'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    Claude:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+
+    Copilot:
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: '1'
+      history: false
+      streamer_name: 'NoHist'
+      num_of_images: 1
+      system: 'SYSTEM'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: '2'
+      num_of_images: 2
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_TWO'
+      question:  |
+        Give detailed creative mix of 2 images decription as one . 
+        be as creative and wierd as possible. 
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: 'Paste 3'
+      num_of_images: 3
+      streamer_name: 'Hist'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible. 
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: 'Paste 4'
+      num_of_images: 4
+      streamer_name: 'Hist'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Give detailed creative mix of all image decriptions as abstract art
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: 'Paste 5'
+      num_of_images: 5
+      streamer_name: 'Hist'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        fuse image descriptions into  one abstract art description, do not split into images
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      name: 'Paste 10'
+      num_of_images: 10
+      streamer_name: 'Hist'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Give detailed creative mix of all image decriptions as one (do not split in two images). 
+        be as creative and weird as possible. 
+
+
+       
+
+  System:
+    Chat:
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      PROMPT: |
+        {params.question}        
+    Copilot:
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      
+      DESCRIBE_IMAGE: |
+        {params.input}
+      SYSTEM_ONE: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.             
+      SYSTEM_TWO: |
+        you are priovided {params.num_of_images} images. answer in english language
+      SYSTEM_MULTI: |
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible.        
+      SECOND: |
+        is there a second image?  creatively mix it's description with first image description in english
+      BLEND: |
+        create detailed description that blends the content of both pictures in english
+      HOW_MANY: |
+        how many images are there to describe? describe all of them in english
+      UKRA: |
+        dd ukrainian essence to each description
+      FIRST: |
+        give detailed description of first image description in english
+      BLEND_2: |
+        blend all image descriptions  in english
+      PINUP: |
+        you are priovided images having modern pinup art or ukrainian theme. answer in english language
+      LIST_ALL: |
+        list descriptions for all images
+

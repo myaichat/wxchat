@@ -6,7 +6,9 @@ client = Anthropic()
 #"claude-3-opus-20240229"
 #"claude-3-sonnet-20240229"
 #"claude-3-5-sonnet-20240620"
+#claude-3-5-sonnet-20240620	claude-3-opus-20240229	claude-3-sonnet-20240229	claude-3-haiku-20240307
 MODEL_NAME = "claude-3-haiku-20240307"
+MODEL_NAME = "claude-3-5-sonnet-20240620"
 
 
 from PIL import Image
@@ -43,11 +45,14 @@ def chat_with_image(image_path, prompt, chat_history=[]):
         max_tokens=2048,
         temperature=0.7,
         top_p=0.9,
+        #frequency_penalty=0.2,  # Slight penalty for frequent tokens
+        #presence_penalty=0.2,   # Slight penalty for new tokens        
         #stop_sequences=["Human:", "AI:"],
         stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
         #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
-        system="You are an art expert analyzing paintings.",
-        messages=message_list
+        system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+        messages=message_list,
+        stream=False,
     )
     
     assistant_message = {
@@ -63,10 +68,11 @@ def chat_with_image(image_path, prompt, chat_history=[]):
 # Example usage
 chat_history = []
 ifn="test.jpeg"
-ifn="test2.png"
-prompt1 = """You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+ifn="superpower.jpg"
+prompt1 = """ 
 Give formal analysis of this artwork? Before providing the answer in <answer> 
-tags, think step by step in <thinking> tags and analyze every part of the image."""
+tags, think step by step in <thinking> tags and analyze every part of the image.
+"""
 
 response1, chat_history = chat_with_image(ifn, prompt1, chat_history)
 print("First response:")

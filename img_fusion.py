@@ -4,6 +4,9 @@ from anthropic import Anthropic
 client = Anthropic()
 MODEL_NAME = "claude-3-opus-20240229"
 
+#claude-3-5-sonnet-20240620	claude-3-opus-20240229	claude-3-sonnet-20240229	claude-3-haiku-20240307
+
+
 def image_fusion_description(description1, description2, chat_history=[]):
     prompt = f"""I want you to imagine and describe in detail an image that fuses elements from two descriptions. 
     Here are the two descriptions:

@@ -736,7 +736,7 @@ class MyNotebookCodePanel(wx.Panel):
         self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  
         self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
-        apc.editor = self.codeCtrl
+        apc.editor = self.codeCtrl 
         
         #
         #pp(apc.chats)

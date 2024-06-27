@@ -1,0 +1,66 @@
+templates:
+  workspace:
+
+      name: 'Python'
+      vendor: 'Gpt4'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    Gpt4:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+    Chat:
+    - vendor: 'Gpt4'
+      chat_type: 'Chat'
+      name: 'General'
+      question: 'How many Python versions are there?'
+
+    Copilot:
+    - vendor: 'Gpt4'
+      chat_type: 'Copilot'
+      name: 'Python Copilot'
+      system: SYSTEM_CHATTY
+      question: 'What can I improve in this Python code?'
+      default_file: 'include\Phy3_Python.py'
+  System:
+    Chat:
+      SYSTEM: "You are a chatbot that assists with General questions. numerate options in answer."
+      PROMPT: |
+        Question: "{params.question}"
+        Answer: 
+    Copilot:
+      SYSTEM: |
+        You are a chatbot that assists with anwering questions about code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Return only the code required for change. 
+        Present changes in form:
+        #Change From:
+        [OLD CODE LINES]
+        #Change To:
+        [NEW CODE LINES]
+        And line number or lines range if possible.
+      SYSTEM_CHATTY: |
+        You are a chatbot that assists with anwering questions about 
+        code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index 
+        Present changes in form:
+        #Description
+        [CHANGE DESCRIPTION]
+        #Change From:
+        [OLD CODE LINES]
+        #Change To:
+        [NEW CODE LINES]
+      SYSTEM_ASK_ABOUT_CODE: |
+        You are a chatbot that assists with anwering questions about 
+        code included or adding new features
+      FIX_CODE: |
+        Code to fix: {params.code}
+        Question: "{params.input}"
+        Answer:
+      ASK_ABOUT_CODE: |
+        Context: {params.code}
+        Question: "{params.input}"
+        Answer:   

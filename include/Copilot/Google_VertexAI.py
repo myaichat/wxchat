@@ -33,7 +33,10 @@ model_list=[
             'models/gemini-1.5-pro', 'models/gemini-1.5-pro-001', 
             'models/gemini-1.5-pro-latest',
             'models/gemini-pro', 'models/gemini-pro-vision', 
-            'models/gemini-pro-vision-latest'
+            'models/gemini-pro-vision-latest', 
+            'models/gemma-2-27b-it',
+            'models/gemma-2-27b-it-001',
+            'models/gemma-2-27b-it-latest',
             ]
 dir_path = 'template'
 #openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -82,10 +85,10 @@ class NoHistory_ResponseStreamer:
             )
 
             MODEL_ID = chat.model  # @param {type:"string"}
-
-            model = GenerativeModel(MODEL_ID)            
-            example_model = GenerativeModel(
-                MODEL_ID,
+            #pp(chat)
+            #model = GenerativeModel(MODEL_ID)            
+            model = GenerativeModel(
+                chat.model,
                 system_instruction=[
                     chat.system_prompt
                     
@@ -118,10 +121,10 @@ class NoHistory_ResponseStreamer:
             contents = [prompt]
 
             # Counts tokens
-            print(example_model.count_tokens(contents))
+            print(model.count_tokens(contents))
 
             # Prompt the model to generate content
-            stream = example_model.generate_content(
+            stream = model.generate_content(
                 contents,
                 generation_config=generation_config,
                 safety_settings=safety_settings,
@@ -199,9 +202,11 @@ class History_ResponseStreamer:
             vertexai.init(project=PROJECT_ID, location=LOCATION)
 
             MODEL_ID = chat.model
-            model = GenerativeModel(MODEL_ID)
-            example_model = GenerativeModel(
-                MODEL_ID,
+            #model = GenerativeModel(MODEL_ID)
+            #pp(chat)
+   
+            model = GenerativeModel(
+                chat.model,
                 system_instruction=[chat.system_prompt],
             )
 
@@ -695,7 +700,8 @@ class Google_VertexAI_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_I
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
-
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model
         # Print the selected model
         #print(f"Selected model: {selected_model}")
 
@@ -1155,7 +1161,9 @@ class Google_VertexAI_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_Input
         selected_model = self.model_dropdown.GetValue()
 
         # Print the selected model
-        print(f"Selected model: {selected_model}")
+        print(f"Selected model 111: {selected_model}")
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model        
 
         # You can add more code here to do something with the selected model
 

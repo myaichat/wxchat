@@ -82,10 +82,8 @@ class NoHist_ResponseStreamer:
             #b_data=get_base64_encoded_image("test.jpeg")
             ifn=image_path[0]
             b_data=get_base64_encoded_image(ifn)
-            prompt=f"""You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.
-            {text_prompt} Before providing the answer in <answer> 
-            tags, think step by step in <thinking> tags and analyze every part of the image."""
 
+            prompt=text_prompt
             message_list = [
                 {
                     "role": 'user',
@@ -141,11 +139,16 @@ class NoHist_ResponseStreamer:
 
         return ''.join(out)
 
+
+
 class Hist_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
-        self.tokenizer={}
+        self.chat_history=[]
+   
+        
+
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
@@ -168,9 +171,9 @@ class Hist_ResponseStreamer:
             import io
             import base64
 
-            def get_base64_encoded_image(image_path):
+            def get_base64_encoded_image(ifn):
                 # Open the image and convert it to JPEG
-                with Image.open(image_path) as image:
+                with Image.open(ifn) as image:
                     with io.BytesIO() as buffer:
                         image.convert('RGB').save(buffer, format="JPEG")
                         binary_data = buffer.getvalue()
@@ -181,19 +184,31 @@ class Hist_ResponseStreamer:
                 return base64_string
 
             #b_data=get_base64_encoded_image("test.jpeg")
-            ifn=image_path[0]
-            b_data=get_base64_encoded_image(ifn)
-            prompt=f"""You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.
-            {text_prompt} Before providing the answer in <answer> 
-            tags, think step by step in <thinking> tags and analyze every part of the image."""
+            
+            content = []
+            if not self.chat_history:
+                for ifn in image_path:
+                    b_data = get_base64_encoded_image(ifn)
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": b_data
+                        }
+                    })
 
-            message_list = [
+            
+            if 0:
+                prompt=f"""You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.
+                {text_prompt} Before providing the answer in <answer> 
+                tags, think step by step in <thinking> tags and analyze every part of the image."""
+            prompt=text_prompt
+            content.append({"type": "text", "text": prompt})
+            message_list = self.chat_history + [
                 {
                     "role": 'user',
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": b_data}},
-                        {"type": "text", "text": prompt}
-                    ]
+                    "content": content
                 }
             ]
             pp(chat)
@@ -213,18 +228,25 @@ class Hist_ResponseStreamer:
             )
             #print(response.content[0].text)
 
-        
+            msg=[]
             for chunk in stream:
                 #pp(chunk)
                 if chunk.type == 'content_block_delta':
                     text = chunk.delta.text
                     print(text, end='', flush=True)
                     out.append(text)
+                    msg.append(text)
                     pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
 
-        
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
             
-
+            self.chat_history.append(message_list[-1])  # Add user's message to history
+            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
         except Exception as e:    
 
@@ -242,7 +264,95 @@ class Hist_ResponseStreamer:
 
         return ''.join(out)    
 
+class Chat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.chat_history=[]
+   
+        
 
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+            import base64
+            from anthropic import Anthropic
+
+
+            client = Anthropic()
+
+           
+            content = []
+            
+            prompt=text_prompt
+            content.append({"type": "text", "text": prompt})
+            message_list = self.chat_history + [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
+            pp(chat)
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
+            )
+            #print(response.content[0].text)
+
+            msg=[]
+            for chunk in stream:
+                #pp(chunk)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
+            
+            self.chat_history.append(message_list[-1])  # Add user's message to history
+            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)    
     
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
@@ -691,6 +801,37 @@ class Claude_AnthropicVision_Copilot_DisplayPanel(wx.Panel):
         self.copilot_splitter.SetSashPosition(width // 2)
         event.Skip()        
 
+class Claude_AnthropicVision_Chat_DisplayPanel(StyledTextDisplay):
+    def __init__(self, parent, tab_id, chat):
+        StyledTextDisplay.__init__(self,parent)
+        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+
+        self.SetFont(font) 
+        self.tab_id=tab_id
+
+        pub.subscribe(self.AddChatOutput, 'chat_output')
+        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+    def IsTabVisible(self):
+        # Get the parent notebook
+        parent_notebook = self.GetParent()
+
+        # Check if the current page is the selected page in the parent notebook
+        return parent_notebook.GetPage(parent_notebook.GetSelection()) == self
+            
+    def AddChatOutput(self, message, tab_id):
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
+        #print('Chat', tab_id, self.IsTabVisible())
+        if self.tab_id==tab_id:
+            #start_pos = self.GetLastPosition()
+            if 1: #for line in message.splitlines():
+
+                wx.CallAfter(self.AddOutput, message)
+                
+                #end_pos = self.chatDisplay.GetLastPosition()
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))        
+    def OnShowTabId(self):
+        print('show_tab_id', self.tab_id)
 
 class Claude_AnthropicVision_ChatDisplayNotebookPanel(wx.Panel):
     subscribed=False
@@ -1358,5 +1499,241 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
+class Claude_AnthropicVision_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Anthropic_Claude):
+    def __init__(self, parent, tab_id):
+        global chatHistory,  currentQuestion, currentModel
+        super(Claude_AnthropicVision_Chat_InputPanel, self).__init__(parent)
+        NewChat.__init__(self)
+        GetClassName.__init__(self)
+        self.tabs={}
+        self.tab_id=tab_id
+        chat=   apc.chats[tab_id]
+        chatHistory[self.tab_id]=[]
+        #pp(chat)
+        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+        self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
+        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        self.chat_type=chat.chat_type
+        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
+        self.model_dropdown.SetValue(DEFAULT_MODEL)
+        
+        self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
+        
+
+        self.askButton = wx.Button(self, label='Ask')
+        self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
+
+
+
+        askSizer = wx.BoxSizer(wx.HORIZONTAL)
+        askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
+        self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
+        askSizer.Add(pause_panel, 0, wx.ALL)
+   
+        askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_1(self, askSizer)
+        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_2(self, h_sizer)
+
+        sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
+        sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        
+
+        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
+        if 1:
+            q=apc.chats[tab_id].question
+
+            self.tabs[self.tab_id]=dict(q=q)
+            questionHistory[self.tab_id]=[q]
+            currentQuestion[self.tab_id]=0
+            currentModel[self.tab_id]=DEFAULT_MODEL
+
+            chat=apc.chats[tab_id]
+            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+         
+
+
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
+        #self.inputCtrl.SetMinSize((-1, 120))  
+        self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        #sizer = wx.BoxSizer(wx.VERTICAL)
+        #sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(self.inputCtrl, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+        self.ex=None
+        self.receiveing_tab_id=0
+
+        pub.subscribe(self.SetException, 'fix_exception')
+        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+        #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        wx.CallAfter(self.inputCtrl.SetFocus)
+    def SetTabId(self, tab_id):
+        self.tab_id=tab_id
+        self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
+    def SetChatDefaults(self, tab_id):
+        global chatHistory, questionHistory, currentModel
+        if tab_id ==self.tab_id:
+            assert self.chat_type==tab_id[1]
+            
+            #pp(apc.chats[tab_id])
+            #e()
+            self.tabs[self.tab_id]=dict(q=apc.chats[tab_id].question)
+            chat=apc.chats[tab_id]
+            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            questionHistory[self.tab_id]=[]
+            currentModel[self.tab_id]=DEFAULT_MODEL
+        self.RestoreQuestionForTabId(tab_id)
+
+    def _SetTabId(self, tab_id):
+        global chatHistory, questionHistory, currentModel
+        self.tab_id=tab_id
+      
+        return self
+
+                      
+    def OnModelChange(self, event):
+        # Get the selected model
+        selected_model = self.model_dropdown.GetValue()
+
+        # Print the selected model
+        print(f"Selected model: {selected_model}")
+
+        # You can add more code here to do something with the selected model
+
+        # Continue processing the event
+        event.Skip()
+
+    def _RestoreQuestionForTabId(self, tab_id):
+        message=tab_id
+        
+        global currentModel
+        if message  in self.tabs:
+            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
+            assert self.chat_type==message[1]
+            print('Chat restoring', message)
+            pp(self.tabs[message])
+            self.inputCtrl.SetValue(self.tabs[message]['q'])
+            
+            self.model_dropdown.SetValue(currentModel[message])
+            self.tab_id=message
+            #self.q_tab_id=message
+            #self.inputCtrl.SetSelection(0, -1)
+            self.inputCtrl.SetFocus()
+        
+    def _SaveQuestionForTabId(self, message):
+        global currentModel
+        q=self.inputCtrl.GetValue()
+        self.tabs[message]=dict(q=q)
+        currentModel[message]=self.model_dropdown.GetValue()
+        if 0:
+            d={"role": "user", "content":q}
+            if self.tab_id in chatHistory:
+                if d not in chatHistory[self.tab_id]:
+                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+
+
+    def SetException(self, message):
+        self.ex=message
+    def onAskButton(self, event):
+        # Code to execute when the Ask button is clicked
+        #print('Ask button clicked')
+        self.AskQuestion()
+    def AskQuestion(self):
+        global chatHistory, questionHistory, currentQuestion,currentModel
+        # Get the content of the StyledTextCtrl
+        #print('current tab_id', self.q_tab_id)
+        
+        #pub.sendMessage('show_tab_id')
+        #pp(chatHistory)
+        self.Base_OnAskQuestion()           
+        question = self.inputCtrl.GetValue()
+        if not question:
+            self.log('There is no question!', color=wx.RED)
+        else:
+            question = self.inputCtrl.GetValue()
+            self.log(f'Asking question: {question}')
+            pub.sendMessage('start_progress')
+            chat=apc.chats[self.tab_id]
+            prompt=evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
+            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+
+            questionHistory[self.tab_id].append(question)
+            currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
+            currentModel[self.tab_id]=self.model_dropdown.GetValue()
+
+            if 0:
+                header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question'])
+                # DO NOT REMOVE THIS LINE
+                print(header)
+                pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)
+            #pub.sendMessage('chat_output', message=f'{prompt}\n')
+            if 'system_prompt' not in chat:
+                system= chat.get('system', 'SYSTEM')
+               
+                chat.system_prompt=evaluate(all_system_templates[chat.workspace].Chat[system], dict2())
+                pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)        
+            
+            self.askButton.Disable()
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
+
+    def stream_response(self, prompt, chatHistory, tab_id, model):
+        # Call stream_response and store the result in out
+        self.receiveing_tab_id=tab_id
+        chat=apc.chats[tab_id]
+        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
+
+        assert streamer_name in globals(), streamer_name
+        print(f'\t\Creating streamer:', streamer_name)
+        cls= globals()[streamer_name]
+        # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+        rs = cls ()
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        if out:
+            chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+        pub.sendMessage('stop_progress')
+        log('Done.')
+        set_status('Done.')  
+        wx.CallAfter(self.askButton.Enable)      
+
+    def PrevQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if qid:
+            q=questionHistory[self.tab_id][qid-1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid-1
+        else:
+            self.log('No previous question.', color=wx.RED)
+    def NextQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if len(questionHistory[self.tab_id])>qid+1:
+            q=questionHistory[self.tab_id][qid+1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid+1
+        else:
+            self.log('No next question.', color=wx.RED)
+    def OnCharHook(self, event):
+        if event.ControlDown() and  event.GetKeyCode() == wx.WXK_RETURN:
+            self.AskQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_RIGHT:
+            log("Ctrl+-> pressed")
+            set_status("Ctrl+-> pressed")
+            self.NextQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_LEFT:
+            self.log("Ctrl+<- pressed")
+            set_status("Ctrl+<- pressed")
+            self.PrevQuestion()
+                       
+        else:
+            event.Skip()
+
+
+    def log(self, message, color=wx.BLUE):
+        
+        pub.sendMessage('log', message=f'{message}', color=color)
           

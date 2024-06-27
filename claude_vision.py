@@ -71,7 +71,8 @@ if 0:
     
 if 1:
     from include.Vision.Anthropic_Claude_Vision import  Claude_AnthropicVision_ChatDisplayNotebookPanel, \
-        Claude_AnthropicVision_Copilot_InputPanel, Claude_AnthropicVision_Copilot_DisplayPanel
+        Claude_AnthropicVision_Copilot_InputPanel, Claude_AnthropicVision_Copilot_DisplayPanel, \
+        Claude_AnthropicVision_Chat_InputPanel
 
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -360,6 +361,7 @@ class VendorNotebook(wx.Notebook):
                 #raise AssertionError(f"Display class '{display_panel}' does not exist.")
             self.AddPage(self.chatDisplay_notebook, title)
             self.SetSelection(self.GetPageCount() - 1)
+
 
 
 

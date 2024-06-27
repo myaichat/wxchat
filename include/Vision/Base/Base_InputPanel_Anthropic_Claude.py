@@ -224,7 +224,7 @@ class Base_InputPanel_Anthropic_Claude(Base_InputPanel):
 
 
 
-            if 1:
+            if 0:
                 sizer_0 = wx.BoxSizer(wx.VERTICAL)
                 dos = wx.StaticText(self, label="top_k")
                 dos.html_content ="""<!DOCTYPE html>
@@ -335,7 +335,7 @@ class Base_InputPanel_Anthropic_Claude(Base_InputPanel):
                 sizer_0.Add(self.top_k_dropdown, 0, wx.ALIGN_CENTER)
                 h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
-
+            if 1:
                 sizer_0 = wx.BoxSizer(wx.VERTICAL)
                 dos = wx.StaticText(self, label="top_p")
                 
@@ -560,7 +560,7 @@ enhancing the quality and coherence of the generated text.
                 else:
                     chat.top_p= float(self.top_p_dropdown.GetValue())
 
-                
+            if 0:    
                 if chat.get('top_k', None):
                     #self.top_k_dropdown.Enable()
                     self.top_k_dropdown.SetValue(str(chat.top_k))

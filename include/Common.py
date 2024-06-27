@@ -11,7 +11,10 @@ def evaluate(ss, params):
     #a = f"{ss}"
     a=eval('f"""'+ss+'"""')
     return a 
-
+def split_text_into_chunks( text, chunk_length=80):
+    # Split the text into chunks of specified length
+    chunks = [text[i:i+chunk_length] for i in range(0, len(text), chunk_length)]
+    return chunks
 class dict2(dict):                                                              
     def __setitem__(self, key, value):
         super(dict2, self).__setitem__(key, value)

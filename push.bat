@@ -1,3 +1,3 @@
 git add .
 git commit -m "%1"
-git push -u origin google_vertexai_copilot
+git push -u origin claude_copilot

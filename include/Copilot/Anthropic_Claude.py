@@ -1,6 +1,3 @@
-#https://github.com/google/generative-ai-docs/blob/main/site/en/palm_docs/chat_quickstart.ipynb
-#PALM2: https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-chat
-#PALM 2 vertex: https://cloud.google.com/vertex-ai/generative-ai/docs/chat/test-chat-prompts
 
 import wx
 import wx.stc as stc
@@ -11,13 +8,18 @@ from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
 from include.fmt import fmt
-from include.Base_InputPanel_Google_PaLM import Base_InputPanel_Google_PaLM
+from include.Copilot.Base.Base_InputPanel_Anthropic_Claude import Base_InputPanel_Anthropic_Claude
 import include.config.init_config as init_config 
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 #DEFAULT_MODEL  = 'gpt-4o'
-model_list=['text-bison', 'chat-bison', 'code-bison', 'codechat-bison']
+
+
+DEFAULT_MODEL='claude-3-haiku-20240307'
+
+model_list=['claude-3-5-sonnet-20240620','claude-3-opus-20240229',
+            'claude-3-sonnet-20240229','claude-3-haiku-20240307']
 dir_path = 'template'
 #openai.api_key = os.getenv("OPENAI_API_KEY")
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -25,211 +27,85 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
-
-class TextGenerationModel_ResponseStreamer:
+class History_ResponseStreamer:
+    subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
-        self.tokenizer={}
+        self.chat_history={}
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+ 
+        
+
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
         # Create a chat completion request with streaming enabled
-       
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        #pp(receiveing_tab_id)
-        #pp(chat)
-        #header = fmt([[f'Question']],[])
-        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         try:
 
-      
-      
-            import vertexai
-            from vertexai.language_models import TextGenerationModel
+            import base64
+            from anthropic import Anthropic
 
-          
-            PROJECT_ID = "spatial-flag-427113-n0"
-            LOCATION="us-central1"
-            vertexai.init(project=PROJECT_ID, location=LOCATION)
-            from google.cloud.aiplatform_v1beta1.types import (
-                content as gapic_content_types,
-            )
-            #text_generation_model = TextGenerationModel.from_pretrained("text-bison")
-            if 1:
-                text_generation_model = TextGenerationModel.from_pretrained("text-bison")
-      
-        
-            parameters = {
-                "temperature": chat.temperature,  
-                "max_output_tokens": int(chat.max_tokens), 
-                "top_p": chat.top_p, 
-                "top_k": chat.top_k
-            }
-            pp(parameters)
-            responses = text_generation_model.predict_streaming(prompt=text_prompt, **parameters)
-            for chunk in responses:
-                
-                #print(type(chunk))
-                #pp(chunk)
-                if chunk.text:
-                    print(chunk.text, end='', flush=True)
-                    out.append(chunk.text)
-                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
 
+            client = Anthropic()
+
+
+            #b_data=get_base64_encoded_image("test.jpeg")
             
-            
+            content = []
 
-        
-        except Exception as e:    
-
-
-            log(f'Error in stream_response', 'red')
-            log(format_stacktrace(), 'red')
-
-            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
-            return ''
-        
-
-        if out:
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)
-
-
-class ChatModel_ResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        self.model={}
-        self.tokenizer={}
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
-        # Create a chat completion request with streaming enabled
-       
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        pp(chat)
-        #header = fmt([[f'Question']],[])
-        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
-        try:
-
-      
-      
-            import vertexai
-            from vertexai.language_models import ChatModel
-
-       
-           
-           
-            PROJECT_ID = "spatial-flag-427113-n0"
-            LOCATION="us-central1"
-            vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-            chat_model = ChatModel.from_pretrained("chat-bison")
-            parameters = {
-                "temperature": chat.temperature,  
-                "max_output_tokens": int(chat.max_tokens), 
-                "top_p": chat.top_p, 
-                "top_k": chat.top_k
-            }
-
+            prompt=text_prompt
+            content.append({"type": "text", "text": prompt})
+            message_list = chat_history + [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
             pp(chat)
-            chat = chat_model.start_chat(
-                context=chat.system_prompt,
-
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
             )
+            #print(response.content[0].text)
 
-            '''
-                examples=[
-                    InputOutputTextPair(
-                        input_text="How many moons does Mars have?",
-                        output_text="The planet Mars has two moons, Phobos and Deimos.",
-                    ),
-                ],
-            '''
-            responses = chat.send_message_streaming(
-                message=text_prompt, **parameters)
-
-            for chunk in responses:
-                
-                #print(type(chunk))
+            msg=[]
+            for chunk in stream:
                 #pp(chunk)
-                if chunk.text:
-                    print(chunk.text, end='', flush=True)
-                    out.append(chunk.text)
-                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
 
-            
-            
-
-        
-        except Exception as e:    
-
-
-            log(f'Error in stream_response', 'red')
-            log(format_stacktrace(), 'red')
-
-            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
-            return ''
-        
-
-        if out:
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)
-
-class CodeGenerationModel_ResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        self.model={}
-        self.tokenizer={}
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
-        # Create a chat completion request with streaming enabled
-       
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        #header = fmt([[f'Question']],[])
-        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
-        try:
-
-      
-      
-
-          
-            PROJECT_ID = "spatial-flag-427113-n0"
-            LOCATION="us-central1"
-            import vertexai
-            from vertexai.language_models import CodeGenerationModel
-
-
-            vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-            code_model = CodeGenerationModel.from_pretrained("code-bison")
-            parameters = {
-                "temperature": chat.temperature,  
-                "max_output_tokens": int(chat.max_tokens)
-
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
             }
-
-            responses = code_model.predict_streaming(
-                prefix=text_prompt, **parameters)
-
-            for chunk in responses:
-                
-                #print(type(chunk))
-                #pp(chunk)
-                if chunk.text:
-                    print(chunk.text, end='', flush=True)
-                    out.append(chunk.text)
-                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
-
             
+            chat_history.append(message_list[-1])  # Add user's message to history
+            chat_history.append(assistant_message)  # Add assistant's response to history
             
-
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
         except Exception as e:    
 
@@ -237,99 +113,22 @@ class CodeGenerationModel_ResponseStreamer:
             log(f'Error in stream_response', 'red')
             log(format_stacktrace(), 'red')
 
-            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
-            return ''
-        
-
-        if out:
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)
-
-
-class CodeChatModel_ResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        self.model={}
-        self.tokenizer={}
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
-        # Create a chat completion request with streaming enabled
-       
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        #header = fmt([[f'Question']],[])
-        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
-        try:
-
-      
-      
-
-          
-            PROJECT_ID = "spatial-flag-427113-n0"
-            LOCATION="us-central1"
-            import vertexai
-            from vertexai.language_models import CodeChatModel
-
-
-            vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-            codechat_model  = CodeChatModel.from_pretrained("codechat-bison")
-            parameters = {
-                "temperature": chat.temperature,  
-                "max_output_tokens": int(chat.max_tokens)
-
-            }
-
-
-            codechat = codechat_model.start_chat()
-
-            pp(chat)
-            if chat.chat_type=='Chat':
-                prompt=chat.question
-            else:
-                prompt=text_prompt
-            if len(text_prompt)>16384:
-                wx.MessageBox(f'"{chat.model_name}" model accepts a maximum of 16384 characters. Please reduce the number of characters in the input.', 'Error', wx.OK | wx.ICON_ERROR)
-                return ''                
-
-            responses = codechat.send_message_streaming(
-                message=prompt, **parameters)
-   
-
-            for chunk in responses:
-                
-                #print(type(chunk))
-                #pp(chunk)
-                if chunk.text:
-                    print(chunk.text, end='', flush=True)
-                    out.append(chunk.text)
-                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
-
-            
-            
-
-        
-        except Exception as e:    
-
-
-            log(f'Error in stream_response', 'red')
-            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
             raise
-            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
-            return ''
+            #return ''
         
 
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
-        return ''.join(out)
+        return ''.join(out)   
 
 
-class Gpt4_Copilot_DisplayPanel(wx.Panel):
+
+
+class Claude_Anthropic_Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(Gpt4_Copilot_DisplayPanel, self).__init__(parent)
+        super(Claude_Anthropic_Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -486,7 +285,7 @@ class code_StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_H
         
                 self.GotoPos(self.GetTextLength())      
 
-class Google_PaLM_Chat_DisplayPanel(code_StyledTextDisplay):
+class Claude_Anthropic_Chat_DisplayPanel(code_StyledTextDisplay):
     def __init__(self, parent, tab_id, chat):
         code_StyledTextDisplay.__init__(self,parent)
         font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
@@ -519,9 +318,9 @@ class Google_PaLM_Chat_DisplayPanel(code_StyledTextDisplay):
         print('show_tab_id', self.tab_id)
 
              
-class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
+class Claude_Anthropic_ChatDisplayNotebookPanel(wx.Panel):
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(Google_PaLM_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(Claude_Anthropic_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -607,7 +406,7 @@ class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
     def AddTab(self, chat):
         chat_notebook=self.chat_notebook
         title=f'{chat.chat_type}: {chat.name}'
-        title=f'{chat.name} | {chat.model_name}'
+        title=f'{chat.name}'
         chatDisplay=None
         tab_id=(chat.workspace, chat.chat_type, chat.vendor,self.vendor_tab_id, chat_notebook.GetPageCount())
         self.tabs[chat_notebook.GetPageCount()]=tab_id
@@ -676,10 +475,10 @@ class Google_PaLM_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 
-class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_PaLM):
+class Claude_Anthropic_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthropic_Claude):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Google_PaLM_Copilot_InputPanel, self).__init__(parent)
+        super(Claude_Anthropic_Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -705,7 +504,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
         self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
         askSizer.Add(pause_panel, 0, wx.ALL)
-        Base_InputPanel_Google_PaLM.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
@@ -722,8 +521,8 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        h_sizer = wx.BoxSizer(wx.VERTICAL)
-        Base_InputPanel_Google_PaLM.AddButtons_Level_2(self, h_sizer)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -739,6 +538,7 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+        self.rs={}
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask copilot {tab_id}:')
@@ -756,7 +556,8 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
-
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model
         # Print the selected model
         #print(f"Selected model: {selected_model}")
 
@@ -821,22 +622,24 @@ class Google_PaLM_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Input
             
             #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
             chat.question=question
+            if 'system_prompt' not in chat:
+                system= chat.get('system', 'SYSTEM')
+                chat.question=question
+                chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(question=chat.question))
+                pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)        
+            else:
+                pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id) 
+
             threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
 
     def stream_response(self, prompt, chatHistory, tab_id, model):
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
         chat=apc.chats[tab_id]
-        streamer_name = f'{chat.language_model}_ResponseStreamer'
-
-        assert streamer_name in globals(), streamer_name
-        print(f'\t\Creating streamer:', streamer_name)
-        cls= globals()[streamer_name]
-        # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-        rs = cls ()
+        rs = self.get_chat_streamer(tab_id,globals())
 
         #rs=ResponseStreamer()
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
         pub.sendMessage('stop_progress')
@@ -930,7 +733,7 @@ class MyNotebookCodePanel(wx.Panel):
         self.codeCtrl.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_P_IDENTIFIER, "fore:#000000,back:#FFFFFF")
-        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF") 
+        self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  
         self.codeCtrl.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")
         self.codeCtrl.StyleSetSpec(stc.STC_STYLE_DEFAULT, 'face:Courier New')
         apc.editor = self.codeCtrl
@@ -1069,52 +872,13 @@ class Copilot_DisplayPanel(code_StyledTextDisplay):
 
           
 
-class Google_PaLM_Copilot_DisplayPanel(wx.Panel):
-    def __init__(self, parent, tab_id, chat):
-        super(Google_PaLM_Copilot_DisplayPanel, self).__init__(parent)
-        apc.chats[tab_id]=chat
-        # Create a splitter window
-        self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
-        #splitter = wx.SplitterWindow(self, style = wx.SP_3D| wx.SP_LIVE_UPDATE)
-        self.tab_id=tab_id
-
-        # Initialize the notebook_panel and logPanel
-        self.notebook_panel=notebook_panel = MyNotebookCodePanel(self.copilot_splitter, tab_id)
-        notebook_panel.SetMinSize((-1, 50))
-        #notebook_panel.SetMinSize((800, -1))
-        self.chatPanel = Copilot_DisplayPanel(self.copilot_splitter, tab_id)
-        self.chatPanel.SetMinSize((-1, 50))
-
-        # Add notebook panel and log panel to the splitter window
-        #self.splitter.AppendWindow(notebook_panel)
-        #self.splitter.AppendWindow(self.logPanel)
-        self.copilot_splitter.SplitVertically( self.chatPanel, notebook_panel) 
-        #print(111, self.GetSize().GetWidth() // 2)
-        self.copilot_splitter.SetSashPosition(500)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.copilot_splitter, 1, wx.EXPAND)
-        self.SetSizer(sizer)
-
-        # Set initial sash positions
-        #
-        self.Bind(wx.EVT_SIZE, self.OnResize)
-    def GetCode(self, tab_id):
-        assert tab_id==self.tab_id, self.__class__.__name__
-        return self.notebook_panel.codeCtrl.GetText()
-    def OnResize(self, event):
-        # Adjust the sash position to keep the vertical splitter size constant
-        width, height = self.GetSize()
-        self.copilot_splitter.SetSashPosition(width // 2)
-        event.Skip()        
-
-                         
 
 
 
-class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_PaLM):
+class Claude_Anthropic_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Anthropic_Claude):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(Google_PaLM_Chat_InputPanel, self).__init__(parent)
+        super(Claude_Anthropic_Chat_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -1145,7 +909,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Google_PaLM.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
 
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
@@ -1167,8 +931,8 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        h_sizer = wx.BoxSizer(wx.VERTICAL)
-        Base_InputPanel_Google_PaLM.AddButtons_Level_2(self, h_sizer)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_Anthropic_Claude.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_CENTER)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1184,6 +948,7 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+        self.rs={}
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
@@ -1213,7 +978,9 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
         selected_model = self.model_dropdown.GetValue()
 
         # Print the selected model
-        print(f"Selected model: {selected_model}")
+        print(f"Selected model 111: {selected_model}")
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model        
 
         # You can add more code here to do something with the selected model
 
@@ -1279,18 +1046,16 @@ class Google_PaLM_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPane
             self.askButton.Disable()
             threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
 
+
     def stream_response(self, prompt, chatHistory, tab_id, model):
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
         chat=apc.chats[tab_id]
-        streamer_name = f'{chat.language_model}_ResponseStreamer'
 
-        assert streamer_name in globals(), streamer_name
-        print(f'\t\Creating streamer:', streamer_name)
-        cls= globals()[streamer_name]
+
         # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-        rs = cls ()
-        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id, model)
+        rs = self.get_chat_streamer(tab_id, globals())
+        out = rs.stream_response(prompt, chatHistory[tab_id], self.receiveing_tab_id)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
         pub.sendMessage('stop_progress')

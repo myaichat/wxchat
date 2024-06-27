@@ -1,0 +1,112 @@
+templates:
+  workspace:
+
+      name: 'Anthropic'
+      vendor: 'Claude'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    Claude:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+    Chat:
+    - vendor: 'Claude'
+      chat_type: 'Chat'
+      streamer_name: 'History'
+      name: 'Chat'
+      streamer_name: 'History'
+      model_name: 'claude-3-haiku-20240307'
+      system: 'SYSTEM_GENERAL'
+      question: 'List us presidents.'
+
+
+    - vendor: 'Claude'
+      chat_type: 'Chat'
+      streamer_name: 'History'
+      name: 'Astronomer'
+      model_name: 'claude-3-haiku-20240307'
+      system: 'SYSTEM_ONE'
+      question: 'How many planets are there in the solar system?'
+ 
+    - vendor: 'Claude'
+      chat_type: 'Chat'
+      streamer_name: 'History'
+      name: 'Code Gen'
+      system: 'SYSTEM_PYTHON'
+      model_name: 'claude-3-haiku-20240307'
+      question: 'Write a function that checks if a year is a leap year.'
+
+    - vendor: 'Claude'
+      chat_type: 'Chat'
+      streamer_name: 'History'
+      name: 'Code Chat'
+      model_name: 'claude-3-haiku-20240307'
+      system: SYSTEM_DEBUG
+      question: 'What kind of questions are you trained to answer?'
+
+
+    Copilot:
+
+
+
+
+    - vendor: 'Claude'
+      chat_type: 'Copilot'
+      streamer_name: 'History'
+      name: 'Copilot/Hist'
+      model_name: 'claude-3-haiku-20240307'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Anthropic_Claude.py'
+  System:
+    Chat:
+      SYSTEM: "You are general knowledge expert."
+      SYSTEM_GENERAL: "You are general knowledge expert."
+      SYSTEM_PYTHON: "You are Python programming expert."
+      SYSTEM_CODE: "You are coding expert."
+      SYSTEM_DEBUG: "You are code debugging  expert."
+      SYSTEM_ONE: " You are an astronomer, knowledgeable about the solar system."
+      PROMPT: |
+        Question: "{params.question}"
+        Answer: 
+      CODE_CHAT: |
+        Question: "{params.question}"
+        Answer:           
+    Copilot:
+ 
+      SYSTEM: |
+        You are a chatbot that assists with anwering questions about code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Return only the code required for change. 
+        Present changes in form:
+        #Change From:
+        [OLD CODE LINES]
+        #Change To:
+        [NEW CODE LINES]
+        And ' #add this line' for new lines
+        and ' #remove this line' for removed lines
+        and ' #change this line' for changed lines
+
+      SYSTEM_CHATTY: |
+        You are a chatbot that assists with anwering questions about 
+        code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index 
+        Present changes in form:
+        #Description
+        [CHANGE DESCRIPTION]
+        #Change To:
+        [NEW CODE LINES]
+      SYSTEM_ASK_ABOUT_CODE: |
+        You are a chatbot that assists with anwering questions about 
+        code included or adding new features
+      FIX_CODE: |
+        Code to fix: {params.code}
+        Question: "{params.input}"
+        Answer:
+      ASK_ABOUT_CODE: |
+        Context: {params.code}
+        Question: "{params.input}"
+        Answer:   

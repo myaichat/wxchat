@@ -24,6 +24,8 @@ Vision demo UI using wxpython
 | OpenBMB| MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
 | Google Gen AI| gemini-pro-vision | [Source](https://github.com/myaichat/wxchat/blob/google_vision/google_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/c75adecb16eb), []()|[]()|
 | Google Vertex AI| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_vision/google_vertexai_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/0d3e1c0e1fb1), []()|[]()|
+| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
+
 
 
 

@@ -41,10 +41,11 @@ all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chat
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
 class NoHist_ResponseStreamer:
+    
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
-        self.tokenizer={}
+        self.chat_history={}
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
@@ -142,17 +143,29 @@ class NoHist_ResponseStreamer:
 
 
 class Hist_ResponseStreamer:
+    subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
-        self.chat_history=[]
-   
+        self.chat_history={}
+        #pub.subscribe(self.load_random_images, 'load_random_images')
+        if  not Hist_ResponseStreamer.subscribed:
+                
+            pub.subscribe(self.load_random_images, 'load_random_images')
+            Hist_ResponseStreamer.subscribed=True    
+    def load_random_images(self, tab_id):
+        
+        if tab_id in     self.chat_history:
+            print(  'Clearing history load_random_images', tab_id)
+            del self.chat_history[tab_id]    
         
 
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
-       
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
@@ -186,7 +199,7 @@ class Hist_ResponseStreamer:
             #b_data=get_base64_encoded_image("test.jpeg")
             
             content = []
-            if not self.chat_history:
+            if not chat_history:
                 for ifn in image_path:
                     b_data = get_base64_encoded_image(ifn)
                     content.append({
@@ -205,7 +218,7 @@ class Hist_ResponseStreamer:
                 tags, think step by step in <thinking> tags and analyze every part of the image."""
             prompt=text_prompt
             content.append({"type": "text", "text": prompt})
-            message_list = self.chat_history + [
+            message_list = chat_history + [
                 {
                     "role": 'user',
                     "content": content
@@ -243,8 +256,8 @@ class Hist_ResponseStreamer:
                 "content": ''.join(msg)
             }
             
-            self.chat_history.append(message_list[-1])  # Add user's message to history
-            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            chat_history.append(message_list[-1])  # Add user's message to history
+            chat_history.append(assistant_message)  # Add assistant's response to history
             
             #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
@@ -369,13 +382,13 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         self.SetKeyWords(0, python_keywords)
         # Set Python styles
         self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
-        self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        #self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
         self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
-        self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
-        self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        #self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        #self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
         self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
-        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
-        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        #self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        #self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
         self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
         self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
         self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
@@ -591,7 +604,7 @@ class MyNotebookImagePanel(wx.Panel):
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         pub.subscribe(self.load_random_images, 'load_random_images')
         self.image_pool=self.get_image_list()
-        if not MyNotebookImagePanel.subscribed:
+        if 0 and not MyNotebookImagePanel.subscribed:
                 
             pub.subscribe(self.load_random_images, 'load_random_images')
             MyNotebookImagePanel.subscribed=True  

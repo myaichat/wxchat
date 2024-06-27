@@ -1,4 +1,4 @@
-# Google Vertex AI Gemini Copilot
+
 streaming api using wxpython
 
 

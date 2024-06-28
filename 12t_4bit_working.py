@@ -18,20 +18,28 @@ class StreamProcessor(LogitsProcessor):
         return scores
 
 start = time.time()
+model_id="google/gemma-2-9b-it"
 model_id="google/gemma-2-27b-it"
 
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
+
 quantization_config = BitsAndBytesConfig(load_in_4bit=True)
 
 
+quantization_config_2 = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_use_double_quant=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
 
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    quantization_config=quantization_config,
+    quantization_config=quantization_config_2,
     device_map="auto",
     torch_dtype=torch.bfloat16,
     cache_dir="./cache",

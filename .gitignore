@@ -6,6 +6,8 @@ medium_dml_128k
 _directml
 .huggingface
 myenv
+2myenv
+3myenv
 pyenv
 *.pyc
 cuda-fp16
@@ -14,3 +16,5 @@ cuda_myenv
 MiniCPM-V
 .cache
 cache
+gemma_pytorch/*   
+gemma

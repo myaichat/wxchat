@@ -8,6 +8,8 @@ wxPython UI for inference API demo
 | Google Vertex AI| gemini-pro-*| [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_copilot/google_vertexai_copilot.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/4b06f4f19937)|[]()|
 | Anthropic | claude-3.x*| [Source](https://github.com/myaichat/wxchat/blob/claude_copilot/claude_copilot.py)| []()| [Medium](https://medium.com/p/6d295d10e357)|[]()|
 
+| Google Gemma 2| gemma-2-*| [Source]()| [Medium](https://medium.com/p/0d7dc430b72c)| [Medium]()|[]()|
+
 
 
 
@@ -61,7 +63,7 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 
 
 ### Google: 
-[Sample browser](cloud.google.com/docs/samples) 
+[Sample browser](https://cloud.google.com/docs/samples)  [Gemma2 Config](https://medium.com/p/0d7dc430b72c))
 
 
 

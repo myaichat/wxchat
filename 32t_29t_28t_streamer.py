@@ -41,8 +41,8 @@ model = AutoModelForCausalLM.from_pretrained(
     quantization_config=quantization_config,
     device_map="auto",
     cache_dir="./cache",
-    #torch_dtype=dtype,
-    #attn_implementation="flash_attention_2"
+    torch_dtype=dtype,
+    attn_implementation="flash_attention_2"
 )
 print("model:", time.time() - start)
 
@@ -73,4 +73,4 @@ model.generate(input_ids=inputs, max_new_tokens=1000, streamer=streamer)
 
 # After generation, print the total time and the full generated text
 print("\nTotal:", time.time() - start)
-print("Generated Text:", streamer.generated_text)
+#print("Generated Text:", streamer.generated_text)

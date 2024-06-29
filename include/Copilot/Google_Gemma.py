@@ -3,7 +3,7 @@ import wx
 import wx.stc as stc
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
-#import os, openai   
+import os
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
@@ -18,9 +18,9 @@ default_copilot_template='SYSTEM_CHATTY'
 
 DEFAULT_MODEL='google/gemma-2-9b-it'
 
-model_list=[DEFAULT_MODEL,'google/gemma-2-27b-it']
+model_list=['google/gemma-2-9b', DEFAULT_MODEL,'google/gemma-2-27b-it']
 dir_path = 'template'
-#openai.api_key = os.getenv("OPENAI_API_KEY")
+
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
 questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
@@ -30,6 +30,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, LogitsProcessorLis
 import torch
 import time
 from transformers import TextStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextStreamer
+import torch
+import time
 
 class StreamProcessor(LogitsProcessor):
     def __init__(self, tokenizer, model,tab_id):
@@ -141,7 +144,1475 @@ class FlashAttn_ManualStreamer:
             # Update the attention mask to include the new token
             new_attention_mask = torch.ones((attention_mask.size(0), 1), device=attention_mask.device)
             generated_attention_mask = torch.cat((generated_attention_mask, new_attention_mask), dim=1)
+class Chat_CustomStreamer(TextStreamer):
+    def __init__(self, tokenizer, tab_id, skip_special_tokens=True):
+        super().__init__(tokenizer, skip_special_tokens=skip_special_tokens)
+        self.generated_text = ""
+        self.skip_special_tokens = skip_special_tokens
+        self.tab_id = tab_id
 
+    def put(self, token_ids):
+        # Ensure we process each token ID individually
+        if token_ids.dim() == 1:  # Case for batch size 1
+            for token_id in token_ids:
+                token = self.tokenizer.decode([token_id.item()], skip_special_tokens=self.skip_special_tokens)
+                self.generated_text += token
+                # Here you can process the token as it is generated
+                pub.sendMessage('chat_output', message=f'{token}', tab_id=self.tab_id)
+                print(token, end='', flush=True)
+        else:  # Case for batch size > 1
+            for batch in token_ids:
+                for token_id in batch:
+                    token = self.tokenizer.decode([token_id.item()], skip_special_tokens=self.skip_special_tokens)
+                    self.generated_text += token
+                    # Here you can process the token as it is generated
+                    if 1: #suppressing
+                        print(token, end='', flush=True)
+class Chat_4bit_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+
+            prompt = tokenizer.apply_chat_template(uchat, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=chat.max_tokens, 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)  
+
+class History_4bit_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+            
+            achat = [
+                {"role": "assistant", "content": streamer.generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out) 
+class Chat_History_FlashAttn_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+            
+            achat = [
+                {"role": "assistant", "content": streamer.generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out) 
+class Copilot_History_4bit_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= [
+            {"role": "user", "content": """Can you as chatbot that assists with anwering questions about 
+        code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index 
+        Present changes in form:
+        #Description
+        [CHANGE DESCRIPTION]
+        #Change To:
+        [NEW CODE LINES]"""},
+            {"role": "assistant", "content": """Okay, I'm ready to help with your wxPython code!  I'll understand the context of each change.
+
+Provide me with the code snippet and tell me what you want to change.
+
+I'll number the changes and make a numbered list to keep track of what is updated. 
+
+
+
+Let's get coding!"""},
+            ]        
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+            
+            achat = [
+                {"role": "assistant", "content": streamer.generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)  
+
+class Copilot_History_FlashAttn_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= [
+            {"role": "user", "content": """Can you as chatbot that assists with anwering questions about 
+        code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index 
+        Present changes in form:
+        #Description
+        [CHANGE DESCRIPTION]
+        #Change To:
+        [NEW CODE LINES]"""},
+            {"role": "assistant", "content": """Okay, I'm ready to help with your wxPython code!  I'll understand the context of each change.
+
+Provide me with the code snippet and tell me what you want to change.
+
+I'll number the changes and make a numbered list to keep track of what is updated. 
+
+
+
+Let's get coding!"""},
+            ]        
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+            
+            achat = [
+                {"role": "assistant", "content": streamer.generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)  
+           
+class Chat_History_4bit_Batch_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= []
+              
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+    
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+            gen_start = time.time()
+            outputs = model.generate(input_ids=inputs, 
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                )
+            generated_text=tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(generated_text)
+            
+            pub.sendMessage('chat_output', message=f'{generated_text}\n', tab_id=receiveing_tab_id)
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')            
+            achat = [
+                {"role": "assistant", "content": generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+class Copilot_History_4bit_Batch_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= []
+              
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+    
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+            gen_start = time.time()
+            outputs = model.generate(input_ids=inputs, 
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                )
+            generated_text=tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(generated_text)
+            
+            pub.sendMessage('chat_output', message=f'{generated_text}\n', tab_id=receiveing_tab_id)
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')            
+            achat = [
+                {"role": "assistant", "content": generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
+
+class Copilot_History_FlashAttn_Batch_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= []
+              
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+    
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+            gen_start = time.time()
+            outputs = model.generate(input_ids=inputs, 
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                )
+            generated_text=tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(generated_text)
+            
+            pub.sendMessage('chat_output', message=f'{generated_text}\n', tab_id=receiveing_tab_id)
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')            
+            achat = [
+                {"role": "assistant", "content": generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+class Copilot_History_Full_Batch_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                #torch_dtype=dtype,
+                #attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"  # Enable synchronous error reporting
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]= []
+              
+            
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+            chat_history +=uchat
+            pp(chat_history)
+    
+            prompt = tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+            gen_start = time.time()
+            outputs = model.generate(input_ids=inputs, 
+                max_new_tokens=int(chat.max_tokens), 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                )
+            generated_text=tokenizer.decode(outputs[0], skip_special_tokens=True)
+            print(generated_text)
+            
+            pub.sendMessage('chat_output', message=f'{generated_text}\n', tab_id=receiveing_tab_id)
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')            
+            achat = [
+                {"role": "assistant", "content": generated_text},
+            ]
+            chat_history +=achat
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+        
+class Chat_8bit_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.float16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+
+            prompt = tokenizer.apply_chat_template(uchat, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=chat.max_tokens, 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)     
+class Chat_NoHist_FlashAttn_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                torch_dtype=dtype,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+
+            prompt = tokenizer.apply_chat_template(uchat, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=chat.max_tokens, 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)  
+    
+class Chat_Full_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        #dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+            #quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                cache_dir="./cache",
+                #torch_dtype=dtype,
+                #attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        #header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+
+
+            start = time.time()
+            model_id = chat.model
+            
+
+            tokenizer = self.get_tokenizer(model_id)
+            telapsed=time.time() - start
+            print("tokenizer:",telapsed )
+
+            #quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+            model_start = time.time()
+            model = self.get_model(model_id)
+            print("model:", time.time() - start)
+            log(f'Tokenizer {telapsed}, Model {time.time() - model_start}')
+
+            uchat = [
+                {"role": "user", "content": text_prompt},
+            ]
+
+            prompt = tokenizer.apply_chat_template(uchat, tokenize=False, add_generation_prompt=True)
+            inputs = tokenizer.encode(prompt, add_special_tokens=False, return_tensors="pt")
+
+            # Ensure the inputs are moved to the same device as the model
+            inputs = inputs.to(model.device)
+
+            # Use the custom streamer
+            streamer = Chat_CustomStreamer(tokenizer, receiveing_tab_id, skip_special_tokens=True)
+
+            # Adjust the call to generate
+            #pp(chat)
+            gen_start = time.time()
+            model.generate(input_ids=inputs, streamer=streamer,
+                max_new_tokens=chat.max_tokens, 
+                do_sample=chat.do_sample,
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),      # Nucleus sampling
+                top_k=int(chat.top_k), 
+                num_return_sequences=1,
+                use_cache=chat.use_cache,
+                #return_dict_in_generate=False,
+                #output_scores=False,                
+            )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)      
 class NoHist_4bit_ResponseStreamer:
     subscribed=False
     def __init__(self):

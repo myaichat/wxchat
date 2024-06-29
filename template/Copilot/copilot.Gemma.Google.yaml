@@ -14,7 +14,7 @@ templates:
     - vendor: 'Gemma'
       chat_type: 'Chat'
       streamer_name: 'NoHist_4bit'
-      name: 'Chat'
+      name: 'NoHist'
       
       model_name: 'google/gemma-2-9b-it'
       system: 'SYSTEM_GENERAL'
@@ -23,7 +23,7 @@ templates:
     - vendor: 'Gemma'
       chat_type: 'Chat'
       streamer_name: 'NoHist_8bit'
-      name: 'Chat'
+      name: 'NoHist'
       
       model_name: 'google/gemma-2-9b-it'
       system: 'SYSTEM_GENERAL'
@@ -31,26 +31,58 @@ templates:
 
     - vendor: 'Gemma'
       chat_type: 'Chat'
-      streamer_name: 'NoHist_4bit'
-      name: 'Astronomer'
-      
-      model_name: 'google/gemma-2-9b-it'
-      system: 'SYSTEM_GENERAL'
-      question: 'How many planets are there in the solar system?'
-
-    - vendor: 'Gemma'
-      chat_type: 'Chat'
       streamer_name: 'NoHist_BFloat16'
-      name: 'Code Gen'
+      name: 'NoHist'
       
       model_name: 'google/gemma-2-9b-it'
       system: 'SYSTEM_GENERAL'
-      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'      
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
 
     - vendor: 'Gemma'
       chat_type: 'Chat'
       streamer_name: 'NoHist_BFloat16_FlashAttn'
-      name: 'Code Gen'
+      name: 'NoHist'
+      
+      model_name: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
+
+
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_4bit'
+      name: 'NoHist'
+      
+      model_name: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_8bit'
+      name: 'NoHist'
+      
+      model_name: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_NoHist_FlashAttn'
+      name: 'Chat'
+      
+      model_name: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'      
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_Full'
+      name: 'Chat'
       
       model_name: 'google/gemma-2-9b-it'
       system: 'SYSTEM_GENERAL'
@@ -58,21 +90,34 @@ templates:
 
  
  
-    - vendor: 'Gemma'
-      chat_type: 'Chat'
-      streamer_name: 'History'
-      name: 'Code Gen'
-      system: 'SYSTEM_PYTHON'
-      model_name: 'claude-3-haiku-20240307'
-      question: 'Write a function that checks if a year is a leap year.'
+
 
     - vendor: 'Gemma'
       chat_type: 'Chat'
-      streamer_name: 'History'
-      name: 'Code Chat'
-      model_name: 'claude-3-haiku-20240307'
+      streamer_name: 'History_4bit'
+      name: 'Chat'
+      model_name: 'google/gemma-2-9b-it'
       system: SYSTEM_DEBUG
       question: 'What kind of questions are you trained to answer?'
+
+
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_History_4bit_Batch'
+      name: 'Chat'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_DEBUG
+      question: 'What kind of questions are you trained to answer?'
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat_History_FlashAttn'
+      name: 'Chat'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_DEBUG
+      question: 'What kind of questions are you trained to answer?'
+
 
 
     Copilot:
@@ -82,12 +127,47 @@ templates:
 
     - vendor: 'Gemma'
       chat_type: 'Copilot'
-      streamer_name: 'History'
-      name: 'Copilot/Hist'
-      model_name: 'claude-3-haiku-20240307'
+      streamer_name: 'Copilot_History_4bit'
+      name: 'Copilot'
+      model_name: 'google/gemma-2-9b-it'
       system: SYSTEM_CHATTY
       question: 'How can I improve this code?'
-      default_file: 'include\Copilot\Anthropic_Claude.py'
+      default_file: 'include\Copilot\Google_Gemma.py'
+
+    - vendor: 'Gemma'
+      chat_type: 'Copilot'
+      streamer_name: 'Copilot_History_FlashAttn'
+      name: 'Copilot'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_Gemma.py'
+
+    - vendor: 'Gemma'
+      chat_type: 'Copilot'
+      streamer_name: 'Copilot_History_4bit_Batch'
+      name: 'Copilot'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_Gemma.py'
+
+    - vendor: 'Gemma'
+      chat_type: 'Copilot'
+      streamer_name: 'Copilot_History_FlashAttn_Batch'
+      name: 'Copilot'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_Gemma.py'
+    - vendor: 'Gemma'
+      chat_type: 'Copilot'
+      streamer_name: 'Copilot_History_Full_Batch'
+      name: 'Copilot'
+      model_name: 'google/gemma-2-9b-it'
+      system: SYSTEM_CHATTY
+      question: 'How can I improve this code?'
+      default_file: 'include\Copilot\Google_Gemma.py'      
   System:
     Chat:
       SYSTEM: "You are general knowledge expert."
@@ -97,11 +177,10 @@ templates:
       SYSTEM_DEBUG: "You are code debugging  expert."
       SYSTEM_ONE: " You are an astronomer, knowledgeable about the solar system."
       PROMPT: |
-        Question: "{params.question}"
-        Answer: 
+        {params.question}
       CODE_CHAT: |
-        Question: "{params.question}"
-        Answer:           
+       {params.question}
+               
     Copilot:
  
       SYSTEM: |
@@ -132,10 +211,9 @@ templates:
         You are a chatbot that assists with anwering questions about 
         code included or adding new features
       FIX_CODE: |
-        Code to fix: {params.code}
-        Question: "{params.input}"
-        Answer:
+        {params.input}:
+        {params.code}
       ASK_ABOUT_CODE: |
         Context: {params.code}
         Question: "{params.input}"
-        Answer:   
+       

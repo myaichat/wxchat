@@ -70,7 +70,15 @@ inputs = inputs.to(model.device)
 streamer = CustomStreamer(tokenizer, skip_special_tokens=True)
 
 # Adjust the call to generate
-model.generate(input_ids=inputs, max_new_tokens=1000, streamer=streamer)
+model.generate(input_ids=inputs, 
+    max_new_tokens=1000, 
+    do_sample=True,
+    temperature=1.0,
+    top_p=0.95,      # Nucleus sampling
+    top_k=50, 
+    use_cache=True,
+    streamer=streamer
+)
 
 # After generation, print the total time and the full generated text
 print("\nTotal:", time.time() - start)

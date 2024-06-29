@@ -65,15 +65,18 @@ if 0:
     from include.Copilot.Google_PaLM import Google_PaLM_ChatDisplayNotebookPanel, \
     Google_PaLM_ChatDisplayNotebookPanel, Google_PaLM_Chat_InputPanel, Google_PaLM_Copilot_InputPanel
 
-if 1:
+if 0:
     from include.Copilot.Google_VertexAI import Google_VertexAI_ChatDisplayNotebookPanel, \
      Google_VertexAI_Chat_InputPanel, Google_VertexAI_Copilot_InputPanel, Google_VertexAI_Chat_DisplayPanel, \
      Google_VertexAI_Copilot_DisplayPanel
 
 
-if 1:
+if 0:
     from include.Copilot.Anthropic_Claude import Claude_Anthropic_ChatDisplayNotebookPanel, \
      Claude_Anthropic_Chat_InputPanel, Claude_Anthropic_Copilot_InputPanel
+if 1:
+    from include.Copilot.Google_Gemma import Gemma_Google_ChatDisplayNotebookPanel, \
+     Gemma_Google_Chat_InputPanel, Gemma_Google_Copilot_InputPanel    
     #, Google_VertexAI_Chat_DisplayPanel, \
      #Google_VertexAI_Copilot_DisplayPanel
 
@@ -432,14 +435,6 @@ class WorkspacePanel(wx.Panel,NewChat):
             self.chatInput.tab_id=tab_id
             self.chatInput.RestoreQuestionForTabId(tab_id)
         else:
-            if 0:
-                if chat.chat_type == 'Chat':
-                    #print(f'NEW Gpt4_Chat_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                    self.chatInput = Gpt4_Chat_InputPanel(v_splitter,tab_id=tab_id)
-                else:
-                    #print(f'NEW Gpt4_Copilot_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
-                    self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
-
 
             chatInput_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.input}'
             #print('display_panel', display_panel)

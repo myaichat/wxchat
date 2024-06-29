@@ -27,30 +27,31 @@ bnb_4bit_quant_type="nf4",
 bnb_4bit_compute_dtype=torch.bfloat16
 )
 
-
-model_id="google/gemma-2-27b-it"
+model_id="google/gemma-2-9b-it"
+#model_id="google/gemma-2-27b-it"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
     device_map="auto",
-    #torch_dtype=torch.bfloat16,
-    quantization_config=quantization_config,
+    torch_dtype=torch.bfloat16,
+    #quantization_config=quantization_config,
     cache_dir="./cache",
     trust_remote_code=True,
-    low_cpu_mem_usage=True
+    #low_cpu_mem_usage=True,
+    attn_implementation="flash_attention_2"
 )
 
-input_text = "Write me a poem about Machine Learning."
+input_text = "Write a function that checks if a year is a leap year. Just code, no explanation needed."
 input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
 
-streamer = TextStreamer(tokenizer, skip_special_tokens=True)
+#streamer = TextStreamer(tokenizer, skip_special_tokens=True)
 
 outputs = model.generate(
     **input_ids,
-    max_new_tokens=100,
-    do_sample=False,
+    max_new_tokens=300,
+    do_sample=True,
     temperature=1.0,
-    streamer=streamer,
+    #streamer=streamer,
     top_p=0.95,      # Nucleus sampling
     top_k=50         # Limiting to top_k choices
 )

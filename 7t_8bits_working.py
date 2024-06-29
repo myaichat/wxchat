@@ -18,7 +18,8 @@ class StreamProcessor(LogitsProcessor):
         return scores
 
 start = time.time()
-model_id="google/gemma-2-27b-it"
+model_id="google/gemma-2-9b-it"
+#model_id="google/gemma-2-27b-it"
 
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
@@ -39,7 +40,7 @@ model = AutoModelForCausalLM.from_pretrained(
     #low_cpu_mem_usage=True
 )
 
-input_text = "Write me a poem about Machine Learning."
+input_text = "Write a function that checks if a year is a leap year. no explanation needed."
 input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
 
 logits_processor = LogitsProcessorList()

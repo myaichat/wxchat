@@ -19,6 +19,7 @@ class StreamProcessor(LogitsProcessor):
 
 start = time.time()
 model_id="google/gemma-2-27b-it"
+model_id="google/gemma-2-9b-it"
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
@@ -26,10 +27,11 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16,
     cache_dir="./cache",
     trust_remote_code=True, #,
-    low_cpu_mem_usage=True
+    low_cpu_mem_usage=True,
+    attn_implementation="flash_attention_2"
 )
 
-input_text = "Write me a poem about Machine Learning."
+input_text = "Write a function that checks if a year is a leap year. Just code, no explanation needed."
 input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
 
 logits_processor = LogitsProcessorList()

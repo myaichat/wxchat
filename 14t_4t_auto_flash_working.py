@@ -19,7 +19,7 @@ start = time.time()
 
 # Model ID
 model_id="google/gemma-2-9b-it"
-model_id = "google/gemma-2-27b-it"
+#model_id = "google/gemma-2-27b-it"
 
 # Load tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -34,7 +34,7 @@ model = AutoModelForCausalLM.from_pretrained(
 )
 
 # Prepare input text
-input_text = "Write me a poem about Machine Learning."
+input_text = "Write a function that checks if a year is a leap year. Just code, no explanation needed."
 input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
 
 # Initialize custom streamer

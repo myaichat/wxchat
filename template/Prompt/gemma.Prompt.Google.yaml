@@ -25,9 +25,9 @@ templates:
       chat_type: 'Copilot'
       name: '1'
       history: false
-      streamer_name: 'NoHist'
-      num_of_images: 1
-      system: 'SYSTEM_CLAUDE'
+      streamer_name: 'One_pChat'
+      num_of_prompts: 1
+      system: 'SYSTEM_ONE'
       question:  |
         Provide a detailed and artistically 
         rich description of the image provided by the user. 
@@ -41,8 +41,8 @@ templates:
       chat_type: 'Copilot'
       name: '2'
       history: false
-      streamer_name: 'NoHist'
-      num_of_images: 2
+      streamer_name: 'pChat'
+      num_of_prompts: 2
       system: 'SYSTEM_CLAUDE'
       question:  |
         Provide a detailed and artistically 
@@ -52,6 +52,41 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'pChat'
+      num_of_prompts: 3
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '4'
+      history: false
+      streamer_name: 'pChat'
+      num_of_prompts: 4
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+        add ukrainian essence 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '5'
+      history: false
+      streamer_name: 'pChat'
+      num_of_prompts: 5
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+        add ukrainian essence 
 
   System:
     Chat:
@@ -69,8 +104,7 @@ templates:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
       SYSTEM_CLAUDE: |
         You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
-        Before providing the answer in <answer> tags, 
-        think step by step in <thinking> tags and analyze every part of the image.
+        Providing the answer in <fused_image> tags
       SYSTEM_FUSION: |
         You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
         Your job is to imagine and describe in detail a single image that fuses 

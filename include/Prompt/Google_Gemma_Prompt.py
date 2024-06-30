@@ -20,7 +20,7 @@ from pprint import pprint as pp
 from include.Common import *
 #from include.Common_MiniCPM import Base_InputPanel
 from include.fmt import fmt, pfmt, pfmtd, fmtd
-from PIL import Image as PILImage
+
 e=sys.exit
 import include.config.init_config as init_config 
 apc = init_config.apc
@@ -47,7 +47,7 @@ class NoHist_ResponseStreamer:
         self.model={}
         self.chat_history={}
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
         # Create a chat completion request with streaming enabled
        
         out=[]
@@ -142,7 +142,7 @@ class NoHist_ResponseStreamer:
 
 
 
-class Hist_ResponseStreamer:
+class _Hist_ResponseStreamer:
     subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
@@ -366,7 +366,235 @@ class Chat_ResponseStreamer:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)    
-    
+
+class One_pChat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.chat_history=[]
+   
+        
+
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
+        # Create a chat completion request with streaming enabled
+
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+            import base64
+            from anthropic import Anthropic
+
+
+            client = Anthropic()
+
+           
+            content = []
+            
+        
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+            
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements 
+            from image descriptions and user image modification request.
+            Here are the descriptions of the input image:
+            '{descriptions_text}'
+            Here user request for input image modofication:
+            '{text_prompt}'
+
+            Please create a vivid, detailed description of a single imaginary taking into account user request.
+            
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Provide the final description in <modified_image> tag.
+            """
+
+
+            content.append({"type": "text", "text": prompt})
+            message_list = self.chat_history + [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
+            pp(chat)
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
+            )
+            #print(response.content[0].text)
+
+            msg=[]
+            for chunk in stream:
+                #pp(chunk)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
+            
+            self.chat_history.append(message_list[-1])  # Add user's message to history
+            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out) 
+class pChat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.chat_history=[]
+   
+        
+
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
+        # Create a chat completion request with streaming enabled
+
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+            import base64
+            from anthropic import Anthropic
+
+
+            client = Anthropic()
+
+           
+            content = []
+            
+        
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+            
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            {text_prompt}"""
+
+
+            content.append({"type": "text", "text": prompt})
+            message_list = self.chat_history + [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
+            pp(chat)
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
+            )
+            #print(response.content[0].text)
+
+            msg=[]
+            for chunk in stream:
+                #pp(chunk)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
+            
+            self.chat_history.append(message_list[-1])  # Add user's message to history
+            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)         
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
@@ -435,14 +663,14 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
                 self.GotoPos(self.GetTextLength())
 
 
-class CanvasCtrl(wx.Panel):
+class PromptCtrl(StyledTextDisplay):
     subscribed=False
     def __init__(self, parent,chat):
         super().__init__(parent)
         self.chat=chat
-        self.image_path=None
+        self.prompt_path=None
         if 'default_file' in chat:
-            self.image_path = chat.default_file
+            self.prompt_path = chat.default_file
         accel_tbl = wx.AcceleratorTable([
             (wx.ACCEL_CTRL, ord('V'), wx.ID_PASTE)
         ])
@@ -451,15 +679,15 @@ class CanvasCtrl(wx.Panel):
         self.SetAcceleratorTable(accel_tbl)
         self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
         
-        if not CanvasCtrl.subscribed:
+        if not PromptCtrl.subscribed:
                 
-            pub.subscribe(self.OnOpenImageFile, 'open_image_file')
-            CanvasCtrl.subscribed=True
-    def OnOpenImageFile(self, file_path):
+            pub.subscribe(self.OnOpenPromptFile, 'open_prompt_file')
+            PromptCtrl.subscribed=True
+    def OnOpenPromptFile(self, file_path):
 
         if self.IsTabVisible():
-            print('Opening image file...')
-            self.load_image_file(file_path)
+            print('Opening prompt file...')
+            self.load_prompt_file(file_path)
         else:
             print('Not visible')
     def IsTabVisible(self):
@@ -470,125 +698,94 @@ class CanvasCtrl(wx.Panel):
         print('Pasting...')
         clipboard = wx.Clipboard.Get()
         if clipboard.Open():
-            if clipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
-                data_object = wx.BitmapDataObject()
+            #get text from clipboard
+            if clipboard.IsSupported(wx.DataFormat(wx.DF_TEXT)):
+                data_object = wx.TextDataObject()
                 if clipboard.GetData(data_object):
-                    bitmap = data_object.GetBitmap()
-                    image = wx.Image(bitmap.ConvertToImage())
-                    
+                    text = data_object.GetText()
+                                        
                     # Save the image to a temporary file or set it directly to the canvas
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    temp_image_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
+                    temp_prompt_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
                     
-                    image.SaveFile(temp_image_path, wx.BITMAP_TYPE_PNG)
-                    self.load_image_file(temp_image_path)
+                    with open(temp_prompt_path, 'wb') as f:
+                        f.write(data_object.GetData(text))
+                    self.load_prompt_file(temp_prompt_path)
+
                 else:
                     print("Clipboard data retrieve failed")
+            
+
             else:
-                print("Clipboard does not contain image data")
+                print("Clipboard does not contain text data")
             clipboard.Close()
             log('Paste done.')
             set_status('Paste done.') 
         else:
             print("Unable to open clipboard")
 
-    def load_image(self, image_path):
-        image = None
-        try:
-            if image_path.lower().endswith('.webp'):
-                pil_image = PILImage.open(image_path)
-                image = wx.Image(pil_image.size[0], pil_image.size[1])
-                image.SetData(pil_image.convert("RGB").tobytes())
-                image.SetAlpha(pil_image.convert("RGBA").tobytes()[3::4])
-            else:
-                image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
-        except Exception as e:
-            print(f"Error loading image: {e}")
-            log(f"Error loading image: {e}", 'red')
+    def load_prompt(self, prompt_path):
+        text = None
+        
+        assert isfile(prompt_path), prompt_path
+        with open(prompt_path, 'r') as f:
+            text = f.read()
             
-        return image
+        return text
     
-    def load_image_file(self, file_path):
+    def load_prompt_file(self, file_path):
         # This method will be used to load and display an image on the canvas
-        self.image_path = file_path
-        self.DisplayImageOnCanvas(file_path)
+        self.prompt_path = file_path
+        self.DisplayPrompt(file_path)
         #self.update_notebook_tab_label(file_path)
 
-    def OnBitmapClick(self, event):
+    def OnPromptClick(self, event):
         # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
         self.SetFocus()
 
 
-    def DisplayImageOnCanvas(self, image_path):
+    def DisplayPrompt(self, prompt_path):
         # Load the image
-        if hasattr(self, 'static_bitmap') and self.static_bitmap:
-            self.static_bitmap.Destroy()      
-        image = self.load_image(image_path)
-        if image is None:
-            print("Failed to load image.")
+     
+        txt = self.load_prompt(prompt_path)
+        if txt is None:
+            print("Failed to load prompt.")
             return
         
-        # Get the top-level window size
-        top_level_window = self.GetTopLevelParent()
-        canvas_width, canvas_height = top_level_window.GetSize()
-        canvas_width=canvas_width/2
-        canvas_height -=200
-        # Get the image size
-        image_width = image.GetWidth()
-        image_height = image.GetHeight()
-        
-        # Calculate the new size maintaining aspect ratio
-        if image_width > image_height:
-            new_width = canvas_width
-            new_height = canvas_width * image_height / image_width
-        else:
-            new_height = canvas_height
-            new_width = canvas_height * image_width / image_height
-        
-        # Resize the image
-        image = image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
-        
-        # Convert it to a bitmap
-        bitmap = wx.Bitmap(image)
-        
-        # Create a StaticBitmap widget to display the image
-        self.static_bitmap = wx.StaticBitmap(self, -1, bitmap)
-        self.static_bitmap.Bind(wx.EVT_LEFT_DOWN, self.OnBitmapClick)
-        # Optionally, resize the panel to fit the image
-        self.SetSize(bitmap.GetWidth(), bitmap.GetHeight()) 
+        self.AppendText(txt)
 
-class MyNotebookImagePanel(wx.Panel):
+class MyNotebookPromptPanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, tab_id):
-        super(MyNotebookImagePanel, self).__init__(parent)
+        super(MyNotebookPromptPanel, self).__init__(parent)
         
         notebook = aui.AuiNotebook(self)
         self.tab_id=tab_id
         self.notebook = notebook
-        self.canvasCtrl=[]
+        self.promptCtrl=[]
         chat = apc.chats[tab_id]
-        canvasCtrl=CanvasCtrl(notebook, chat)
-        self.canvasCtrl.append(canvasCtrl)
+        promptCtrl=PromptCtrl(notebook, chat)
+        self.promptCtrl.append(promptCtrl)
 
-        apc.canvas = self.canvasCtrl
-        self.static_bitmap = None
-        #self.Bind(wx.EVT_SIZE, self.OnResize)
-        self.image_path = None
+        apc.prompts = self.promptCtrl
         
-        chat.num_of_images=    chat.get('num_of_images',    1)
-        if canvasCtrl.image_path:
+        #self.Bind(wx.EVT_SIZE, self.OnResize)
+        
+        
+        chat.num_of_prompts=    chat.get('num_of_prompts',    1)
+        if promptCtrl.prompt_path:
             
-            print(canvasCtrl.image_path)
-            canvasCtrl.DisplayImageOnCanvas(canvasCtrl.image_path)
-            notebook.AddPage(canvasCtrl, canvasCtrl.image_path)
+            print(promptCtrl.prompt_path)
+            promptCtrl.DisplayPrompt(promptCtrl.prompt_path)
+            notebook.AddPage(promptCtrl, promptCtrl.prompt_path)
         else:
-            notebook.AddPage(canvasCtrl, f'Image_1')
+            notebook.AddPage(promptCtrl, f'Prompt_1')
             
             
-            for i in range(2,chat.num_of_images+1):
-                canvasCtrl = CanvasCtrl(notebook, chat)
-                self.canvasCtrl.append(canvasCtrl)                
-                notebook.AddPage(canvasCtrl, f'Image_{i}')
+            for i in range(2,chat.num_of_prompts+1):
+                promptCtrl = PromptCtrl(notebook, chat)
+                self.promptCtrl.append(promptCtrl)                
+                notebook.AddPage(promptCtrl, f'Prompt_{i}')
                 
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -602,19 +799,19 @@ class MyNotebookImagePanel(wx.Panel):
         # Bind key down event to handle Ctrl+V
 
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        pub.subscribe(self.load_random_images, 'load_random_images')
-        self.image_pool=self.get_image_list()
-        if 0 and not MyNotebookImagePanel.subscribed:
+        pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+        self.prompt_pool=self.get_prompt_list()
+        if 0 and not MyNotebookPromptPanel.subscribed:
                 
-            pub.subscribe(self.load_random_images, 'load_random_images')
-            MyNotebookImagePanel.subscribed=True  
+            pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+            MyNotebookPromptPanel.subscribed=True  
         self.notebook.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSE, self.onTabClose)
     def onTabClose(self, event):
         # Check if the panel being closed is MyNotebookImagePanel
         page_index = event.GetSelection()
         #print(page_index, self.notebook.GetPageCount(), isinstance(self, MyNotebookImagePanel))
         page = self.notebook.GetPage(page_index)
-        if isinstance(self, MyNotebookImagePanel):
+        if isinstance(self, MyNotebookPromptPanel):
             # Prevent the tab from closing
             #dialog asking if want to close
             dialog=wx.MessageDialog(self, 'Are you sure you want to close this tab?', 'Close Tab', wx.YES_NO | wx.ICON_QUESTION)
@@ -625,31 +822,31 @@ class MyNotebookImagePanel(wx.Panel):
             else:       
 
                 event.Veto()              
-    def get_image_list(self):
+    def get_prompt_list(self):
         from pathlib import Path
 
-        image_path = Path.home() / 'Downloads'
+        prompt_path = Path(apc.home)/'prompts'
         #image_path= Path(__file__).parent / 'test'
-        print(image_path)
-        
-        jpg_files = list(image_path.glob('*.jpg')) +list(image_path.glob('*.jpeg'))
-        png_files = list(image_path.glob('*.png'))
-        webp_files = list(image_path.glob('*.webp'))
-        
-        return  jpg_files + png_files + webp_files
-    def load_random_images(self, tab_id):
+        #print(apc.home)
+        #print(prompt_path)
+        #e()
+        txt_files = list(prompt_path.glob('*.txt')) 
+
+        return  txt_files
+    def load_random_prompts(self, tab_id):
+        print(tab_id == self.tab_id , tab_id, self.tab_id)
         if tab_id == self.tab_id:
             
             chat = apc.chats[self.tab_id]
-            print('Loading random images...', chat.num_of_images)
+            print('Loading random prompts...', chat.num_of_prompts)
             
-            print(len(self.image_pool))
-            random_subset = random.sample(self.image_pool, chat.num_of_images)
+            print(len(self.prompt_pool))
+            random_subset = random.sample(self.prompt_pool, chat.num_of_prompts)
             pp(random_subset)
             if 1:
                 for i, fn in enumerate(random_subset):
                     print(i, fn)
-                    self.canvasCtrl[i].load_image_file(str(fn))
+                    self.promptCtrl[i].load_prompt_file(str(fn))
         else:
             pass
             #print('Not for me', self.tab_id)
@@ -660,36 +857,13 @@ class MyNotebookImagePanel(wx.Panel):
         
         # Find the tab with the canvas and update its label
         for i in range(notebook.GetPageCount()):
-            if notebook.GetPage(i) == self.canvasCtrl:
+            if notebook.GetPage(i) == self.promptCtrl:
                 notebook.SetPageText(i, file_name)
                 break
         
 
 
 
-
-
-    def ScaleImage(self, image, max_width, max_height):
-        image_width = image.GetWidth()
-        image_height = image.GetHeight()
-
-        # Calculate the new size maintaining the aspect ratio
-        if image_width > image_height:
-            new_width = max_width
-            new_height = max_width * image_height / image_width
-            if new_height > max_height:
-                new_height = max_height
-                new_width = max_height * image_width / image_height
-        else:
-            new_height = max_height
-            new_width = max_height * image_width / image_height
-            if new_width > max_width:
-                new_width = max_width
-                new_height = max_width * image_height / image_width
-
-        # Resize the image
-        return image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
-            
 
 
 
@@ -766,7 +940,7 @@ class Copilot_DisplayPanel(wx.Panel):
         self.tab_id=tab_id
 
         # Initialize the notebook_panel and logPanel
-        self.notebook_panel=notebook_panel = MyNotebookImagePanel(self.copilot_splitter, tab_id)
+        self.notebook_panel=notebook_panel = MyNotebookPromptPanel(self.copilot_splitter, tab_id)
         notebook_panel.SetMinSize((-1, 50))
         #notebook_panel.SetMinSize((800, -1))
         self.chatPanel = _Copilot_DisplayPanel(self.copilot_splitter, tab_id)
@@ -789,11 +963,11 @@ class Copilot_DisplayPanel(wx.Panel):
         assert tab_id==self.tab_id, self.__class__.__name__
         
         out=[]
-        notebook= self.notebook_panel.canvasCtrl
-        for canvas in  self.notebook_panel.canvasCtrl:
-            out.append(canvas.image_path)
+        notebook= self.notebook_panel.promptCtrl
+        for prompt in  self.notebook_panel.promptCtrl:
+            out.append(prompt.prompt_path)
         
-    def GetImagePath(self, tab_id):
+    def GetPromptPath(self, tab_id):
         assert tab_id==self.tab_id, self.__class__.__name__
         
         out=[]
@@ -805,7 +979,7 @@ class Copilot_DisplayPanel(wx.Panel):
             # Get the panel (page) at the current index
             page = notebook.GetPage(page_index)
             
-            out.append(page.image_path)
+            out.append(page.prompt_path)
         return out
     
     def OnResize(self, event):
@@ -1139,8 +1313,8 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthro
 
     def onRandomButton(self, event):
         # Implement the random function logic here
-        self.log('Random button clicked')
-        pub.sendMessage('load_random_images', tab_id=self.tab_id)
+        self.log('Random button clicked 11')
+        pub.sendMessage('load_random_prompts', tab_id=self.tab_id)
     def onHistoryButton(self, event):
         global chatHistory
         dialog = ChatHistoryDialog(self, self.tab_id, chatHistory)
@@ -1243,10 +1417,10 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthro
                 pub.sendMessage('start_progress')
                 #code=???
                 chatDisplay=apc.chat_panels[self.tab_id]
-                image_path=chatDisplay.GetImagePath(self.tab_id)
+                prompt_path=chatDisplay.GetPromptPath(self.tab_id)
                 #pp(image_path)
                 #return
-                assert image_path,chatDisplay
+                assert prompt_path,chatDisplay
                 #print(888, chatDisplay.__class__.__name__)
                 #code='print(1223)'
                 chat=apc.chats[self.tab_id]
@@ -1276,7 +1450,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthro
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
                 #pp(image_path)
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-                for i, fn in enumerate(image_path):
+                for i, fn in enumerate(prompt_path):
                     if not fn:
                         log(f'Image {i} is not set', color=wx.RED)
                         pub.sendMessage('stop_progress')
@@ -1285,21 +1459,21 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthro
                 import random  
                 #pp(image_path)
                 if 1:
-                    random.shuffle(image_path)
+                    random.shuffle(prompt_path)
                 #pp(image_path)
                 if 'system_prompt' not in chat:
                     system= chat.get('system', 'SYSTEM')
-                    num_oi=str(chat.num_of_images)
-                    chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(num_of_images=num_oi))
+                    num_op=str(chat.num_of_prompts)
+                    chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(num_of_prompts=num_op))
                     pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
                     #print(system_prompt)
 
-                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path)).start()
+                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, prompt_path)).start()
         except Exception as e:
             print(format_stacktrace())
             self.log(f'Error: {format_stacktrace()}', color=wx.RED)
             pub.sendMessage('stop_progress')
-    def stream_response(self, prompt, payload, tab_id,  image_path):
+    def stream_response(self, prompt, payload, tab_id,  prompt_path):
         # Call stream_response and store the result in out
         global chatHistory, questionHistory, currentQuestion,currentModel
         self.receiveing_tab_id=tab_id
@@ -1308,7 +1482,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Anthro
        
         payload=chatHistory[self.tab_id]
         vrs=self.get_rs(tab_id)
-        out = vrs.stream_response(prompt, payload, self.receiveing_tab_id, image_path)
+        out = vrs.stream_response(prompt, payload, self.receiveing_tab_id, prompt_path)
         if out:
             chatHistory[tab_id].append({"role": "assistant", "content": out}) 
             self.image_id +=1

@@ -141,7 +141,7 @@ for yfn in yaml_files:
 #e()
 #all_templates=all_templates.Oracle
 apc.default_workspace = list(all_templates.values())[0].templates.workspace
-
+apc.home=os.path.dirname(os.path.abspath(__file__))
 
 
 

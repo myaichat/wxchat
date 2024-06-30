@@ -69,11 +69,18 @@ if 0:
     from include.Vision.Google_VertexAI_Vision import  VertexAI_GoogleVision_ChatDisplayNotebookPanel, \
         VertexAI_GoogleVision_Copilot_InputPanel, VertexAI_GoogleVision_Copilot_DisplayPanel
     
-if 1:
+if 0:
     from include.Vision.Anthropic_Claude_Vision import  Claude_AnthropicVision_ChatDisplayNotebookPanel, \
         Claude_AnthropicVision_Copilot_InputPanel, Claude_AnthropicVision_Copilot_DisplayPanel, \
         Claude_AnthropicVision_Chat_InputPanel
 
+if 0:
+    from include.Prompt.Google_Gemma_Prompt import  ChatDisplayNotebookPanel, \
+        Copilot_InputPanel, Copilot_DisplayPanel, Chat_InputPanel
+
+if 1:
+    import include.Prompt.Google_Gemma_Prompt as Prompt_Infusion_Google_Gemma
+        
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
 
@@ -348,9 +355,22 @@ class VendorNotebook(wx.Notebook):
             page.AddTab(chat)
         else:
             display_panel = f'{chat.vendor}_{chat.workspace}_ChatDisplayNotebookPanel'
+            display_panel = f'{panels.vendor}'
+
+            mod_name=f'{chat.workspace}_{chat.vendor}'
+
+            #print('display_panel', display_panel)
+           
+            if 1:   
+                
+                assert mod_name in globals(), f"Module '{mod_name}' does not exist."
+                module= globals()[mod_name]
+                assert hasattr(module, display_panel), f"Display class '{display_panel}' is not defined in '{mod_name}'."
+                cls= getattr(module, display_panel)
+
             try:
                 #assert display_panel in globals()
-                cls = globals()[display_panel]
+                #cls = globals()[display_panel]
                 self.chatDisplay_notebook = cls(self, self.GetPageCount(), self.ws_name)
                 #print(f'Adding {chat.vendor}_ChatDisplayNotebookPanel panel:', display_panel)
                 self.chatDisplay_notebook.AddTab(chat)
@@ -433,12 +453,17 @@ class WorkspacePanel(wx.Panel,NewChat):
 
 
             chatInput_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.input}'
+            chatInput_panel = f'{chat.chat_type}_{panels.input}'
+            mod_name=f'{chat.workspace}_{chat.vendor}'
+
             #print('display_panel', display_panel)
             try:
                 
                 print(f'\t\tWorkspace|resplit[{resplit}]: Adding {chat.workspace} "{chat.chat_type}" panel:', chatInput_panel)
-                assert chatInput_panel in globals(), f"Display class '{chatInput_panel}' does not exist."
-                cls= globals()[chatInput_panel]
+                assert mod_name in globals(), f"Module '{mod_name}' does not exist."
+                module= globals()[mod_name]
+                assert hasattr(module, chatInput_panel), f"Display class '{chatInput_panel}' is not defined in '{mod_name}'."
+                cls= getattr(module, chatInput_panel)
                 # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
                 try:
                     self.chatInput = cls (v_splitter, tab_id=tab_id)
@@ -755,7 +780,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Anthropic Claude Vision')
+        self.frame = MyFrame(f'Google Gemma Prompt Infusion')
         return True
 
 if __name__ == '__main__':

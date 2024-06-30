@@ -412,7 +412,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             WorkspacePanel.subscribed = True
 
     def SwapInputPanel(self,  tab_id, resplit=True):
-        print('SwapInputPanel 111', tab_id)
+        #print('SwapInputPanel 111', tab_id)
         #parent = self.GetParent()
         #apc.chats[tab_id]=chat
         chat=apc.chats[tab_id]
@@ -467,6 +467,7 @@ class WorkspacePanel(wx.Panel,NewChat):
             v_splitter.SplitVertically(self.chatInput, self.logPanel)
             #self.chatInput.SetFocus()
         #old_chat_input.Destroy()
+        
 
     def OnResize(self, event):
         #print('OnResize')

@@ -19,6 +19,7 @@ class Base_InputPanel_Anthropic_Claude(Base_InputPanel):
         streamer_name = f'{chat.streamer_name}_ResponseStreamer'
         if streamer_name not in self.rs:
 
+
             assert streamer_name in glbs, streamer_name
             print(f'\t\Creating streamer:', streamer_name)
             cls= glbs[streamer_name]

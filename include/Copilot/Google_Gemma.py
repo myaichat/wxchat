@@ -47,7 +47,7 @@ class StreamProcessor(LogitsProcessor):
         generated_token_id = torch.argmax(scores, dim=-1)
         generated_token = self.tokenizer.decode(generated_token_id)
         self.generated_text += generated_token
-        print(generated_token, end='', flush=True)
+        #print(generated_token, end='', flush=True)
         pub.sendMessage('chat_output', message=f'{generated_token}', tab_id=self.tab_id)
         return scores
 
@@ -1691,16 +1691,7 @@ class NoHist_4bit_ResponseStreamer:
             print("\nTotal:", time.time() - start)
 
 
-            if 0:
-                msg=[]
-                for chunk in outputs:
-                    #pp(chunk)
-                    if chunk.type == 'content_block_delta':
-                        text = chunk.delta.text
-                        print(text, end='', flush=True)
-                        out.append(text)
-                        msg.append(text)
-                        pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
 
         
         except Exception as e:    
@@ -1719,6 +1710,386 @@ class NoHist_4bit_ResponseStreamer:
 
         return ''.join(out)   
 
+class Hist_4bit_ResponseStreamer:
+    subscribed = False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.chat_history = {}
+        self.tokenizer = {}
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+
+            quantization_config_2 = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                torch_dtype=torch.bfloat16,
+                cache_dir="./cache",
+                trust_remote_code=True
+            )
+           
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history = self.chat_history[receiving_tab_id]
+        out = []
+        from os.path import isfile
+        chat = apc.chats[receiving_tab_id]
+        txt = '\n'.join(split_text_into_chunks(text_prompt, 80))
+        
+        try:
+            start = time.time()
+            apc.stream_start = time.time()
+           
+            model_id = DEFAULT_MODEL
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            tokenizer = self.get_tokenizer(model_id)
+            model = self.get_model(model_id)
+
+            # Prepare input with chat history
+            input_text = self.prepare_input_with_history(text_prompt, chat_history)
+            input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
+
+            logits_processor = LogitsProcessorList()
+            logits_processor.append(StreamProcessor(tokenizer, model, receiving_tab_id))
+
+            outputs = model.generate(
+                **input_ids,
+                logits_processor=logits_processor,
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=1.0,
+                top_p=0.95,
+                top_k=50
+            )
+
+            print("\nStreaming:", time.time() - logits_processor[0].start)
+            print("\nTotal:", time.time() - start)
+
+            # Update chat history
+            self.update_chat_history(receiving_tab_id, text_prompt, outputs)
+
+        except Exception as e:    
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
+            raise
+
+        if logits_processor[0].generated_text:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def prepare_input_with_history(self, text_prompt, chat_history):
+        # Prepare input text with chat history
+        history_text = ""
+        for entry in chat_history:
+            history_text += f"Human: {entry['human']}\nAI: {entry['ai']}\n\n"
+        return f"{history_text}Human: {text_prompt}\nAI:"
+
+    def update_chat_history(self, tab_id, human_message, ai_response):
+        # Update chat history for the given tab
+        chat=apc.chats[tab_id]
+        tokenizer=self.tokenizer[chat.model]
+        decoded_response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        self.chat_history[tab_id].append({
+            "human": human_message,
+            "ai": decoded_response
+        })
+
+class Hist_4bit_Sys_ResponseStreamer:
+    subscribed = False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.chat_history = {}
+        self.tokenizer = {}
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True)
+
+            quantization_config_2 = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16
+            )
+
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=quantization_config,
+                device_map="auto",
+                torch_dtype=torch.bfloat16,
+                cache_dir="./cache",
+                trust_remote_code=True
+            )
+           
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = [
+            { "human": """Can you as chatbot that assists with anwering questions about 
+        code included or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index 
+        Present changes in form:
+        #Description
+        [CHANGE DESCRIPTION]
+        #Change To:
+        [NEW CODE LINES]""","ai": """Okay, I'm ready to help with your wxPython code!  I'll understand the context of each change.
+
+Provide me with the code snippet and tell me what you want to change.
+
+I'll number the changes and make a numbered list to keep track of what is updated. 
+
+
+
+Let's get coding!"""},
+            ] 
+            self.chat_history[receiving_tab_id] = [
+            { "human": """Can you as chatbot that assists with anwering questions about 
+        code given or adding new features 
+        and debugging scripts written using wxPython. 
+        Give short description for each change the code required for change.
+        Numerate each change by index. 
+        Present changes in form:
+        Line number:
+        [NEW CODE LINES]""","ai": """Okay, I'm ready to help with your wxPython code!  I'll understand the context of each change.
+
+Provide me with the code snippet and tell me what you want to change.
+
+I'll number the changes and make a numbered list to keep track of what is updated. 
+
+
+
+Let's get coding!"""},
+            ]             
+        chat_history = self.chat_history[receiving_tab_id]
+        out = []
+        from os.path import isfile
+        chat = apc.chats[receiving_tab_id]
+        txt = '\n'.join(split_text_into_chunks(text_prompt, 80))
+        
+        try:
+            start = time.time()
+            apc.stream_start = time.time()
+           
+            model_id = DEFAULT_MODEL
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            tokenizer = self.get_tokenizer(model_id)
+            model = self.get_model(model_id)
+
+            # Prepare input with chat history
+            input_text = self.prepare_input_with_history(text_prompt, chat_history)
+            input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
+
+            logits_processor = LogitsProcessorList()
+            logits_processor.append(StreamProcessor(tokenizer, model, receiving_tab_id))
+
+            outputs = model.generate(
+                **input_ids,
+                logits_processor=logits_processor,
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=1.0,
+                top_p=0.95,
+                top_k=50
+            )
+
+            print("\nStreaming:", time.time() - logits_processor[0].start)
+            print("\nTotal:", time.time() - start)
+
+            # Update chat history
+            self.update_chat_history(receiving_tab_id, text_prompt, outputs)
+
+        except Exception as e:    
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
+            raise
+
+        if logits_processor[0].generated_text:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def prepare_input_with_history(self, text_prompt, chat_history):
+        # Prepare input text with chat history
+        history_text = ""
+        for entry in chat_history:
+            history_text += f"Human: {entry['human']}\nAI: {entry['ai']}\n\n"
+        return f"{history_text}Human: {text_prompt}\nAI:"
+
+    def update_chat_history(self, tab_id, human_message, ai_response):
+        # Update chat history for the given tab
+        chat=apc.chats[tab_id]
+        tokenizer=self.tokenizer[chat.model]
+        decoded_response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        self.chat_history[tab_id].append({
+            "human": human_message,
+            "ai": decoded_response
+        })
+
+class Hist_Flash_ResponseStreamer:
+    subscribed = False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.chat_history = {}
+        self.tokenizer = {}
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                torch_dtype=torch.bfloat16,
+                cache_dir="./cache",
+                trust_remote_code=True,
+                #low_cpu_mem_usage=True,
+                attn_implementation="flash_attention_2"
+            )
+           
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history = self.chat_history[receiving_tab_id]
+        out = []
+        from os.path import isfile
+        chat = apc.chats[receiving_tab_id]
+        txt = '\n'.join(split_text_into_chunks(text_prompt, 80))
+        
+        try:
+            start = time.time()
+            apc.stream_start = time.time()
+           
+            model_id = DEFAULT_MODEL
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            tokenizer = self.get_tokenizer(model_id)
+            model = self.get_model(model_id)
+
+            # Prepare input with chat history
+            input_text = self.prepare_input_with_history(text_prompt, chat_history)
+            input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
+
+            logits_processor = LogitsProcessorList()
+            logits_processor.append(StreamProcessor(tokenizer, model, receiving_tab_id))
+
+            outputs = model.generate(
+                **input_ids,
+                logits_processor=logits_processor,
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=1.0,
+                top_p=0.95,
+                top_k=50
+            )
+
+            print("\nStreaming:", time.time() - logits_processor[0].start)
+            print("\nTotal:", time.time() - start)
+
+            # Update chat history
+            self.update_chat_history(receiving_tab_id, text_prompt, outputs)
+
+        except Exception as e:    
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
+            raise
+
+        if logits_processor[0].generated_text:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def prepare_input_with_history(self, text_prompt, chat_history):
+        # Prepare input text with chat history
+        history_text = ""
+        for entry in chat_history:
+            history_text += f"Human: {entry['human']}\nAI: {entry['ai']}\n\n"
+        return f"{history_text}Human: {text_prompt}\nAI:"
+
+    def update_chat_history(self, tab_id, human_message, ai_response):
+        # Update chat history for the given tab
+        chat=apc.chats[tab_id]
+        tokenizer=self.tokenizer[chat.model]
+        decoded_response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        self.chat_history[tab_id].append({
+            "human": human_message,
+            "ai": decoded_response
+        })
+    
 class NoHist_8bit_ResponseStreamer:
 
     subscribed=False
@@ -2304,7 +2675,7 @@ class Gemma_Google_Chat_DisplayPanel(code_StyledTextDisplay):
 
         pub.subscribe(self.AddChatOutput, 'chat_output')
         #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
-        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+        #pub.subscribe(self.OnShowTabId, 'show_tab_id') 
     def IsTabVisible(self):
         # Get the parent notebook
         parent_notebook = self.GetParent()
@@ -2328,6 +2699,7 @@ class Gemma_Google_Chat_DisplayPanel(code_StyledTextDisplay):
 
              
 class Gemma_Google_ChatDisplayNotebookPanel(wx.Panel):
+    subscribed=False
     def __init__(self, parent, vendor_tab_id, ws_name):
         super(Gemma_Google_ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
@@ -2342,10 +2714,12 @@ class Gemma_Google_ChatDisplayNotebookPanel(wx.Panel):
         self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
-        pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
-        pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
-        pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
-        pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
+        if not Gemma_Google_ChatDisplayNotebookPanel.subscribed:
+            pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
+            pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
+            pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
+            pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
+            Gemma_Google_ChatDisplayNotebookPanel.subscribed=True
     def get_active_chat_panel(self):
         active_chat_tab_index = self.chat_notebook.GetSelection()
         if active_chat_tab_index == wx.NOT_FOUND:
@@ -2485,6 +2859,7 @@ class Gemma_Google_ChatDisplayNotebookPanel(wx.Panel):
         return self.GetPageCount() - 1
 
 class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Gemma):
+    subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Gemma_Google_Copilot_InputPanel, self).__init__(parent)
@@ -2499,7 +2874,7 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
         self.askLabel = wx.StaticText(self, label=f'Ask copilot {tab_id}:')
        
         self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(chat.model_name)
+        self.model_dropdown.SetValue(chat.model)
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -2522,7 +2897,7 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=chat.model_name
+            currentModel[self.tab_id]=chat.model
             chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
 
         self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
@@ -2541,11 +2916,12 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
         self.SetSizer(sizer)
         self.ex=None
         self.receiveing_tab_id=0
-
-        #pub.subscribe(self.SetException, 'fix_exception')
-        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
-        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
-        #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        if not Gemma_Google_Copilot_InputPanel.subscribed:
+            #pub.subscribe(self.SetException, 'fix_exception')
+            pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+            #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+            #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+            Gemma_Google_Copilot_InputPanel.subscribed=True
         wx.CallAfter(self.inputCtrl.SetFocus)
         self.rs={}
     def SetTabId(self, tab_id):
@@ -2561,7 +2937,7 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
             self.tabs[self.tab_id]=dict(q=chat.question)
             chatHistory[self.tab_id]= [{"role": "system", "content": chat.system}]
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=chat.model_name        
+            currentModel[self.tab_id]=chat.model        
     def OnModelChange(self, event):
         # Get the selected model
         selected_model = self.model_dropdown.GetValue()
@@ -2695,6 +3071,7 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
 
    
 class MyNotebookCodePanel(wx.Panel):
+    subscribed=False
     def __init__(self, parent, tab_id):
         super(MyNotebookCodePanel, self).__init__(parent)
         
@@ -2764,8 +3141,11 @@ class MyNotebookCodePanel(wx.Panel):
 
         self.SetSizer(sizer)
         self.Layout()
-        pub.subscribe(self.ExecuteFile, 'execute')
-        pub.subscribe(self.OnSaveFile, 'save_file')
+        if not MyNotebookCodePanel.subscribed:
+
+            pub.subscribe(self.ExecuteFile, 'execute')
+            pub.subscribe(self.OnSaveFile, 'save_file')
+            MyNotebookCodePanel.subscribed=True
 
     def OnSaveFile(self):
         #print('Saving file...')
@@ -2858,7 +3238,7 @@ class Copilot_DisplayPanel(code_StyledTextDisplay):
         self.tab_id=tab_id
         pub.subscribe(self.AddChatOutput, 'chat_output')
         #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
-        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+        #pub.subscribe(self.OnShowTabId, 'show_tab_id') 
     def IsTabVisible(self):
         # Get the parent notebook
         parent_notebook = self.GetParent().GetParent().GetParent()
@@ -2900,7 +3280,7 @@ class Gemma_Google_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPan
         
         self.chat_type=chat.chat_type
         self.model_dropdown = wx.ComboBox(self, choices=model_list, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(chat.model_name)
+        self.model_dropdown.SetValue(chat.model)
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -2928,7 +3308,7 @@ class Gemma_Google_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPan
             self.tabs[self.tab_id]=dict(q=q)
             questionHistory[self.tab_id]=[q]
             currentQuestion[self.tab_id]=0
-            currentModel[self.tab_id]=chat.model_name
+            currentModel[self.tab_id]=chat.model
 
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
@@ -2972,7 +3352,7 @@ class Gemma_Google_Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPan
             chat=apc.chats[tab_id]
             chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
             questionHistory[self.tab_id]=[]
-            currentModel[self.tab_id]=chat.model_name
+            currentModel[self.tab_id]=chat.model
 
 
     def _SetTabId(self, tab_id):

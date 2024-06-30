@@ -2,7 +2,7 @@ templates:
   workspace:
 
       name: 'Prompt_Infusion'
-      vendor: 'Google_Gemma'
+      vendor: 'Anthropic_Claude'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
@@ -11,7 +11,7 @@ templates:
       copilot: 'Copilot'
   tabs:
     Chat:
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Chat'
       streamer_name: 'Chat'
       name: 'Ukrainian Art'
@@ -21,7 +21,7 @@ templates:
     
     Copilot:
 
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Copilot'
       name: '1'
       history: false
@@ -36,8 +36,22 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '1 :-)'
+      history: false
+      streamer_name: 'pChat'
+      num_of_prompts: 1
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
 
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Copilot'
       name: '2'
       history: false
@@ -52,7 +66,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Copilot'
       name: '3'
       history: false
@@ -68,7 +82,7 @@ templates:
         the image to life in the reader's mind. 
 
 
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Copilot'
       name: '4'
       history: false
@@ -78,7 +92,7 @@ templates:
       question:  |
         add ukrainian essence 
 
-    - vendor: 'Google_Gemma'
+    - vendor: 'Anthropic_Claude'
       chat_type: 'Copilot'
       name: '5'
       history: false
@@ -87,6 +101,77 @@ templates:
       system: 'SYSTEM_CLAUDE'
       question:  |
         add ukrainian essence 
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '1 :=)'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 1
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '2'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 2
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 3
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '4'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 4
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '5'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 5
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '10'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 10
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
+
+    - vendor: 'Anthropic_Claude'
+      chat_type: 'Copilot'
+      name: '20'
+      history: false
+      streamer_name: 'pHist'
+      num_of_prompts: 20
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+         do not mention fusion in <fused_image> section
 
   System:
     Chat:
@@ -104,7 +189,11 @@ templates:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
       SYSTEM_CLAUDE: |
         You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
-        Providing the answer in <fused_image> tags
+        Providing the answer in <fused_image> tags.
+        do not start with "The resulting image is a captivating fusion of" in  <fused_image>
+        do not start with "The resulting image is a" in <fused_image>
+        do not start with 'A striking, captivating image emerges, blending elements from the three descriptions.'
+        do not mention fusion in <fused_image> section
       SYSTEM_FUSION: |
         You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
         Your job is to imagine and describe in detail a single image that fuses 

@@ -142,26 +142,26 @@ class NoHist_ResponseStreamer:
 
 
 
-class _Hist_ResponseStreamer:
+class Hist_ResponseStreamer:
     subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
         self.chat_history={}
         #pub.subscribe(self.load_random_images, 'load_random_images')
-        if  not Hist_ResponseStreamer.subscribed:
+        if  not pHist_ResponseStreamer.subscribed:
                 
-            pub.subscribe(self.load_random_images, 'load_random_images')
-            Hist_ResponseStreamer.subscribed=True    
-    def load_random_images(self, tab_id):
+            pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+            pHist_ResponseStreamer.subscribed=True    
+    def load_random_prompts(self, tab_id):
         
         if tab_id in     self.chat_history:
-            print(  'Clearing history load_random_images', tab_id)
+            print(  'Clearing history load_random_prompts', tab_id)
             del self.chat_history[tab_id]    
         
 
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
         # Create a chat completion request with streaming enabled
         if receiveing_tab_id not in self.chat_history:
             self.chat_history[receiveing_tab_id]=[]
@@ -277,19 +277,30 @@ class _Hist_ResponseStreamer:
 
         return ''.join(out)    
 
-class Chat_ResponseStreamer:
+class pHist_ResponseStreamer:
+    subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
-        self.chat_history=[]
-   
+        self.chat_history={}
+        #pub.subscribe(self.load_random_images, 'load_random_images')
+        if  not pHist_ResponseStreamer.subscribed:
+                
+            pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+            pHist_ResponseStreamer.subscribed=True    
+    def load_random_prompts(self, tab_id):
         
+        if tab_id in     self.chat_history:
+            print(  'Clearing history load_random_prompts', tab_id)
+            del self.chat_history[tab_id]  
 
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
         # Create a chat completion request with streaming enabled
-       
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]  
         out=[]
+
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
         txt='\n'.join(split_text_into_chunks(text_prompt,80))
@@ -306,9 +317,34 @@ class Chat_ResponseStreamer:
            
             content = []
             
-            prompt=text_prompt
+        
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+            
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            do not start with "The resulting image is" in <fused_image>
+            {text_prompt}"""
+
+
             content.append({"type": "text", "text": prompt})
-            message_list = self.chat_history + [
+            message_list = chat_history + [
                 {
                     "role": 'user',
                     "content": content
@@ -346,8 +382,101 @@ class Chat_ResponseStreamer:
                 "content": ''.join(msg)
             }
             
-            self.chat_history.append(message_list[-1])  # Add user's message to history
-            self.chat_history.append(assistant_message)  # Add assistant's response to history
+            chat_history.append(message_list[-1])  # Add user's message to history
+            chat_history.append(assistant_message)  # Add assistant's response to history
+            
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out) 
+    
+    
+class Chat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.chat_history={}
+   
+        
+
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]         
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        try:
+
+            import base64
+            from anthropic import Anthropic
+
+
+            client = Anthropic()
+
+           
+            content = []
+            
+            prompt=text_prompt
+            content.append({"type": "text", "text": prompt})
+            message_list = chat_history + [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
+            pp(chat)
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
+            )
+            #print(response.content[0].text)
+
+            msg=[]
+            for chunk in stream:
+                #pp(chunk)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
+            
+            chat_history.append(message_list[-1])  # Add user's message to history
+            chat_history.append(assistant_message)  # Add assistant's response to history
             
             #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
@@ -411,7 +540,7 @@ class One_pChat_ResponseStreamer:
             from image descriptions and user image modification request.
             Here are the descriptions of the input image:
             '{descriptions_text}'
-            Here user request for input image modofication:
+            Here user request for input image modification:
             '{text_prompt}'
 
             Please create a vivid, detailed description of a single imaginary taking into account user request.
@@ -424,7 +553,7 @@ class One_pChat_ResponseStreamer:
 
 
             content.append({"type": "text", "text": prompt})
-            message_list = self.chat_history + [
+            message_list =  [
                 {
                     "role": 'user',
                     "content": content
@@ -462,9 +591,7 @@ class One_pChat_ResponseStreamer:
                 "content": ''.join(msg)
             }
             
-            self.chat_history.append(message_list[-1])  # Add user's message to history
-            self.chat_history.append(assistant_message)  # Add assistant's response to history
-            
+          
             #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
         except Exception as e:    
@@ -537,7 +664,7 @@ class pChat_ResponseStreamer:
 
 
             content.append({"type": "text", "text": prompt})
-            message_list = self.chat_history + [
+            message_list =  [
                 {
                     "role": 'user',
                     "content": content
@@ -575,9 +702,7 @@ class pChat_ResponseStreamer:
                 "content": ''.join(msg)
             }
             
-            self.chat_history.append(message_list[-1])  # Add user's message to history
-            self.chat_history.append(assistant_message)  # Add assistant's response to history
-            
+
             #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
         except Exception as e:    
@@ -604,7 +729,7 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         self.SetWrapMode(stc.STC_WRAP_WORD)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'woman pinup pin-up nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
+        python_keywords = 'woman tryzub pinup pin-up nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
 
 
         self.SetKeyWords(0, python_keywords)

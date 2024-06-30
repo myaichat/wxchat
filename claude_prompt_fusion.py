@@ -75,11 +75,11 @@ if 0:
         Claude_AnthropicVision_Chat_InputPanel
 
 if 0:
-    from include.Prompt.Google_Gemma_Prompt import  ChatDisplayNotebookPanel, \
+    from include.Prompt.Anthropic_Claude_Prompt import  ChatDisplayNotebookPanel, \
         Copilot_InputPanel, Copilot_DisplayPanel, Chat_InputPanel
 
 if 1:
-    import include.Prompt.Google_Gemma_Prompt as Prompt_Infusion_Google_Gemma
+    import include.Prompt.Anthropic_Claude_Prompt as Prompt_Infusion_Anthropic_Claude
         
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -780,7 +780,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Gemma Prompt Infusion')
+        self.frame = MyFrame(f'Anthropic Claude Prompt Infusion')
         return True
 
 if __name__ == '__main__':

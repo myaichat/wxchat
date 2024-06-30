@@ -1,6 +1,7 @@
-
+#https://aistudio.google.com/app/prompts/new_chat?model=gemma-2-27b-it
 import wx
 import wx.stc as stc
+import wx.adv
 import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os
@@ -2881,7 +2882,13 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
         self.askButton = wx.Button(self, label='Ask')
         self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
 
-
+        # Create a HyperlinkCtrl
+        
+        self.hyperlink = wx.adv.HyperlinkCtrl(self, id=wx.ID_ANY, label="AiStudio", url="https://aistudio.google.com/app/prompts/new_chat?model=gemma-2-27b-it")
+        
+        # Bind the EVT_HYPERLINK event to an event handler
+        self.hyperlink.Bind(wx.adv.EVT_HYPERLINK, self.onHyperlinkClick)
+        
 
         askSizer = wx.BoxSizer(wx.HORIZONTAL)
         askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
@@ -2890,7 +2897,7 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
         askSizer.Add(pause_panel, 0, wx.ALL)
         Base_InputPanel_Google_Gemma.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
-
+        askSizer.Add(self.hyperlink, 0, wx.ALIGN_CENTER)
         self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
         if 1:
             q= apc.chats[self.tab_id].question
@@ -2924,6 +2931,11 @@ class Gemma_Google_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_Inpu
             Gemma_Google_Copilot_InputPanel.subscribed=True
         wx.CallAfter(self.inputCtrl.SetFocus)
         self.rs={}
+    def onHyperlinkClick(self, event):
+        # Custom action when the hyperlink is clicked
+        # For example, open the URL in a web browser
+        import webbrowser
+        webbrowser.open(self.hyperlink.GetURL())        
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask copilot {tab_id}:')

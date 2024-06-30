@@ -147,7 +147,7 @@ templates:
 
     - vendor: 'Gemma'
       chat_type: 'Copilot'
-      streamer_name: 'Copilot_History_FlashAttn'
+      streamer_name: 'Copilot_History_FlashAttn_Sys'
       name: 'Copilot'
       model: 'google/gemma-2-9b-it'
       system: SYSTEM_CHATTY
@@ -227,6 +227,24 @@ templates:
       model: 'google/gemma-2-9b-it'
       system: 'SYSTEM_GENERAL'
       question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Hist_Full'
+      name: 'Chat++'
+      
+      model: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+    - vendor: 'Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'NoHist_Full'
+      name: 'Chat++'
+      
+      model: 'google/gemma-2-9b-it'
+      system: 'SYSTEM_GENERAL'
+      question: 'Write a function that checks if a year is a leap year. Just code, no explanation needed.'
+
 
 
 

@@ -664,7 +664,7 @@ Let's get coding!"""},
 
         return ''.join(out)  
 
-class Copilot_History_FlashAttn_ResponseStreamer:
+class Copilot_History_FlashAttn_Sys_ResponseStreamer:
     subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
@@ -2090,7 +2090,227 @@ class Hist_Flash_ResponseStreamer:
             "human": human_message,
             "ai": decoded_response
         })
-    
+
+class Hist_Full_ResponseStreamer:
+    subscribed = False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.chat_history = {}
+        self.tokenizer = {}
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                #torch_dtype=torch.bfloat16,
+                cache_dir="./cache",
+                trust_remote_code=True,
+                #low_cpu_mem_usage=True,
+                #attn_implementation="flash_attention_2"
+            )
+           
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history = self.chat_history[receiving_tab_id]
+        out = []
+        from os.path import isfile
+        chat = apc.chats[receiving_tab_id]
+        txt = '\n'.join(split_text_into_chunks(text_prompt, 80))
+        
+        try:
+            start = time.time()
+            apc.stream_start = time.time()
+           
+            model_id = DEFAULT_MODEL
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            tokenizer = self.get_tokenizer(model_id)
+            model = self.get_model(model_id)
+
+            # Prepare input with chat history
+            input_text = self.prepare_input_with_history(text_prompt, chat_history)
+            input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
+
+            logits_processor = LogitsProcessorList()
+            logits_processor.append(StreamProcessor(tokenizer, model, receiving_tab_id))
+
+            outputs = model.generate(
+                **input_ids,
+                logits_processor=logits_processor,
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=1.0,
+                top_p=0.95,
+                top_k=50
+            )
+
+            print("\nStreaming:", time.time() - logits_processor[0].start)
+            print("\nTotal:", time.time() - start)
+
+            # Update chat history
+            self.update_chat_history(receiving_tab_id, text_prompt, outputs)
+
+        except Exception as e:    
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
+            raise
+
+        if logits_processor[0].generated_text:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def prepare_input_with_history(self, text_prompt, chat_history):
+        # Prepare input text with chat history
+        history_text = ""
+        for entry in chat_history:
+            history_text += f"Human: {entry['human']}\nAI: {entry['ai']}\n\n"
+        return f"{history_text}Human: {text_prompt}\nAI:"
+
+    def update_chat_history(self, tab_id, human_message, ai_response):
+        # Update chat history for the given tab
+        chat=apc.chats[tab_id]
+        tokenizer=self.tokenizer[chat.model]
+        decoded_response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        self.chat_history[tab_id].append({
+            "human": human_message,
+            "ai": decoded_response
+        })
+
+class NoHist_Full_ResponseStreamer:
+    subscribed = False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.chat_history = {}
+        self.tokenizer = {}
+    def get_model(self, model_id):
+        dtype = torch.bfloat16
+        if model_id not in self.model:
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                #quantization_config=quantization_config,
+                device_map="auto",
+                #torch_dtype=torch.bfloat16,
+                cache_dir="./cache",
+                trust_remote_code=True,
+                #low_cpu_mem_usage=True,
+                #attn_implementation="flash_attention_2"
+            )
+           
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Model already loaded")
+        return self.tokenizer[model_id]
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id):
+        # Create a chat completion request with streaming enabled
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history = self.chat_history[receiving_tab_id]
+        out = []
+        from os.path import isfile
+        chat = apc.chats[receiving_tab_id]
+        txt = '\n'.join(split_text_into_chunks(text_prompt, 80))
+        
+        try:
+            start = time.time()
+            apc.stream_start = time.time()
+           
+            model_id = DEFAULT_MODEL
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
+
+
+            tokenizer = self.get_tokenizer(model_id)
+            model = self.get_model(model_id)
+
+            # Prepare input with chat history
+            input_text = self.prepare_input_with_history(text_prompt, chat_history)
+            input_ids = tokenizer(input_text, return_tensors="pt").to("cuda")
+
+            logits_processor = LogitsProcessorList()
+            logits_processor.append(StreamProcessor(tokenizer, model, receiving_tab_id))
+
+            outputs = model.generate(
+                **input_ids,
+                logits_processor=logits_processor,
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=1.0,
+                top_p=0.95,
+                top_k=50
+            )
+
+            print("\nStreaming:", time.time() - logits_processor[0].start)
+            print("\nTotal:", time.time() - start)
+
+            # Update chat history
+            self.update_chat_history(receiving_tab_id, text_prompt, outputs)
+
+        except Exception as e:    
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            print(f"An error occurred: {e}")
+            raise
+
+        if logits_processor[0].generated_text:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def prepare_input_with_history(self, text_prompt, chat_history):
+        # Prepare input text with chat history
+        history_text = ""
+        for entry in chat_history:
+            history_text += f"Human: {entry['human']}\nAI: {entry['ai']}\n\n"
+        return f"{history_text}Human: {text_prompt}\nAI:"
+
+    def update_chat_history(self, tab_id, human_message, ai_response):
+        # Update chat history for the given tab
+        chat=apc.chats[tab_id]
+        tokenizer=self.tokenizer[chat.model]
+        decoded_response = tokenizer.decode(ai_response[0], skip_special_tokens=True)
+        self.chat_history[tab_id]=[]
+        
+
 class NoHist_8bit_ResponseStreamer:
 
     subscribed=False

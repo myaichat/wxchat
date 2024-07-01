@@ -1,3 +1,3 @@
 git add .
 git commit -m "%1"
-git push -u origin claude_prompt_fusion
+git push -u origin gemma_prompt_fusion

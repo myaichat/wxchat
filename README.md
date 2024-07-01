@@ -16,7 +16,7 @@ wxPython UI for inference API demo
 
 
 
-# Vision
+# Vision/Image Infusion
 wxPython UI for Vision API demo
 
 | Vendor   | Model   | Vision | Config | Usage|Info | 

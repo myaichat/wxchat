@@ -1,6 +1,6 @@
 # Chat/Copilot
 wxPython UI for inference API demo
-| Vendor   | Model   | Chat/Copilot | Config | Useage|Info | 
+| Vendor   | Model   | Chat/Copilot | Config | Usage|Info | 
 |------------|------------|------------|------------|------------|------------|
 | Google AI| PaLM 2| [Source](https://github.com/myaichat/wxchat/blob/google_palm_copilot/google_palm_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/@alexbuzunov/introducing-palm-2-copilot-your-google-ai-powered-coding-assistant-1dddbf4fc1d0)|[]()|
 | Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_copilot/phi3_copilot.py)| []()| [Medium](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|[CookBook](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|
@@ -19,7 +19,7 @@ wxPython UI for inference API demo
 # Vision
 wxPython UI for Vision API demo
 
-| Vendor   | Model   | Vision | Config | Useage|Info | 
+| Vendor   | Model   | Vision | Config | Usage|Info | 
 |------------|------------|------------|------------|------------|------------|
 | Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/gpt4_vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
 | Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
@@ -32,7 +32,7 @@ wxPython UI for Vision API demo
 # Prompt Infusion
 wxPython UI for Prompt Infusion API demo
 
-| Vendor   | Model   | Vision | Config | Useage|Info | 
+| Vendor   | Model   | Vision | Config | Ueage|Info | 
 |------------|------------|------------|------------|------------|------------|
 | Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_prompt_fusion/claude_prompt_fusion.py)| []()| [Medium](https://medium.com/p/4bd85eb997ec), []()|[]()|
 
@@ -43,7 +43,7 @@ wxPython UI for Prompt Infusion API demo
 # Image Generation
 Image Generation demo UI using wxpython
 
-| Vendor   | Model   | Image Generation | Config | Useage|Info | 
+| Vendor   | Model   | Image Generation | Config | Usage|Info | 
 |------------|------------|------------|------------|------------|------------|
 | OpenAI| dall-e-3 | [Source](https://github.com/myaichat/wxchat/blob/create_dalee_image/image/create_dalee_image/7awx_any.py)| []()| [Medium](https://medium.com/p/70f457c2e851), [YouTube](https://www.youtube.com/watch?v=QlUF6PXgLOo&t=36s)|[]()|
 

@@ -9,7 +9,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Vision.Base.Base_InputPanel_Anthropic_Claude import Base_InputPanel_Anthropic_Claude
+from include.Prompt.Base.Base_InputPanel_Anthropic_Claude import Base_InputPanel_Anthropic_Claude
 
 import base64
 import requests

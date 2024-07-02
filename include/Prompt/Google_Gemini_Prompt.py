@@ -9,11 +9,11 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_OpenAI_Gpt4 import Base_InputPanel_OpenAI_Gpt4
+from include.Prompt.Base.Base_InputPanel_Google_Gemini import Base_InputPanel_Google_Gemini
 
 import base64
 import requests
-import openai
+#import openai
 
 from pubsub import pub
 from pprint import pprint as pp 
@@ -28,9 +28,21 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 
-DEFAULT_MODEL='gpt-4o'
+DEFAULT_MODEL='models/gemini-1.5-flash'
+model_list=[
+            'models/gemini-1.0-pro', 'models/gemini-1.0-pro-001', 'models/gemini-1.0-pro-latest', 
+            'models/gemini-1.0-pro-vision-latest', 
+            'models/gemini-1.5-flash', 'models/gemini-1.5-flash-001',
+            'models/gemini-1.5-flash-latest', 
+            'models/gemini-1.5-pro', 'models/gemini-1.5-pro-001', 
+            'models/gemini-1.5-pro-latest',
+            'models/gemini-pro', 'models/gemini-pro-vision', 
+            'models/gemini-pro-vision-latest', 
+            'models/gemma-2-27b-it',
+            'models/gemma-2-27b-it-001',
+            'models/gemma-2-27b-it-latest',
+            ]
 
-model_list=['gpt-4o', 'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-vision-preview']
 dir_path = 'template'
 
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -38,168 +50,354 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
-
-
-
-class Hist_Chat_ResponseStreamer:
+import vertexai
+from vertexai.language_models import TextGenerationModel
+class NoHistory_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
-        
+        self.model={}
+        self.tokenizer={}
 
-        # Initialize the client
-        self.client = openai.OpenAI()
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
         # Create a chat completion request with streaming enabled
-        #pp(chatHistory)
+       
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        txt='\n'.join(split_text_into_chunks(text_prompt,80))
-        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-        start = time.time()
-        content = []
+        #pp(receiveing_tab_id)
+        #pp(chat)
+        #header = fmt([[f'Question']],[])
+        #pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
+        header = fmt([[f'History OFF']],[])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)        
+        try:
+
+      
+      
+            import vertexai
+            from vertexai.language_models import TextGenerationModel
 
 
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+            # Load a example model with system instructions
+            from vertexai.generative_models import (
+                GenerationConfig,
+                GenerativeModel,
+                HarmBlockThreshold,
+                HarmCategory,
+                Part,
+            )
+
+            #MODEL_ID = chat.model  # @param {type:"string"}
+            #pp(chat)
+            #model = GenerativeModel(MODEL_ID)            
+            model = GenerativeModel(
+                chat.model,
+                system_instruction=[
+                    chat.system_prompt
+                    
+                ],
+            )
+
+            # Set model parameters
+            generation_config = GenerationConfig(
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                top_k=float(chat.top_k),
+                candidate_count=1,
+                max_output_tokens=int(chat.max_tokens),
+            )
+
+            # Set safety settings
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            }
+
+            prompt = f"""
+            User input: {text_prompt}
+            Answer:
+            """
+
+            # Set contents to send to the model
+            contents = [prompt]
+
+            # Counts tokens
+            print(model.count_tokens(contents))
+
+            # Prompt the model to generate content
+            stream = model.generate_content(
+                contents,
+                generation_config=generation_config,
+                safety_settings=safety_settings,
+                stream=True,
+            )
+
+            # Print the model response
            
-        chatHistory[receiveing_tab_id] += [{"role": "user", "content": text_prompt}]
-        response = self.client.chat.completions.create(
-            model=chat.model,
-            messages=chatHistory[receiveing_tab_id],
-            stream=True
-        )
-        out = []
-        # Print each response chunk as it arrives
-        stop_output=apc.stop_output[receiveing_tab_id]
-        pause_output=apc.pause_output[receiveing_tab_id]
-        for chunk in response:
-            if stop_output[0] or pause_output[0] :
+
+            for chunk in stream:
+                print(chunk.text, end='', flush=True)
+                out.append(chunk.text)
+                pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
                 
-                if stop_output[0] :
-                    print('\n-->Stopped\n')
-                    pub.sendMessage("stopped")
-                    break
-                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                else:
-                    while pause_output[0] :
-                        time.sleep(0.1)
-                        if stop_output[0]:
-                            print('\n-->Stopped\n')
-                            pub.sendMessage("stopped")
-                            break
-                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                                            
-            if hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                #print(content, end='', flush=True)
-                #pp(content)
-                if content:
-                    out.append(content)
-                    #print(content, receiveing_tab_id)
-                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
+                if 0 and hasattr(chunk, 'usage_metadata'):
+                    print("Usage Metadata:", chunk.usage_metadata)
+                    print(f"\nFinish reason:\n{chunk.candidates[0].finish_reason}")
+                    print(f"\nSafety settings:\n{chunk.candidates[0].safety_ratings}")                    
+
+
+
+            #print(f'\nUsage metadata:\n{stream.to_dict().get("usage_metadata")}')
+
+
+
+
 
         
-        print("\nElapsed:", time.time() - start)
-        log(f'\nElapsed: {time.time() - start}')
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
 
         if out:
-            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)    
-
-class Hist_Infuser_ResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        
-
-        # Initialize the client
-        self.client = openai.OpenAI()
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
-        # Create a chat completion request with streaming enabled
-        #pp(chatHistory)
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        txt='\n'.join(split_text_into_chunks(text_prompt,80))
-        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-        start = time.time()
-        content = []
-
-
-
-        image_descriptions=[]
-        for pfn in prompt_path:
-            with open(pfn, 'r') as f:
-                image_descriptions.append(f.read()) 
-
-        descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
-
-
-
-        prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
-        Here are the descriptions of the input images:
-
-        {descriptions_text}
-
-        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
-        Focus on how the elements from each description interact and blend together. 
-        Be specific about colors, shapes, textures, and composition. 
-        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
-
-        Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
-        {text_prompt}"""
-           
-        chatHistory[receiveing_tab_id] += [{"role": "user", "content": prompt}]
-        response = self.client.chat.completions.create(
-            model=chat.model,
-            messages=chatHistory[receiveing_tab_id],
-            stream=True
-        )
-        out = []
-        # Print each response chunk as it arrives
-        stop_output=apc.stop_output[receiveing_tab_id]
-        pause_output=apc.pause_output[receiveing_tab_id]
-        for chunk in response:
-            if stop_output[0] or pause_output[0] :
-                
-                if stop_output[0] :
-                    print('\n-->Stopped\n')
-                    pub.sendMessage("stopped")
-                    break
-                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                else:
-                    while pause_output[0] :
-                        time.sleep(0.1)
-                        if stop_output[0]:
-                            print('\n-->Stopped\n')
-                            pub.sendMessage("stopped")
-                            break
-                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                                            
-            if hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                #print(content, end='', flush=True)
-                #pp(content)
-                if content:
-                    out.append(content)
-                    #print(content, receiveing_tab_id)
-                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
-
-        
-        print("\nElapsed:", time.time() - start)
-        log(f'\nElapsed: {time.time() - start}')
-
-        if out:
-            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)
-    
-        
+
+
+class History_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.tokenizer = {}
+        self.chat_history = {}  # Dictionary to store chat history for each tab
+
+    #def stream_response(self, text_prompt, receiving_tab_id, image_path):
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id, prompt_path):
+        # Initialize chat history for the tab if it doesn't exist
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history=self.chat_history[receiving_tab_id]
+        out = []
+        chat = apc.chats[receiving_tab_id]
+
+        try:
+            import vertexai
+            from vertexai.language_models import TextGenerationModel
+            from vertexai.generative_models import (
+                GenerationConfig,
+                GenerativeModel,
+                HarmBlockThreshold,
+                HarmCategory,
+                Part,
+                Content,
+            )
+
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION = "us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+            #MODEL_ID = chat.model
+            #model = GenerativeModel(MODEL_ID)
+            pp(chat)
+   
+            model = GenerativeModel(
+                chat.model,
+                system_instruction=[chat.system_prompt],
+            )
+
+            generation_config = GenerationConfig(
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                top_k=float(chat.top_k),
+                candidate_count=1,
+                max_output_tokens=int(chat.max_tokens),
+            )
+
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            }
+
+            # Create the chat history content ensuring alternation between user and model
+            history_content = []
+            for entry in self.chat_history[receiving_tab_id]:
+                history_content.append(Content(role="user", parts=[Part.from_text(entry['prompt'])]))
+                history_content.append(Content(role="model", parts=[Part.from_text(entry['response'])]))
+
+            # Add the current user input to the history
+            #history_content.append(Content(role="user", parts=[Part.from_text(text_prompt)]))
+
+            # Start a new chat with the history
+            print('history_content', len(history_content))
+            chat2 = model.start_chat(history=history_content)
+
+            # Send the message and receive the response
+            response = chat2.send_message(text_prompt, stream=True)
+            response_text=[]
+            for chunk in response:
+
+                out.append(chunk.text)
+                response_text.append(chunk.text)
+                pub.sendMessage('chat_output', message=chunk.text   , tab_id=receiving_tab_id)
+
+            # Update chat history with the new interaction
+            #history_content.append(Content(role="model", parts=[Part.from_text(response_text)]))
+            self.chat_history[receiving_tab_id].append({
+                'prompt': text_prompt,
+                'response': ''.join(response_text)
+            })
+
+        except Exception as e:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            return ''
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def get_chat_history(self, tab_id):
+        return self.chat_history.get(tab_id, [])
+
+
+
+class History_Infuser_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model = {}
+        self.tokenizer = {}
+        self.chat_history = {}  # Dictionary to store chat history for each tab
+
+    #def stream_response(self, text_prompt, receiving_tab_id, image_path):
+    def stream_response(self, text_prompt, chatHistory, receiving_tab_id, prompt_path):
+        # Initialize chat history for the tab if it doesn't exist
+        if receiving_tab_id not in self.chat_history:
+            self.chat_history[receiving_tab_id] = []
+        chat_history=self.chat_history[receiving_tab_id]
+        out = []
+        chat = apc.chats[receiving_tab_id]
+
+        try:
+            import vertexai
+            from vertexai.language_models import TextGenerationModel
+            from vertexai.generative_models import (
+                GenerationConfig,
+                GenerativeModel,
+                HarmBlockThreshold,
+                HarmCategory,
+                Part,
+                Content,
+            )
+
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION = "us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+            #MODEL_ID = chat.model
+            #model = GenerativeModel(MODEL_ID)
+            pp(chat)
+   
+            model = GenerativeModel(
+                chat.model,
+                system_instruction=[chat.system_prompt],
+            )
+
+            generation_config = GenerationConfig(
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                top_k=float(chat.top_k),
+                candidate_count=1,
+                max_output_tokens=int(chat.max_tokens),
+            )
+
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            }
+
+            # Create the chat history content ensuring alternation between user and model
+            history_content = []
+            for entry in self.chat_history[receiving_tab_id]:
+                history_content.append(Content(role="user", parts=[Part.from_text(entry['prompt'])]))
+                history_content.append(Content(role="model", parts=[Part.from_text(entry['response'])]))
+
+            # Add the current user input to the history
+            #history_content.append(Content(role="user", parts=[Part.from_text(text_prompt)]))
+
+            # Start a new chat with the history
+            print('history_content', len(history_content))
+            chat2 = model.start_chat(history=history_content)
+
+            # Send the message and receive the response
+
+
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            {text_prompt}"""
+
+            response = chat2.send_message(prompt, stream=True)
+            response_text=[]
+            for chunk in response:
+
+                out.append(chunk.text)
+                response_text.append(chunk.text)
+                pub.sendMessage('chat_output', message=chunk.text   , tab_id=receiving_tab_id)
+
+            # Update chat history with the new interaction
+            #history_content.append(Content(role="model", parts=[Part.from_text(response_text)]))
+            self.chat_history[receiving_tab_id].append({
+                'prompt': prompt,
+                'response': ''.join(response_text)
+            })
+
+        except Exception as e:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            return ''
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiving_tab_id)
+
+        return ''.join(out)
+
+    def get_chat_history(self, tab_id):
+        return self.chat_history.get(tab_id, [])
+
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
@@ -789,7 +987,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI_Gpt4):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Gemini):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -855,7 +1053,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Google_Gemini.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -866,7 +1064,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Google_Gemini.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1292,7 +1490,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt4):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Gemini):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1305,7 +1503,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         #pp(chat)
         chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        model_names = model_list  # Add more model names as needed
         self.chat_type=chat.chat_type
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
         self.model_dropdown.SetValue(DEFAULT_MODEL)
@@ -1326,11 +1524,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Google_Gemini.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Google_Gemini.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        
@@ -1398,6 +1596,8 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         # You can add more code here to do something with the selected model
 
         # Continue processing the event
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model
         event.Skip()
 
     def _RestoreQuestionForTabId(self, tab_id):

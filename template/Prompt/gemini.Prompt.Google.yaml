@@ -2,31 +2,52 @@ templates:
   workspace:
 
       name: 'Prompt_Infusion'
-      vendor: 'Anthropic_Claude'
+      vendor: 'Google_Gemini'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    GoogleGemma:
+    Google_Gemini:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
     Chat:
-    - vendor: 'Anthropic_Claude'
+    - vendor: 'Google_Gemini'
       chat_type: 'Chat'
-      streamer_name: 'Chat'
-      name: 'Ukrainian Art'
-      system: 'SYSTEM_GENERAL'
-      question: 'Come up with amazing prompt for image generation. add intricate details. impress me. add ukrainian essence to it.'  
-    
-    
+      streamer_name: 'NoHistory'
+      name: 'Scones'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM'
+      question: |
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. use these as inspiration:
+        inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
+
+
+    - vendor: 'Google_Gemini'
+      chat_type: 'Chat'
+      streamer_name: 'History'
+      name: 'Chat'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM'
+      question: |
+        Come up with fused prompt for image generation. add intricate details.
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
+        Just show one promt in <prompt> tags. 
+
+
+
+
     Copilot:
 
-    - vendor: 'Anthropic_Claude'
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '1'
-      history: false
-      streamer_name: 'One_pChat'
+      name: '1'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 1
+      model: 'models/gemini-1.5-flash'
       system: 'SYSTEM_ONE'
       question:  |
         Provide a detailed and artistically 
@@ -36,146 +57,86 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Anthropic_Claude'
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '1 :-)'
-      history: false
-      streamer_name: 'pChat'
-      num_of_prompts: 1
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '2'
-      history: false
-      streamer_name: 'pChat'
+      name: '2'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 2
-      system: 'SYSTEM_CLAUDE'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
         rich description of the image provided by the user. 
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        the image to life in the reader's mind.     
 
-    - vendor: 'Anthropic_Claude'
+
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '3'
-      history: false
-      streamer_name: 'pChat'
+      name: '3'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 3
-      system: 'SYSTEM_CLAUDE'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
         rich description of the image provided by the user. 
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        the image to life in the reader's mind.     
 
 
-    - vendor: 'Anthropic_Claude'
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '4'
-      history: false
-      streamer_name: 'pChat'
+      name: '4'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 4
-      system: 'SYSTEM_CLAUDE'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM_MULTI'
       question:  |
-        add ukrainian essence 
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
 
-    - vendor: 'Anthropic_Claude'
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '5'
-      history: false
-      streamer_name: 'pChat'
+      name: '5'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 5
-      system: 'SYSTEM_CLAUDE'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM_MULTI'
       question:  |
-        add ukrainian essence 
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
 
-    - vendor: 'Anthropic_Claude'
+
+    - vendor: 'Google_Gemini'
       chat_type: 'Copilot'
-      name: '1 :=)'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 1
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '2'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 2
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '3'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 3
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '4'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 4
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '5'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 5
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '10'
-      history: false
-      streamer_name: 'pHist'
+      name: '10'      
+      streamer_name: 'History_Infuser'
       num_of_prompts: 10
-      system: 'SYSTEM_CLAUDE'
+      model: 'models/gemini-1.5-flash'
+      system: 'SYSTEM_MULTI'
       question:  |
-         do not mention fusion in <fused_image> section
-
-    - vendor: 'Anthropic_Claude'
-      chat_type: 'Copilot'
-      name: '20'
-      history: false
-      streamer_name: 'pHist'
-      num_of_prompts: 20
-      system: 'SYSTEM_CLAUDE'
-      question:  |
-         do not mention fusion in <fused_image> section
-
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
   System:
     Chat:
-      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."
       SYSTEM_GENERAL: |
         You are general knowledge expert   
       PROMPT: |

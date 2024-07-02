@@ -81,7 +81,7 @@ if 0:
 
     
 if 1:
-    import include.Prompt.OpenAI_Gpt4_Prompt as Prompt_Infusion_OpenAI_Gpt4
+    import include.Prompt.Google_Gemini_Prompt as Prompt_Infusion_Google_Gemini
         
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -782,7 +782,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Gpt4 Prompt Infuser')
+        self.frame = MyFrame(f'Google Gemini Prompt Fuser')
         return True
 
 if __name__ == '__main__':

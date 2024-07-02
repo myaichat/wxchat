@@ -10,25 +10,102 @@ from include.Common import HtmlDialog, Base_InputPanel, ChatHistoryDialog, dict2
 
 
 
-class Base_InputPanel_Google_Gemma(Base_InputPanel):
+class ShowSystemPrompts_Chat(wx.Dialog):
+    def __init__(self, parent, tab_id, chat_history):
+        super(ShowSystemPrompts_Chat, self).__init__(parent, title="Chat System Prompts", size=(600, 400))
+        self.tab_id = tab_id
+        self.chat_history = chat_history
+        
+        # Create the ListCtrl
+        self.listCtrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.BORDER_SUNKEN)
+        
+        # Add columns
+        self.listCtrl.InsertColumn(0, 'Name', width=100)
+        self.listCtrl.InsertColumn(1, 'Content', width=450)
+        
+        # Populate the ListCtrl with chat history
+        self.populate_list_ctrl()
+        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_MULTILINE, size=(580, 100))  # Adjust size and style as needed
+        
+        # Create a close button
+        useButton = wx.Button(self, label="Use Prompt")
+        useButton.Bind(wx.EVT_BUTTON, self.on_use)        
+        closeButton = wx.Button(self, label="Close")
+        closeButton.Bind(wx.EVT_BUTTON, self.on_close)
+        
+        # Layout
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(self.listCtrl, 1, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(self.inputCtrl, 0, wx.EXPAND | wx.ALL, 10) 
+        
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        h_sizer.AddStretchSpacer(1)
+        h_sizer.Add(useButton, 0, wx.ALL, 10)
+        h_sizer.Add(closeButton, 0,  wx.ALL, 10)
+        sizer.Add(h_sizer, 0, wx.EXPAND | wx.ALL, 10) 
+
+        self.SetSizer(sizer)
+        # Bind the event for row selection
+        self.listCtrl.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_row_click)
+        
+        # Bind the event for double click or Enter key
+        self.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_row_activated)        
+
+    def on_row_click(self, event):
+        # Get the selected row index
+        selected_index = event.Index
+        
+        # Get the content of the selected row
+        role = self.listCtrl.GetItemText(selected_index, col=0)
+        content = self.listCtrl.GetItemText(selected_index, col=1)
+        self.inputCtrl.SetValue(content)
+        # Process the row click
+        # For example, show the content in a message dialog
+        #wx.MessageBox(f"Role: {role}\nContent: {content}", "Row Clicked")
+
+    def on_row_activated(self, event):
+        # This method will be called when a row is double-clicked or Enter key is pressed on a row
+        self.on_row_click(event)
+        
+    def populate_list_ctrl(self):
+        chat= apc.chats[self.tab_id]
+
+        for name, content in apc.all_system_templates[chat.workspace].Chat.items():
+            
+            index = self.listCtrl.InsertItem(self.listCtrl.GetItemCount(), name)
+            prompt=evaluate(content, dict2(question=chat.question))
+            self.listCtrl.SetItem(index, 1, prompt) 
+
+           
+
+    def on_use(self, event):
+        chat=apc.chats[self.tab_id]
+        #print(self.inputCtrl.GetValue())
+        chat.system_prompt=self.inputCtrl.GetValue()
+        pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
+        self.Close() 
+    def on_close(self, event):
+        self.Close()         
+
+
+
+class Base_InputPanel_Google_Gemini(Base_InputPanel):
     def get_chat_streamer(self, tab_id, glbs):
 
         chat=apc.chats[tab_id]
-        pp(chat)
-      
-        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
+
+        if chat.get('history',0)==0:
+            streamer_name = f'NoHistory_ResponseStreamer'
+        else:
+            streamer_name = f'History_ResponseStreamer'
         if streamer_name not in self.rs:
 
             assert streamer_name in glbs, streamer_name
-            #print(f'\t\Creating streamer:', streamer_name)
+            print(f'\t\Creating streamer:', streamer_name)
             cls= glbs[streamer_name]
             # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
             self.rs[streamer_name] = cls ()
-            print(f'\t\Created streamer:', streamer_name)
-        else:
-            print(f'\t\Reusing streamer:', streamer_name)
-        return self.rs[streamer_name]  
-            
+        return self.rs[streamer_name]    
     def AddButtons_Level_1(self, h_sizer):
         if 1: #second row
 
@@ -76,41 +153,33 @@ class Base_InputPanel_Google_Gemma(Base_InputPanel):
         return chunks
 
 
-    def AddButtons_Level_2(self, h_sizer_1):
+    def AddButtons_Level_2(self, v_sizer):
         if 1: #second row
 
 
-            #h_sizer_1 = wx.BoxSizer(wx.HORIZONTAL)
+            h_sizer_1 = wx.BoxSizer(wx.HORIZONTAL)
             chat=apc.chats[self.tab_id] 
-            self.max_tokens_dropdown = wx.ComboBox(self, choices=['100', '150','300','450', '600', '750', '1000', '2000', '2048', '4096', '8192'], style=wx.CB_READONLY)
-            self.max_tokens_dropdown.SetValue('450')  # Default value
+            self.max_tokens_dropdown = wx.ComboBox(self, choices=['100', '150','300','450', '600', '750', '1000', '2000', '2048', '4096'], style=wx.CB_READONLY)
+            self.max_tokens_dropdown.SetValue('300')  # Default value
             self.max_tokens_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxTokensChange)
             chat.max_tokens = int(self.max_tokens_dropdown.GetValue())
 
-            self.do_sample_dropdown = wx.ComboBox(self, choices=['True', 'False'], style=wx.CB_READONLY)
-            self.do_sample_dropdown.SetValue('False')  # Default value
-            self.do_sample_dropdown.Bind(wx.EVT_COMBOBOX, self.OnDoSampleChange)
-            chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
-
-            self.temp_dropdown = wx.ComboBox(self, choices=['-1.0','0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9','0.95',  '1.0', '1.2', '2', '3'], style=wx.CB_READONLY)
+            self.temp_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9','0.95',  '1.0', '1.2'], style=wx.CB_READONLY)
             self.temp_dropdown.SetValue('0.8')  # Default value
             self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
             chat.temperature = float(self.temp_dropdown.GetValue()  )                         
             if 1:
-                self.top_p_dropdown = wx.ComboBox(self, choices=['-1.0','0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9', '0.95',  '1.0',  '1.1',], style=wx.CB_READONLY)
-                self.top_p_dropdown.SetValue('0.0')  # Default value
+                self.top_p_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9', '0.95',  '1.0',  '1.1',], style=wx.CB_READONLY)
+                self.top_p_dropdown.SetValue('0.95')  # Default value
                 self.top_p_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopPChange)
                 chat.top_p = float(self.top_p_dropdown.GetValue()  )
                 #top_k
-                self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '40',  '41'], style=wx.CB_READONLY)
-                self.top_k_dropdown.SetValue('1')  # Default value
+                self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '40'], style=wx.CB_READONLY)
+                self.top_k_dropdown.SetValue('40')  # Default value
                 self.top_k_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopKChange)
                 chat.top_k = int(self.top_k_dropdown.GetValue()  )     
 
-            self.use_cache_dropdown = wx.ComboBox(self, choices=['True', 'False'], style=wx.CB_READONLY)
-            self.use_cache_dropdown.SetValue('False')  # Default value
-            self.use_cache_dropdown.Bind(wx.EVT_COMBOBOX, self.OnUseCacheChange)
-            chat.use_cache = (self.use_cache_dropdown.GetValue() == 'True')
+
 
         
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
@@ -138,124 +207,6 @@ class Base_InputPanel_Google_Gemma(Base_InputPanel):
             dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))          
             sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
             sizer_0.Add(self.max_tokens_dropdown, 0, wx.ALIGN_CENTER)
-            h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
-
-
-            sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="do_sample")
-            dos.html_content="""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Increasing Artfulness with do_sample=True</title>
-</head>
-<body>
-    <h1>Increasing Artfulness with do_sample=True</h1>
-    
-    <p>When <code>do_sample=true</code>, the model uses stochastic decoding methods such as sampling with temperature, top-p, or top-k sampling. Here are several strategies to increase the artfulness of the output:</p>
-    
-    <h2>Strategies:</h2>
-    
-    <h3>1. Adjust Temperature:</h3>
-    <ul>
-        <li><strong>Description:</strong> Increasing the temperature value increases the randomness of the predictions, leading to more creative and diverse outputs.</li>
-        <li><strong>Example:</strong> Set <code>temperature=1.2</code> for more creativity.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2
-}
-    </pre>
-
-    <h3>2. Adjust Top-p (Nucleus Sampling):</h3>
-    <ul>
-        <li><strong>Description:</strong> Top-p sampling considers the smallest set of tokens whose cumulative probability exceeds the threshold p. Lowering top-p can make the output more focused, while increasing it can make it more diverse.</li>
-        <li><strong>Example:</strong> Set <code>top_p=0.9</code> to balance creativity and coherence.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "top_p": 0.9
-}
-    </pre>
-
-    <h3>3. Adjust Top-k:</h3>
-    <ul>
-        <li><strong>Description:</strong> Top-k sampling considers only the top k tokens. Increasing the value of k allows the model to consider a broader range of tokens, increasing diversity.</li>
-        <li><strong>Example:</strong> Set <code>top_k=100</code> for more diverse outputs.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "top_k": 100
-}
-    </pre>
-
-    <h3>4. Combine Strategies:</h3>
-    <ul>
-        <li><strong>Description:</strong> Combining temperature, top-p, and top-k adjustments can amplify their effects, leading to even more artful and creative outputs.</li>
-        <li><strong>Example:</strong> Use a combination of these parameters for maximum creativity.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2,
-  "top_p": 0.9,
-  "top_k": 100
-}
-    </pre>
-
-    <h3>5. Apply Repetition Penalty:</h3>
-    <ul>
-        <li><strong>Description:</strong> Using a repetition penalty discourages the model from repeating the same phrases or words, promoting more varied and interesting outputs.</li>
-        <li><strong>Example:</strong> Set <code>repetition_penalty=1.2</code>.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "repetition_penalty": 1.2
-}
-    </pre>
-
-    <h3>6. Adjust Length Penalty:</h3>
-    <ul>
-        <li><strong>Description:</strong> Tuning the length penalty can influence the length of the output, which can indirectly affect its creativity. A lower length penalty encourages longer outputs, while a higher penalty favors shorter ones.</li>
-        <li><strong>Example:</strong> Set <code>length_penalty=0.8</code> for longer, potentially more creative outputs.
-        </li>
-    </ul>
-    <pre>
-{
-  "do_sample": true,
-  "length_penalty": 0.8
-}
-    </pre>
-
-    <h2>Example Configuration Combining Multiple Strategies:</h2>
-    <pre>
-{
-  "do_sample": true,
-  "temperature": 1.2,
-  "top_p": 0.9,
-  "top_k": 100,
-  "repetition_penalty": 1.2,
-  "length_penalty": 0.8
-}
-    </pre>
-    
-</body>
-</html>
-
-"""        
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.do_sample_dropdown, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
@@ -479,7 +430,7 @@ class Base_InputPanel_Google_Gemma(Base_InputPanel):
                 sizer_0.Add(self.top_k_dropdown, 0, wx.ALIGN_CENTER)
                 h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
-            if 1:
+
                 sizer_0 = wx.BoxSizer(wx.VERTICAL)
                 dos = wx.StaticText(self, label="top_p")
                 
@@ -586,45 +537,12 @@ class Base_InputPanel_Google_Gemma(Base_InputPanel):
                 sizer_0.Add(self.top_p_dropdown, 0, wx.ALIGN_CENTER)
                 h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
-            sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="use_cache")
-            dos.html_content="""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meaning of use_cache</title>
-</head>
-<body>
-    <h1>use_cache=True</h1>
 
-<ul>
-<li><strong>1:</strong> The <code>use_cache</code> parameter in the <code>generate()</code> method controls whether the model should use the past key/value states (cache) for faster generation.
-
-</li><li><strong>2:</strong> When <code>use_cache</code> is set to <code>True</code>, the model will cache the key/value states generated during the decoding process. This means that at each generation step, the model doesn't need to recompute the attention scores for the previous tokens, as they are already stored in the cache. Instead, it can simply retrieve the cached states and use them for the current step, leading to faster generation.
-
-</li><li><strong>3:</strong> On the other hand, when <code>use_cache</code> is set to <code>False</code>, the model will not store the past key/value states and will recompute the attention scores at each generation step. This can be slower, especially for longer sequences, as the model needs to process the entire input sequence at each step.
-
-</li><li><strong>4:</strong> In general, setting <code>use_cache=True</code> can provide a significant speed-up during generation, especially for models with a large number of layers or when generating long sequences. However, it does come with a trade-off in terms of memory usage, as the cached states need to be stored in memory.
-
-</li></li><li><strong>5:</strong> In your code, <code>use_cache=True</code> is used to enable caching during the generation process, which can help speed up the generation of tokens using the custom streamer.
-
-<li><strong>6:</strong> It's worth noting that the <code>use_cache</code> parameter is only applicable to models that support caching, such as the <code>AutoModelForCausalLM</code> used in your code. Some models may not have this capability, in which case setting <code>use_cache=True</code> would have no effect.
-</li></ul>
-    
-</body>
-</html>
-
-"""        
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.use_cache_dropdown, 0, wx.ALIGN_CENTER)
-            h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
 
     
             
-            #v_sizer.Add(h_sizer_1, 0, wx.ALIGN_CENTER) 
+            v_sizer.Add(h_sizer_1, 0, wx.ALIGN_CENTER) 
     def OnClickDos(self, event):
         # Define your HTML content here. It could also be loaded from a file or a webpage.
         html_content = event.GetEventObject().html_content
@@ -650,7 +568,6 @@ enhancing the quality and coherence of the generated text.
         if self.tooltip:
             self.tooltip.Destroy()
             self.tooltip = None  # Reset the tooltip attribute to None
-
     def OnMaxTokensChange(self, event):
         # Get the selected do_sample value
         selected_value = self.max_tokens_dropdown.GetValue()
@@ -661,27 +578,7 @@ enhancing the quality and coherence of the generated text.
         print('OnMaxTokensChange',selected_value, self.tab_id)
         # Continue processing the event
         event.Skip()  
-
-    def OnDoSampleChange(self, event):
-        # Get the selected do_sample value
-        selected_do_sample = self.do_sample_dropdown.GetValue()
-
-        # Print the selected model
-        chat = apc.chats[self.tab_id]
-        chat.do_sample = (selected_do_sample == 'True')
-        print('OnDoSampleChange',selected_do_sample, self.tab_id)
-        # Continue processing the event
-        event.Skip()
-    def OnUseCacheChange(self, event):
-        # Get the selected do_sample value
-        selected_use_cache = self.use_cache_dropdown.GetValue()
-
-        # Print the selected model
-        chat = apc.chats[self.tab_id]
-        chat.use_cache = (selected_use_cache == 'True')
-        print('OnUseCacheChange',selected_use_cache, self.tab_id)
-        # Continue processing the event
-        event.Skip()
+ 
     def OnTopPChange(self, event):
         # Get the selected do_sample value
         selected_top_p = self.top_p_dropdown.GetValue()
@@ -750,17 +647,16 @@ enhancing the quality and coherence of the generated text.
             if 1:
 
                 if chat.get('top_p', None):
-                    #self.top_p_dropdown.Enable()
-                
+                 
                     self.top_p_dropdown.SetValue(str(chat.top_p))
                     
                     #wx.MessageBox(f"top_p {chat.top_p} {self.top_p_dropdown.GetValue()}", "top_p"   )
                 else:
                     chat.top_p= float(self.top_p_dropdown.GetValue())
 
-            if 1:    
+                
                 if chat.get('top_k', None):
-                    #self.top_k_dropdown.Enable()
+                    
                     self.top_k_dropdown.SetValue(str(chat.top_k))
                 else:
                     chat.top_k = int(self.top_k_dropdown.GetValue())
@@ -771,16 +667,3 @@ enhancing the quality and coherence of the generated text.
             else:
                 chat.temperature = float(self.temp_dropdown.GetValue())
 
-            if chat.get('do_sample', None) is not None:
-                
-                val = 'True' if chat.do_sample else 'False'
-                self.do_sample_dropdown.SetValue(val)
-            else:
-                chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
-
-            if chat.get('use_cache', None) is not None:
-                
-                val = 'True' if chat.use_cache else 'False'
-                self.use_cache_dropdown.SetValue(val)
-            else:
-                chat.use_cache = (self.use_cache_dropdown.GetValue() == 'True')

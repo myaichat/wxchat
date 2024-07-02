@@ -71,7 +71,8 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 
 
 ### Google: 
-[Sample browser](https://cloud.google.com/docs/samples)  [Gemma2 Config](https://medium.com/p/0d7dc430b72c))
+[Sample browser](https://cloud.google.com/docs/samples)  [Gemma2 Config](https://medium.com/p/0d7dc430b72c)    [GPrompt Gallery](https://console.cloud.google.com/vertex-ai/generative/prompt-gallery?_ga=2.197961389.362164277.1719958699-521879258.1717807561&project=spatial-flag-427113-n0) 
+
 
 
 

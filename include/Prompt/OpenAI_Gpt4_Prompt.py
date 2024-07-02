@@ -357,7 +357,7 @@ class PromptCtrl(StyledTextDisplay):
             print("Failed to load prompt.")
             return
         
-        self.AppendText(txt)
+        self.SetText(txt)
 
 class MyNotebookPromptPanel(wx.Panel):
     subscribed=False

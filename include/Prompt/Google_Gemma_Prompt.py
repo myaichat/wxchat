@@ -1427,7 +1427,7 @@ class Chat_Hist_4bit_ResponseStreamer:
                 with open(pfn, 'r') as f:
                     image_descriptions.append(f.read()) 
 
-            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:750]}" for i, desc in enumerate(image_descriptions)])
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:1000]}" for i, desc in enumerate(image_descriptions)])
             
 
 
@@ -1565,7 +1565,7 @@ class Chat_Hist_Flash_ResponseStreamer:
                 with open(pfn, 'r') as f:
                     image_descriptions.append(f.read()) 
 
-            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:750]}" for i, desc in enumerate(image_descriptions)])
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:1000]}" for i, desc in enumerate(image_descriptions)])
             
 
 
@@ -1702,7 +1702,7 @@ class Chat_Hist_Full_ResponseStreamer:
                 with open(pfn, 'r') as f:
                     image_descriptions.append(f.read()) 
 
-            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:750]}" for i, desc in enumerate(image_descriptions)])
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc[:1000]}" for i, desc in enumerate(image_descriptions)])
             
 
 
@@ -1928,8 +1928,8 @@ class PromptCtrl(StyledTextDisplay):
         if txt is None:
             print("Failed to load prompt.")
             return
-        
-        self.AppendText(txt)
+        #set text
+        self.SetText(txt)
 
 class MyNotebookPromptPanel(wx.Panel):
     subscribed=False

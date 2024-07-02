@@ -1,0 +1,285 @@
+templates:
+  workspace:
+
+      name: 'PromptInfusion'
+      vendor: 'GoogleGemma'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    GoogleGemma:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+    Chat:
+    - vendor: 'GoogleGemma'
+      chat_type: 'Chat'
+      streamer_name: 'Chat'
+      name: 'Ukrainian Art'
+      system: 'SYSTEM_GENERAL'
+      question: 'Come up with amazing prompt for image generation. add intricate details. impress me. add ukrainian essence to it.'  
+    Copilot:
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '1'
+      history: false
+      streamer_name: 'NoHist'
+      num_of_images: 1
+      system: 'SYSTEM_CLAUDE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '1'
+      history: false
+      streamer_name: 'Hist'
+      num_of_images: 1
+      system: 'SYSTEM'
+      question:  |
+        You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.
+        Provide a detailed and artistically rich description of the image provided by the user.
+        Before providing the answer in <answer> tags, 
+        think step by step in <thinking> tags and analyze every part of the image. 
+        
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '2'
+      num_of_images: 2
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM'
+      question:  |
+        Give detailed creative mix of 2 images decription as one . 
+        be as creative and wierd as possible. 
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '2 Sys Fusion'
+      num_of_images: 2
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '2 User Fusion'
+      num_of_images: 2
+      
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '3 Sys Fusion'
+      num_of_images: 3
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '3 User Fusion'
+      num_of_images: 3
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '4 Sys Fusion'
+      num_of_images: 4
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '4 User Fusion'
+      num_of_images: 4
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '5 Sys Fusion'
+      num_of_images: 5
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '5 User Fusion'
+      num_of_images: 5
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '10 Sys Fusion'
+      num_of_images: 10
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '10 User Fusion'
+      num_of_images: 10
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '20 Sys Fusion'
+      num_of_images: 20
+      
+      streamer_name: 'Hist'
+      system: 'SYSTEM_FUSION'
+      question:  |
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+
+
+    - vendor: 'GoogleGemma'
+      chat_type: 'Copilot'
+      name: '20 User Fusion'
+      num_of_images: 20
+      streamer_name: 'Hist'
+      system: 'NO_SYSTEM'
+      question:  |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Now imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.
+
+
+       
+
+  System:
+    Chat:
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM_GENERAL: |
+        You are general knowledge expert   
+      PROMPT: |
+        {params.question}        
+    Copilot:
+ 
+      NO_SYSTEM: |
+        '  '
+      DESCRIBE_IMAGE: |
+        {params.input}
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM_CLAUDE: |
+        You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
+        Before providing the answer in <answer> tags, 
+        think step by step in <thinking> tags and analyze every part of the image.
+      SYSTEM_FUSION: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Your job is to imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.      DESCRIBE_IMAGE: |
+        
+      SYSTEM_ONE: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.             
+      SYSTEM_TWO: |
+        you are priovided {params.num_of_images} images. answer in english language
+      SYSTEM_MULTI: |
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible.        
+      SECOND: |
+        is there a second image?  creatively mix it's description with first image description in english
+      BLEND: |
+        create detailed description that blends the content of both pictures in english
+      HOW_MANY: |
+        how many images are there to describe? describe all of them in english
+      UKRA: |
+        dd ukrainian essence to each description
+      FIRST: |
+        give detailed description of first image description in english
+      BLEND_2: |
+        blend all image descriptions  in english
+      PINUP: |
+        you are priovided images having modern pinup art or ukrainian theme. answer in english language
+      LIST_ALL: |
+        list descriptions for all images
+

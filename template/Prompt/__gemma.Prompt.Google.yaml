@@ -1,0 +1,281 @@
+templates:
+  workspace:
+
+      name: 'Prompt_Infusion'
+      vendor: 'Google_Gemma'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    Google_Gemma:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+    Chat:
+    - vendor: 'Google_Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'NoHist_4bit'
+      name: 'Art Chat'
+      system: 'SYSTEM_GENERAL'
+      question: 'Come up with fused prompt for image generation. add intricate details. Just show one promt in <prompt> tags. use these as inspiration:'  
+    
+    - vendor: 'Google_Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Hist_4bit'
+      name: 'Art Chat'
+      system: 'SYSTEM_GENERAL'
+      question: 'Come up with fused prompt for image generation. add intricate details. Just show one promt in <prompt> tags. use these as inspiration:'  
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Hist_Flash'
+      name: 'Art Chat'
+      system: 'SYSTEM'
+      question: 'Come up with fused prompt for image generation. add intricate details. Just show one promt in <prompt> tags. use these as inspiration:'  
+
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Chat'
+      streamer_name: 'Hist_Full'
+      name: 'Art Chat'
+      system: 'SYSTEM'
+      question: 'Come up with amazing prompt for image generation. add intricate details. impress me. add ukrainian essence to it.'  
+
+
+
+    Copilot:
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '1'
+      history: false
+      streamer_name: 'NoHist_4bit_pChat'
+      num_of_prompts: 1
+      system: 'SYSTEM_ONE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '2'
+      history: false
+      streamer_name: 'NoHist_4bit_pChat'
+      num_of_prompts: 2
+      system: 'SYSTEM_ONE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'NoHist_4bit_pChat'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'NoHist_Flash_pChat'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'NoHist_Full_pChat'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Cop_Hist_4bit_Batch'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Cop_Hist_Flash_Batch'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Cop_Hist_Full_Batch'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Cop_Hist_4bit'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Chat_Hist_4bit'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Chat_Hist_Flash'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+
+    - vendor: 'Google_Gemma'
+      chat_type: 'Copilot'
+      name: '3'
+      history: false
+      streamer_name: 'Chat_Hist_Full'
+      num_of_prompts: 3
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+  System:
+    Chat:
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM_GENERAL: |
+        You are general knowledge expert   
+      PROMPT: |
+        {params.question}        
+    Copilot:
+ 
+      NO_SYSTEM: |
+        '  '
+      DESCRIBE_IMAGE: |
+        {params.input}
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM_CLAUDE: |
+        You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
+        Providing the answer in <fused_image> tags.
+        do not start with "The resulting image is a captivating fusion of" in  <fused_image>
+        do not start with "The resulting image is a" in <fused_image>
+        do not start with 'A striking, captivating image emerges, blending elements from the three descriptions.'
+        do not mention fusion in <fused_image> section
+      SYSTEM_FUSION: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Your job is to imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.      DESCRIBE_IMAGE: |
+        
+      SYSTEM_ONE: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.             
+      SYSTEM_TWO: |
+        you are priovided {params.num_of_images} images. answer in english language
+      SYSTEM_MULTI: |
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible.        
+      SECOND: |
+        is there a second image?  creatively mix it's description with first image description in english
+      BLEND: |
+        create detailed description that blends the content of both pictures in english
+      HOW_MANY: |
+        how many images are there to describe? describe all of them in english
+      UKRA: |
+        dd ukrainian essence to each description
+      FIRST: |
+        give detailed description of first image description in english
+      BLEND_2: |
+        blend all image descriptions  in english
+      PINUP: |
+        you are priovided images having modern pinup art or ukrainian theme. answer in english language
+      LIST_ALL: |
+        list descriptions for all images
+

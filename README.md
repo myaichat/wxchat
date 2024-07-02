@@ -29,7 +29,7 @@ wxPython UI for Vision API demo
 | Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
 
 
-# Prompt Infusion
+# Prompt Fusion
 wxPython UI for Prompt Infusion API demo
 
 | Vendor   | Model   | Vision | Config | Ueage|Info | 

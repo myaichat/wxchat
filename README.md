@@ -1,6 +1,3 @@
-# Prompt Infusion
-wxPython UI for Prompt Infusion API demo
-
-| Vendor   | Model   | Vision | Config | Usage|Info | 
+| Vendor   | Model   | Vision | Config | Ueage|Info | 
 |------------|------------|------------|------------|------------|------------|
-| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_prompt_fusion/claude_prompt_fusion.py)| []()| [Medium](https://medium.com/p/4bd85eb997ec), []()|[]()|
+|  Google Vertex AI| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/gemini_prompt_fuser/gemini_prompt_fuser.py)| []()| [Medium](), []()|[]()|

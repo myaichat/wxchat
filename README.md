@@ -1,6 +1,6 @@
-# Prompt Infusion
+# Prompt Fusion
 wxPython UI for Prompt Infusion API demo
 
-| Vendor   | Model   | Vision | Config | Usage|Info | 
+| Vendor   | Model   | Vision | Config | Ueage|Info | 
 |------------|------------|------------|------------|------------|------------|
-| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_prompt_fusion/claude_prompt_fusion.py)| []()| [Medium](https://medium.com/p/4bd85eb997ec), []()|[]()|
+|  Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_prompt_infuser/gpt4_prompt_infuser.py)| []()| [Medium](https://medium.com/me/stats/post/d8b41ec9e482), []()|[]()|

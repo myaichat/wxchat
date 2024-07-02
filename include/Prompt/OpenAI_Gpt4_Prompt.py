@@ -9,35 +9,28 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Base_InputPanel_Google_VertexAI import Base_InputPanel_Google_VertexAI
+from include.Prompt.Base.Base_InputPanel_OpenAI_Gpt4 import Base_InputPanel_OpenAI_Gpt4
+
 import base64
 import requests
-#import openai
+import openai
 
 from pubsub import pub
 from pprint import pprint as pp 
 from include.Common import *
 #from include.Common_MiniCPM import Base_InputPanel
 from include.fmt import fmt, pfmt, pfmtd, fmtd
-from PIL import Image as PILImage
+
 e=sys.exit
 import include.config.init_config as init_config 
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
-#DEFAULT_MODEL  = "openbmb/MiniCPM-Llama3-V-2_5"
-DEFAULT_MODEL='models/gemini-1.5-flash'
-model_list=[#'models/gemini-1.0-pro', 'models/gemini-1.0-pro-001', 'models/gemini-1.0-pro-latest', 
-            #'models/gemini-1.0-pro-vision-latest', 
-            'models/gemini-1.5-flash', 'models/gemini-1.5-flash-001',
-            #'models/gemini-1.5-flash-latest', 
-            'models/gemini-1.5-pro', 'models/gemini-1.5-pro-001', 
-            #'models/gemini-1.5-pro-latest',
-            #'models/gemini-pro', 'models/gemini-pro-vision', 
-            #'models/gemini-pro-vision-latest'
-            ]
 
+DEFAULT_MODEL='gpt-4o'
+
+model_list=['gpt-4o', 'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-vision-preview']
 dir_path = 'template'
 
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -45,15 +38,279 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
+
+
+
 class VisionResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
         self.tokenizer={}
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+
+            
+
+
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id,  image_path):
         # Create a chat completion request with streaming enabled
        
+
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        header = fmt([[f'Question',chat.model]],[])
+        pub.sendMessage('chat_output', message=f'{header}\n{prompt}\n', tab_id=receiveing_tab_id)
+        
+
+        # OpenAI API Key
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+        # Function to encode the image
+        def encode_image(image_path):
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+
+        # Path to your image
+        images=[]
+        for fn in image_path:
+            
+            if not fn:
+                log(f'No image file not set', 'red')
+                return ''
+            assert isfile(fn)
+            print('appending')
+            print(fn)
+            images.append( {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{encode_image(fn)}"
+                }
+                } ) 
+
+
+
+        # Getting the base64 string
+        #base64_image = encode_image(image_path)
+        headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {openai.api_key}"
+        }
+
+        payload = {
+        "model": chat.model,
+        "messages": [
+            {
+            "role": "user",
+            "content": [
+                {
+                "type": "text",
+                "text": prompt                
+                },
+                *images
+            ]
+            }
+        ],
+        "max_tokens": chat.max_tokens
+        #"min_tokens": chat.min_tokens
+        }
+        out=[]
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            #pfmt([[f'System Answer']],[])
+            if 'choices'  in response.json():
+                data=response.json()['choices'][0]
+                message=data['message']
+                content=message['content']
+                usage = response.json()['usage']
+                header=fmt([[f'System Answer']],[])
+                pub.sendMessage('chat_output', message=f'{header}\n{content}', tab_id=receiveing_tab_id)
+                log(f'{usage}', 'blue')
+            
+                out.append(content)
+            else:
+                log(f'Error in stream_response', 'red')
+                log(f'{response.json()}', 'red')
+                
+        except Exception as e:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
+class Hist_Chat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        
+
+        # Initialize the client
+        self.client = openai.OpenAI()
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
+        # Create a chat completion request with streaming enabled
+        #pp(chatHistory)
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        content = []
+
+
+           
+        chatHistory[receiveing_tab_id] += [{"role": "user", "content": text_prompt}]
+        response = self.client.chat.completions.create(
+            model=chat.model,
+            messages=chatHistory[receiveing_tab_id],
+            stream=True
+        )
+        out = []
+        # Print each response chunk as it arrives
+        stop_output=apc.stop_output[receiveing_tab_id]
+        pause_output=apc.pause_output[receiveing_tab_id]
+        for chunk in response:
+            if stop_output[0] or pause_output[0] :
+                
+                if stop_output[0] :
+                    print('\n-->Stopped\n')
+                    pub.sendMessage("stopped")
+                    break
+                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                else:
+                    while pause_output[0] :
+                        time.sleep(0.1)
+                        if stop_output[0]:
+                            print('\n-->Stopped\n')
+                            pub.sendMessage("stopped")
+                            break
+                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                                            
+            if hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                #print(content, end='', flush=True)
+                #pp(content)
+                if content:
+                    out.append(content)
+                    #print(content, receiveing_tab_id)
+                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
+
+        
+        print("\nElapsed:", time.time() - start)
+        log(f'\nElapsed: {time.time() - start}')
+
+        if out:
+            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)    
+
+class Hist_Infuser_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        
+
+        # Initialize the client
+        self.client = openai.OpenAI()
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
+        # Create a chat completion request with streaming enabled
+        #pp(chatHistory)
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        content = []
+
+
+
+        image_descriptions=[]
+        for pfn in prompt_path:
+            with open(pfn, 'r') as f:
+                image_descriptions.append(f.read()) 
+
+        descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+
+
+        prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+        Here are the descriptions of the input images:
+
+        {descriptions_text}
+
+        Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+        Focus on how the elements from each description interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+        Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+        {text_prompt}"""
+           
+        chatHistory[receiveing_tab_id] += [{"role": "user", "content": prompt}]
+        response = self.client.chat.completions.create(
+            model=chat.model,
+            messages=chatHistory[receiveing_tab_id],
+            stream=True
+        )
+        out = []
+        # Print each response chunk as it arrives
+        stop_output=apc.stop_output[receiveing_tab_id]
+        pause_output=apc.pause_output[receiveing_tab_id]
+        for chunk in response:
+            if stop_output[0] or pause_output[0] :
+                
+                if stop_output[0] :
+                    print('\n-->Stopped\n')
+                    pub.sendMessage("stopped")
+                    break
+                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                else:
+                    while pause_output[0] :
+                        time.sleep(0.1)
+                        if stop_output[0]:
+                            print('\n-->Stopped\n')
+                            pub.sendMessage("stopped")
+                            break
+                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
+                                            
+            if hasattr(chunk.choices[0].delta, 'content'):
+                content = chunk.choices[0].delta.content
+                #print(content, end='', flush=True)
+                #pp(content)
+                if content:
+                    out.append(content)
+                    #print(content, receiveing_tab_id)
+                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
+
+        
+        print("\nElapsed:", time.time() - start)
+        log(f'\nElapsed: {time.time() - start}')
+
+        if out:
+            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+    
+class pChat_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.chat_history=[]
+   
+        
+
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
+        # Create a chat completion request with streaming enabled
+
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
@@ -62,95 +319,81 @@ class VisionResponseStreamer:
         pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         try:
 
-      
-            import vertexai
-
-            from vertexai import generative_models
-            from vertexai.generative_models import Part, Image
-            from io import BytesIO
-            from PIL import Image as PILImage
-            from vertexai.generative_models import Image as VertexAIImage            
-            #return ''
-
-            # TODO(developer): Update and un-comment below line
-            # project_id = "PROJECT_ID"
-
-            PROJECT_ID = "spatial-flag-427113-n0"
-            LOCATION="us-central1"
-            vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-            model = generative_models.GenerativeModel(model_name=chat.model)
-            #pp(chat)
-            # Generation config
-            generation_config = generative_models.GenerationConfig(
-                max_output_tokens= int(chat.max_tokens), temperature=float(chat.temperature), top_p=chat.top_p, top_k=chat.top_k
-            )
-
-            # Safety config
-            safety_config = [
-                generative_models.SafetySetting(
-                    category=generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                generative_models.SafetySetting(
-                    category=generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                generative_models.SafetySetting(
-                    category=generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                generative_models.SafetySetting(
-                    category=generative_models.HarmCategory.HARM_CATEGORY_UNSPECIFIED,
-                    threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                generative_models.SafetySetting(
-                    category=generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=generative_models.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                
-            ]
-            image_files=[]
-            for ifn in image_path:
-
-                #local_image_path = image_path[0]
-                # Load your PIL image
-                #pil_image = image_path[0]
-                pil_image = PILImage.open(ifn)
-
-                if pil_image.mode == 'RGBA':
-                    pil_image = pil_image.convert('RGB')
-
-                #pil_image.save(buffer, format='JPEG') 
-
-                # Convert the PIL Image to bytes
-                buffer = BytesIO()
-                pil_image.save(buffer, format='JPEG') #pil_image.format)
-                image_bytes = buffer.getvalue()
-
-                # Assuming VertexAIImage has a method to create an instance from bytes
-                # This is a hypothetical example; you'll need to replace `from_bytes` with the actual method
-                vertex_ai_image = VertexAIImage.from_bytes(image_bytes)
-
-                image_files.append(Part.from_image(vertex_ai_image))
-
-            # Generate content
-            stream = model.generate_content(
-                [*image_files,  text_prompt],
-                generation_config=generation_config,
-                safety_settings=safety_config,
-                stream=True,
-            )
+            import base64
+            from anthropic import Anthropic
 
 
-            for chunk in stream:
-                print(chunk.text, end='', flush=True)
-                out.append(chunk.text)
-                pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+            client = Anthropic()
 
+           
+            content = []
+            
         
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
             
 
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            {text_prompt}"""
+
+
+            content.append({"type": "text", "text": prompt})
+            message_list =  [
+                {
+                    "role": 'user',
+                    "content": content
+                }
+            ]
+            pp(chat)
+            stream = client.messages.create(
+                model=chat.model,
+                max_tokens=int(chat.max_tokens),
+                temperature=float(chat.temperature),
+                top_p=float(chat.top_p),
+                stop_sequences=["Human:", "User:", "Assistant:", "AI:"],
+                
+                #system="You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.",
+                system=chat.system_prompt,
+                messages=message_list,
+                
+                stream=True
+                
+            )
+            #print(response.content[0].text)
+
+            msg=[]
+            for chunk in stream:
+                #pp(chunk)
+                if chunk.type == 'content_block_delta':
+                    text = chunk.delta.text
+                    print(text, end='', flush=True)
+                    out.append(text)
+                    msg.append(text)
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+
+            assistant_message = {
+                "role": "assistant",
+                "content": ''.join(msg)
+            }
+            
+
+            #prompt2 = "Now, can you tell me about the color palette used in this artwork?"
         
         except Exception as e:    
 
@@ -166,91 +409,7 @@ class VisionResponseStreamer:
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
-        return ''.join(out)
-    
-
-class _VisionResponseStreamer:
-    def __init__(self):
-        # Set your OpenAI API key here
-        self.model={}
-        self.tokenizer={}
-
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
-        # Create a chat completion request with streaming enabled
-       
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        header = fmt([[f'Question',chat.model]],[])
-        pub.sendMessage('chat_output', message=f'{header}\n{text_prompt}', tab_id=receiveing_tab_id)
-        if 1:
-
-            import google.generativeai as genai
-            from google.generativeai.types import ContentType
-            from PIL import Image
-            #from IPython.display import display,Markdown
-            import os, sys
-            e=sys.exit
-            from pprint import pprint as pp
-            GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-
-           
-
-
-        genai.configure(api_key=GOOGLE_API_KEY)
-
-        model = genai.GenerativeModel(chat.model)
-
-        images=[]
-        for img in image_path:
-            images.append(Image.open(img))
-       
-        prompt = [text_prompt, *images]
-
-        #response_stream = model.generate_content_async(prompt)
-
-        header=fmt([[f'System Answer']],[])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-        stream={}
-        try:
-            stream = model.generate_content(prompt, stream=True)
-            for chunk in stream:
-                print(chunk.text, end='', flush=True)
-                out.append(chunk.text)
-                pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
-
-        
-            
-
-        
-        except Exception as e:    
-
-
-            log(f'Error in stream_response', 'red')
-            log(format_stacktrace(), 'red')
-
-            print(f"An error occurred: {e}")
-            # Check candidate safety ratings
-            if hasattr(stream, 'candidates'):
-                for candidate in stream.candidates:
-                    if hasattr(candidate, 'safety_ratings'):
-                        print("Safety ratings:", candidate.safety_ratings)
-                        log("Safety ratings:\n"+str(candidate.safety_ratings), 'red')
-                    else:
-                        print("No safety ratings available.")
-                        log("No safety ratings available.")
-            else:
-                print("No candidates available in the response.")
-                log("No candidates available in the response.")
-            pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
-            return ''
-        
-
-        if out:
-            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
-        return ''.join(out)
-    
+        return ''.join(out)         
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
@@ -260,19 +419,19 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
         self.SetWrapMode(stc.STC_WRAP_WORD)
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
         self.SetLexer(stc.STC_LEX_PYTHON)
-        python_keywords = 'woman pinup pin-up nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
+        python_keywords = 'woman tryzub pinup pin-up nude Ukraine Ukrainian Tryzub flag blue yellow picture model image file artist artistic artistically color light scene question answer description mood texture emotion feeling sense impression atmosphere tone style technique brushstroke composition perspective'
 
 
         self.SetKeyWords(0, python_keywords)
         # Set Python styles
         self.StyleSetSpec(stc.STC_P_DEFAULT, "fore:#000000,back:#FFFFFF")  # Default
-        self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
+        #self.StyleSetSpec(stc.STC_P_COMMENTLINE, "fore:#008000,back:#FFFFFF")  # Comment
         self.StyleSetSpec(stc.STC_P_NUMBER, "fore:#FF8C00,back:#FFFFFF")  # Number
-        self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
-        self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
+        #self.StyleSetSpec(stc.STC_P_STRING, "fore:#FF0000,back:#FFFFFF")  # String
+        #self.StyleSetSpec(stc.STC_P_CHARACTER, "fore:#FF0000,back:#FFFFFF")  # Character
         self.StyleSetSpec(stc.STC_P_WORD, "fore:#0000FF,back:#FFFFFF,weight:bold")
-        self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
-        self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
+        #self.StyleSetSpec(stc.STC_P_TRIPLE, "fore:#FF0000,back:#FFFFFF")  # Triple quotes
+        #self.StyleSetSpec(stc.STC_P_TRIPLEDOUBLE, "fore:#FF0000,back:#FFFFFF")  # Triple double quotes
         self.StyleSetSpec(stc.STC_P_CLASSNAME, "fore:#00008B,back:#FFFFFF")  # Class name
         self.StyleSetSpec(stc.STC_P_DEFNAME, "fore:#00008B,back:#FFFFFF")  # Function or method name
         self.StyleSetSpec(stc.STC_P_OPERATOR, "fore:#000000,back:#FFFFFF")  # Operators
@@ -319,14 +478,14 @@ class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handle
                 self.GotoPos(self.GetTextLength())
 
 
-class CanvasCtrl(wx.Panel):
+class PromptCtrl(StyledTextDisplay):
     subscribed=False
     def __init__(self, parent,chat):
         super().__init__(parent)
         self.chat=chat
-        self.image_path=None
+        self.prompt_path=None
         if 'default_file' in chat:
-            self.image_path = chat.default_file
+            self.prompt_path = chat.default_file
         accel_tbl = wx.AcceleratorTable([
             (wx.ACCEL_CTRL, ord('V'), wx.ID_PASTE)
         ])
@@ -335,15 +494,15 @@ class CanvasCtrl(wx.Panel):
         self.SetAcceleratorTable(accel_tbl)
         self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
         
-        if not CanvasCtrl.subscribed:
+        if not PromptCtrl.subscribed:
                 
-            pub.subscribe(self.OnOpenImageFile, 'open_image_file')
-            CanvasCtrl.subscribed=True
-    def OnOpenImageFile(self, file_path):
+            pub.subscribe(self.OnOpenPromptFile, 'open_prompt_file')
+            PromptCtrl.subscribed=True
+    def OnOpenPromptFile(self, file_path):
 
         if self.IsTabVisible():
-            print('Opening image file...')
-            self.load_image_file(file_path)
+            print('Opening prompt file...')
+            self.load_prompt_file(file_path)
         else:
             print('Not visible')
     def IsTabVisible(self):
@@ -354,125 +513,94 @@ class CanvasCtrl(wx.Panel):
         print('Pasting...')
         clipboard = wx.Clipboard.Get()
         if clipboard.Open():
-            if clipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
-                data_object = wx.BitmapDataObject()
+            #get text from clipboard
+            if clipboard.IsSupported(wx.DataFormat(wx.DF_TEXT)):
+                data_object = wx.TextDataObject()
                 if clipboard.GetData(data_object):
-                    bitmap = data_object.GetBitmap()
-                    image = wx.Image(bitmap.ConvertToImage())
-                    
+                    text = data_object.GetText()
+                                        
                     # Save the image to a temporary file or set it directly to the canvas
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    temp_image_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
+                    temp_prompt_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
                     
-                    image.SaveFile(temp_image_path, wx.BITMAP_TYPE_PNG)
-                    self.load_image_file(temp_image_path)
+                    with open(temp_prompt_path, 'wb') as f:
+                        f.write(data_object.GetData(text))
+                    self.load_prompt_file(temp_prompt_path)
+
                 else:
                     print("Clipboard data retrieve failed")
+            
+
             else:
-                print("Clipboard does not contain image data")
+                print("Clipboard does not contain text data")
             clipboard.Close()
             log('Paste done.')
             set_status('Paste done.') 
         else:
             print("Unable to open clipboard")
 
-    def load_image(self, image_path):
-        image = None
-        try:
-            if image_path.lower().endswith('.webp'):
-                pil_image = PILImage.open(image_path)
-                image = wx.Image(pil_image.size[0], pil_image.size[1])
-                image.SetData(pil_image.convert("RGB").tobytes())
-                image.SetAlpha(pil_image.convert("RGBA").tobytes()[3::4])
-            else:
-                image = wx.Image(image_path, wx.BITMAP_TYPE_ANY)
-        except Exception as e:
-            print(f"Error loading image: {e}")
-            log(f"Error loading image: {e}", 'red')
+    def load_prompt(self, prompt_path):
+        text = None
+        
+        assert isfile(prompt_path), prompt_path
+        with open(prompt_path, 'r') as f:
+            text = f.read()
             
-        return image
+        return text
     
-    def load_image_file(self, file_path):
+    def load_prompt_file(self, file_path):
         # This method will be used to load and display an image on the canvas
-        self.image_path = file_path
-        self.DisplayImageOnCanvas(file_path)
+        self.prompt_path = file_path
+        self.DisplayPrompt(file_path)
         #self.update_notebook_tab_label(file_path)
 
-    def OnBitmapClick(self, event):
+    def OnPromptClick(self, event):
         # Set focus to the notebook tab containing the static bitmap (canvasCtrl)
         self.SetFocus()
 
 
-    def DisplayImageOnCanvas(self, image_path):
+    def DisplayPrompt(self, prompt_path):
         # Load the image
-        if hasattr(self, 'static_bitmap') and self.static_bitmap:
-            self.static_bitmap.Destroy()      
-        image = self.load_image(image_path)
-        if image is None:
-            print("Failed to load image.")
+     
+        txt = self.load_prompt(prompt_path)
+        if txt is None:
+            print("Failed to load prompt.")
             return
         
-        # Get the top-level window size
-        top_level_window = self.GetTopLevelParent()
-        canvas_width, canvas_height = top_level_window.GetSize()
-        canvas_width=canvas_width/2
-        canvas_height -=200
-        # Get the image size
-        image_width = image.GetWidth()
-        image_height = image.GetHeight()
-        
-        # Calculate the new size maintaining aspect ratio
-        if image_width > image_height:
-            new_width = canvas_width
-            new_height = canvas_width * image_height / image_width
-        else:
-            new_height = canvas_height
-            new_width = canvas_height * image_width / image_height
-        
-        # Resize the image
-        image = image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
-        
-        # Convert it to a bitmap
-        bitmap = wx.Bitmap(image)
-        
-        # Create a StaticBitmap widget to display the image
-        self.static_bitmap = wx.StaticBitmap(self, -1, bitmap)
-        self.static_bitmap.Bind(wx.EVT_LEFT_DOWN, self.OnBitmapClick)
-        # Optionally, resize the panel to fit the image
-        self.SetSize(bitmap.GetWidth(), bitmap.GetHeight()) 
+        self.AppendText(txt)
 
-class MyNotebookImagePanel(wx.Panel):
+class MyNotebookPromptPanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, tab_id):
-        super(MyNotebookImagePanel, self).__init__(parent)
+        super(MyNotebookPromptPanel, self).__init__(parent)
         
         notebook = aui.AuiNotebook(self)
         self.tab_id=tab_id
         self.notebook = notebook
-        self.canvasCtrl=[]
+        self.promptCtrl=[]
         chat = apc.chats[tab_id]
-        canvasCtrl=CanvasCtrl(notebook, chat)
-        self.canvasCtrl.append(canvasCtrl)
+        promptCtrl=PromptCtrl(notebook, chat)
+        self.promptCtrl.append(promptCtrl)
 
-        apc.canvas = self.canvasCtrl
-        self.static_bitmap = None
-        #self.Bind(wx.EVT_SIZE, self.OnResize)
-        self.image_path = None
+        apc.prompts = self.promptCtrl
         
-        chat.num_of_images=    chat.get('num_of_images',    1)
-        if canvasCtrl.image_path:
+        #self.Bind(wx.EVT_SIZE, self.OnResize)
+        
+        
+        chat.num_of_prompts=    chat.get('num_of_prompts',    1)
+        if promptCtrl.prompt_path:
             
-            print(canvasCtrl.image_path)
-            canvasCtrl.DisplayImageOnCanvas(canvasCtrl.image_path)
-            notebook.AddPage(canvasCtrl, canvasCtrl.image_path)
+            print(promptCtrl.prompt_path)
+            promptCtrl.DisplayPrompt(promptCtrl.prompt_path)
+            notebook.AddPage(promptCtrl, promptCtrl.prompt_path)
         else:
-            notebook.AddPage(canvasCtrl, f'Image_1')
+            notebook.AddPage(promptCtrl, f'Prompt_1')
             
             
-            for i in range(2,chat.num_of_images+1):
-                canvasCtrl = CanvasCtrl(notebook, chat)
-                self.canvasCtrl.append(canvasCtrl)                
-                notebook.AddPage(canvasCtrl, f'Image_{i}')
+            for i in range(2,chat.num_of_prompts+1):
+                promptCtrl = PromptCtrl(notebook, chat)
+                self.promptCtrl.append(promptCtrl)                
+                notebook.AddPage(promptCtrl, f'Prompt_{i}')
                 
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -486,19 +614,19 @@ class MyNotebookImagePanel(wx.Panel):
         # Bind key down event to handle Ctrl+V
 
         #self.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
-        pub.subscribe(self.load_random_images, 'load_random_images')
-        self.image_pool=self.get_image_list()
-        if not MyNotebookImagePanel.subscribed:
+        pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+        self.prompt_pool=self.get_prompt_list()
+        if 0 and not MyNotebookPromptPanel.subscribed:
                 
-            pub.subscribe(self.load_random_images, 'load_random_images')
-            MyNotebookImagePanel.subscribed=True  
+            pub.subscribe(self.load_random_prompts, 'load_random_prompts')
+            MyNotebookPromptPanel.subscribed=True  
         self.notebook.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSE, self.onTabClose)
     def onTabClose(self, event):
         # Check if the panel being closed is MyNotebookImagePanel
         page_index = event.GetSelection()
         #print(page_index, self.notebook.GetPageCount(), isinstance(self, MyNotebookImagePanel))
         page = self.notebook.GetPage(page_index)
-        if isinstance(self, MyNotebookImagePanel):
+        if isinstance(self, MyNotebookPromptPanel):
             # Prevent the tab from closing
             #dialog asking if want to close
             dialog=wx.MessageDialog(self, 'Are you sure you want to close this tab?', 'Close Tab', wx.YES_NO | wx.ICON_QUESTION)
@@ -509,31 +637,31 @@ class MyNotebookImagePanel(wx.Panel):
             else:       
 
                 event.Veto()              
-    def get_image_list(self):
+    def get_prompt_list(self):
         from pathlib import Path
 
-        image_path = Path.home() / 'Downloads'
+        prompt_path = Path(apc.home)/'prompts'
         #image_path= Path(__file__).parent / 'test'
-        print(image_path)
-        
-        jpg_files = list(image_path.glob('*.jpg')) +list(image_path.glob('*.jpeg'))
-        png_files = list(image_path.glob('*.png'))
-        webp_files = list(image_path.glob('*.webp'))
-        
-        return  jpg_files + png_files + webp_files
-    def load_random_images(self, tab_id):
+        #print(apc.home)
+        #print(prompt_path)
+        #e()
+        txt_files = list(prompt_path.glob('*.txt')) 
+
+        return  txt_files
+    def load_random_prompts(self, tab_id):
+        print(tab_id == self.tab_id , tab_id, self.tab_id)
         if tab_id == self.tab_id:
             
             chat = apc.chats[self.tab_id]
-            print('Loading random images...', chat.num_of_images)
+            print('Loading random prompts...', chat.num_of_prompts)
             
-            print(len(self.image_pool))
-            random_subset = random.sample(self.image_pool, chat.num_of_images)
+            print(len(self.prompt_pool))
+            random_subset = random.sample(self.prompt_pool, chat.num_of_prompts)
             pp(random_subset)
             if 1:
                 for i, fn in enumerate(random_subset):
                     print(i, fn)
-                    self.canvasCtrl[i].load_image_file(str(fn))
+                    self.promptCtrl[i].load_prompt_file(str(fn))
         else:
             pass
             #print('Not for me', self.tab_id)
@@ -544,36 +672,13 @@ class MyNotebookImagePanel(wx.Panel):
         
         # Find the tab with the canvas and update its label
         for i in range(notebook.GetPageCount()):
-            if notebook.GetPage(i) == self.canvasCtrl:
+            if notebook.GetPage(i) == self.promptCtrl:
                 notebook.SetPageText(i, file_name)
                 break
         
 
 
 
-
-
-    def ScaleImage(self, image, max_width, max_height):
-        image_width = image.GetWidth()
-        image_height = image.GetHeight()
-
-        # Calculate the new size maintaining the aspect ratio
-        if image_width > image_height:
-            new_width = max_width
-            new_height = max_width * image_height / image_width
-            if new_height > max_height:
-                new_height = max_height
-                new_width = max_height * image_width / image_height
-        else:
-            new_height = max_height
-            new_width = max_height * image_width / image_height
-            if new_width > max_width:
-                new_width = max_width
-                new_height = max_width * image_height / image_width
-
-        # Resize the image
-        return image.Scale(int(new_width), int(new_height), wx.IMAGE_QUALITY_HIGH)
-            
 
 
 
@@ -597,7 +702,7 @@ class MyNotebookImagePanel(wx.Panel):
 
 
 
-class Copilot_DisplayPanel(StyledTextDisplay):
+class _Copilot_DisplayPanel(StyledTextDisplay):
     subscribed=False
     def __init__(self, parent, tab_id):
         StyledTextDisplay.__init__(self,parent)
@@ -640,9 +745,9 @@ class Copilot_DisplayPanel(StyledTextDisplay):
           
 
 
-class VertexAI_GoogleVision_Copilot_DisplayPanel(wx.Panel):
+class Copilot_DisplayPanel(wx.Panel):
     def __init__(self, parent, tab_id, chat):
-        super(VertexAI_GoogleVision_Copilot_DisplayPanel, self).__init__(parent)
+        super(Copilot_DisplayPanel, self).__init__(parent)
         apc.chats[tab_id]=chat
         # Create a splitter window
         self.copilot_splitter = wx.SplitterWindow(self, style=wx.SP_LIVE_UPDATE)
@@ -650,10 +755,10 @@ class VertexAI_GoogleVision_Copilot_DisplayPanel(wx.Panel):
         self.tab_id=tab_id
 
         # Initialize the notebook_panel and logPanel
-        self.notebook_panel=notebook_panel = MyNotebookImagePanel(self.copilot_splitter, tab_id)
+        self.notebook_panel=notebook_panel = MyNotebookPromptPanel(self.copilot_splitter, tab_id)
         notebook_panel.SetMinSize((-1, 50))
         #notebook_panel.SetMinSize((800, -1))
-        self.chatPanel = Copilot_DisplayPanel(self.copilot_splitter, tab_id)
+        self.chatPanel = _Copilot_DisplayPanel(self.copilot_splitter, tab_id)
         self.chatPanel.SetMinSize((-1, 50))
 
         # Add notebook panel and log panel to the splitter window
@@ -673,11 +778,11 @@ class VertexAI_GoogleVision_Copilot_DisplayPanel(wx.Panel):
         assert tab_id==self.tab_id, self.__class__.__name__
         
         out=[]
-        notebook= self.notebook_panel.canvasCtrl
-        for canvas in  self.notebook_panel.canvasCtrl:
-            out.append(canvas.image_path)
+        notebook= self.notebook_panel.promptCtrl
+        for prompt in  self.notebook_panel.promptCtrl:
+            out.append(prompt.prompt_path)
         
-    def GetImagePath(self, tab_id):
+    def GetPromptPath(self, tab_id):
         assert tab_id==self.tab_id, self.__class__.__name__
         
         out=[]
@@ -689,7 +794,7 @@ class VertexAI_GoogleVision_Copilot_DisplayPanel(wx.Panel):
             # Get the panel (page) at the current index
             page = notebook.GetPage(page_index)
             
-            out.append(page.image_path)
+            out.append(page.prompt_path)
         return out
     
     def OnResize(self, event):
@@ -698,11 +803,42 @@ class VertexAI_GoogleVision_Copilot_DisplayPanel(wx.Panel):
         self.copilot_splitter.SetSashPosition(width // 2)
         event.Skip()        
 
+class Chat_DisplayPanel(StyledTextDisplay):
+    def __init__(self, parent, tab_id, chat):
+        StyledTextDisplay.__init__(self,parent)
+        font = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
 
-class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
+        self.SetFont(font) 
+        self.tab_id=tab_id
+
+        pub.subscribe(self.AddChatOutput, 'chat_output')
+        #pub.subscribe(lambda message, tab_id: self.AddOutput(message, tab_id), 'chat_output')
+        pub.subscribe(self.OnShowTabId, 'show_tab_id') 
+    def IsTabVisible(self):
+        # Get the parent notebook
+        parent_notebook = self.GetParent()
+
+        # Check if the current page is the selected page in the parent notebook
+        return parent_notebook.GetPage(parent_notebook.GetSelection()) == self
+            
+    def AddChatOutput(self, message, tab_id):
+        #print(1111, self.tab_id,tab_id, self.tab_id==tab_id, message)
+        #print('Chat', tab_id, self.IsTabVisible())
+        if self.tab_id==tab_id:
+            #start_pos = self.GetLastPosition()
+            if 1: #for line in message.splitlines():
+
+                wx.CallAfter(self.AddOutput, message)
+                
+                #end_pos = self.chatDisplay.GetLastPosition()
+                #self.chatDisplay.SetStyle(start_pos, end_pos, wx.TextAttr(wx.BLACK))        
+    def OnShowTabId(self):
+        print('show_tab_id', self.tab_id)
+
+class ChatDisplayNotebookPanel(wx.Panel):
     subscribed=False
     def __init__(self, parent, vendor_tab_id, ws_name):
-        super(VertexAI_GoogleVision_ChatDisplayNotebookPanel, self).__init__(parent)
+        super(ChatDisplayNotebookPanel, self).__init__(parent)
         self.tabs={}
         self.ws_name=ws_name
         self.chat_notebook = wx.Notebook(self, style=wx.NB_BOTTOM)
@@ -715,13 +851,13 @@ class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
         self.chat_notebook.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGING, self.OnPageChanging)
         self.chat_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChanged)
-        if not VertexAI_GoogleVision_ChatDisplayNotebookPanel.subscribed:
+        if not ChatDisplayNotebookPanel.subscribed:
             
             pub.subscribe(self.OnWorkspaceTabChanging, 'workspace_tab_changing')
             pub.subscribe(self.OnWorkspaceTabChanged, 'workspace_tab_changed')
             pub.subscribe(self.OnVendorspaceTabChanging, 'vendor_tab_changing')   
             pub.subscribe(self.OnVendorspaceTabChanged, 'vendor_tab_changed')
-            VertexAI_GoogleVision_ChatDisplayNotebookPanel.subscribed=True
+            ChatDisplayNotebookPanel.subscribed=True
     def get_active_chat_panel(self):
         active_chat_tab_index = self.chat_notebook.GetSelection()
         if active_chat_tab_index == wx.NOT_FOUND:
@@ -792,7 +928,7 @@ class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
     def AddTab(self, chat):
         chat_notebook=self.chat_notebook
         title=f'{chat.chat_type}: {chat.name}'
-        title=f'{chat.name}'
+        title=f'{chat.name} | {chat.streamer_name}'
         chatDisplay=None
         tab_id=(chat.workspace, chat.chat_type, chat.vendor,self.vendor_tab_id, chat_notebook.GetPageCount())
         self.tabs[chat_notebook.GetPageCount()]=tab_id
@@ -800,6 +936,7 @@ class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
             #pp(panels.__dict__)
             #pp(chat.__dict__)
             display_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.chat}'
+            display_panel = f'{chat.chat_type}_{panels.chat}'
             #print('display_panel', display_panel)
             try:
                 assert display_panel in globals(), display_panel
@@ -862,11 +999,11 @@ class VertexAI_GoogleVision_ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_VertexAI):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI_Gpt4):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
-        super(VertexAI_GoogleVision_Copilot_InputPanel, self).__init__(parent)
+        super(Copilot_InputPanel, self).__init__(parent)
         NewChat.__init__(self)
         GetClassName.__init__(self)
         self.tabs={}
@@ -876,7 +1013,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
         #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
-        self.askLabel = wx.StaticText(self, label=f'Ask Google AI {tab_id}:')
+        self.askLabel = wx.StaticText(self, label=f'Ask Claude AI {tab_id}:')
         if 1:
             model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -928,7 +1065,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_VertexAI.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -939,7 +1076,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_VertexAI.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -962,16 +1099,26 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
-        if  not  hasattr(apc, 'vrs'):
-            apc.vrs=VisionResponseStreamer() # model=self.model_dropdown.GetValue())
-        if not VertexAI_GoogleVision_Copilot_InputPanel.subscribed:
+
+        self.rs={}
+
+        if not Copilot_InputPanel.subscribed:
                 
             #pub.subscribe(self.SetException, 'fix_exception')
             pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
             #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
             #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
-            VertexAI_GoogleVision_Copilot_InputPanel.subscribed=True
-        
+            Copilot_InputPanel.subscribed=True
+    def get_rs(self, tab_id):
+        chat=apc.chats[tab_id]
+        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
+        if streamer_name not in self.rs:
+            
+            print(f'\t\Creating streamer:', streamer_name)
+            cls= globals()[streamer_name]
+            # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+            self.rs[streamer_name] = cls ()
+        return self.rs [streamer_name]             
     def onTabsButton(self, event):
         try:
             num_of_tabs = int(self.numOfTabsCtrl.GetValue())
@@ -981,8 +1128,8 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
 
     def onRandomButton(self, event):
         # Implement the random function logic here
-        self.log('Random button clicked')
-        pub.sendMessage('load_random_images', tab_id=self.tab_id)
+        self.log('Random button clicked 11')
+        pub.sendMessage('load_random_prompts', tab_id=self.tab_id)
     def onHistoryButton(self, event):
         global chatHistory
         dialog = ChatHistoryDialog(self, self.tab_id, chatHistory)
@@ -1008,7 +1155,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
         chat.temperature = selected_value            
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
-        self.askLabel.SetLabel(f'Ask Google{tab_id}:')
+        self.askLabel.SetLabel(f'Ask Claude{tab_id}:')
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:
@@ -1085,10 +1232,10 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
                 pub.sendMessage('start_progress')
                 #code=???
                 chatDisplay=apc.chat_panels[self.tab_id]
-                image_path=chatDisplay.GetImagePath(self.tab_id)
+                prompt_path=chatDisplay.GetPromptPath(self.tab_id)
                 #pp(image_path)
                 #return
-                assert image_path,chatDisplay
+                assert prompt_path,chatDisplay
                 #print(888, chatDisplay.__class__.__name__)
                 #code='print(1223)'
                 chat=apc.chats[self.tab_id]
@@ -1118,7 +1265,7 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
                 #pub.sendMessage('chat_output', message=f'{prompt}\n')
                 #pp(image_path)
                 #out=rs.stream_response(prompt, chatHistory[self.q_tab_id])  
-                for i, fn in enumerate(image_path):
+                for i, fn in enumerate(prompt_path):
                     if not fn:
                         log(f'Image {i} is not set', color=wx.RED)
                         pub.sendMessage('stop_progress')
@@ -1127,33 +1274,32 @@ class VertexAI_GoogleVision_Copilot_InputPanel(wx.Panel, NewChat, GetClassName, 
                 import random  
                 #pp(image_path)
                 if 1:
-                    random.shuffle(image_path)
+                    random.shuffle(prompt_path)
                 #pp(image_path)
                 if 'system_prompt' not in chat:
                     system= chat.get('system', 'SYSTEM')
-                    num_oi=str(chat.num_of_images)
-                    chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(num_of_images=num_oi))
+                    num_op=str(chat.num_of_prompts)
+                    chat.system_prompt=evaluate(all_system_templates[chat.workspace].Copilot[system], dict2(num_of_prompts=num_op))
                     pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)
                     #print(system_prompt)
 
-                threading.Thread(target=self.stream_response, args=(prompt, payload, self.tab_id, image_path, chat.history)).start()
+                threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, prompt_path)).start()
         except Exception as e:
             print(format_stacktrace())
             self.log(f'Error: {format_stacktrace()}', color=wx.RED)
             pub.sendMessage('stop_progress')
-    def stream_response(self, prompt, payload, tab_id,  image_path, keep_history):
+    def stream_response(self, prompt, payload, tab_id,  prompt_path):
         # Call stream_response and store the result in out
         global chatHistory, questionHistory, currentQuestion,currentModel
         self.receiveing_tab_id=tab_id
         
         #print(1111, keep_history)
-        chatHistory[self.tab_id] += payload
-        if keep_history:
-            payload=chatHistory[self.tab_id]
-
-        out = apc.vrs.stream_response(prompt, payload, self.receiveing_tab_id, image_path)
+       
+        payload=chatHistory[self.tab_id]
+        vrs=self.get_rs(tab_id)
+        out = vrs.stream_response(prompt, chatHistory, self.receiveing_tab_id, prompt_path)
         if out:
-            chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+            #chatHistory[tab_id].append({"role": "assistant", "content": out}) 
             self.image_id +=1
         pub.sendMessage('stop_progress')
         log('Done.')
@@ -1356,5 +1502,242 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt4):
+    def __init__(self, parent, tab_id):
+        global chatHistory,  currentQuestion, currentModel
+        super(Chat_InputPanel, self).__init__(parent)
+        NewChat.__init__(self)
+        GetClassName.__init__(self)
+        self.tabs={}
+        self.tab_id=tab_id
+        chat=   apc.chats[tab_id]
+        chatHistory[self.tab_id]=[]
+        #pp(chat)
+        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+        self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
+        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        self.chat_type=chat.chat_type
+        self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
+        self.model_dropdown.SetValue(DEFAULT_MODEL)
+        
+        self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
+        
+
+        self.askButton = wx.Button(self, label='Ask')
+        self.askButton.Bind(wx.EVT_BUTTON, self.onAskButton)
+
+
+
+        askSizer = wx.BoxSizer(wx.HORIZONTAL)
+        askSizer.Add(self.askLabel, 0, wx.ALIGN_CENTER)
+        askSizer.Add(self.model_dropdown, 0, wx.ALIGN_CENTER)
+        self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
+        askSizer.Add(pause_panel, 0, wx.ALL)
+   
+        askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
+        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
+        askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
+
+        sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
+        sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        
+
+        self.inputCtrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER | wx.TE_MULTILINE)
+        if 1:
+            q=apc.chats[tab_id].question
+
+            self.tabs[self.tab_id]=dict(q=q)
+            questionHistory[self.tab_id]=[q]
+            currentQuestion[self.tab_id]=0
+            currentModel[self.tab_id]=DEFAULT_MODEL
+
+            chat=apc.chats[tab_id]
+            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+         
+
+
+        self.inputCtrl.SetValue(self.tabs[self.tab_id]['q'])
+        #self.inputCtrl.SetMinSize((-1, 120))  
+        self.inputCtrl.Bind(wx.EVT_CHAR_HOOK, self.OnCharHook)
+        #sizer = wx.BoxSizer(wx.VERTICAL)
+        #sizer.Add(askSizer, 0, wx.EXPAND)
+        sizer.Add(self.inputCtrl, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+        self.ex=None
+        self.receiveing_tab_id=0
+
+        pub.subscribe(self.SetException, 'fix_exception')
+        pub.subscribe(self.SetChatDefaults  , 'set_chat_defaults')
+        #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
+        #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
+        wx.CallAfter(self.inputCtrl.SetFocus)
+    def SetTabId(self, tab_id):
+        self.tab_id=tab_id
+        self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
+    def SetChatDefaults(self, tab_id):
+        global chatHistory, questionHistory, currentModel
+        if tab_id ==self.tab_id:
+            assert self.chat_type==tab_id[1]
+            
+            #pp(apc.chats[tab_id])
+            #e()
+            self.tabs[self.tab_id]=dict(q=apc.chats[tab_id].question)
+            chat=apc.chats[tab_id]
+            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            questionHistory[self.tab_id]=[]
+            currentModel[self.tab_id]=DEFAULT_MODEL
+        self.RestoreQuestionForTabId(tab_id)
+
+    def _SetTabId(self, tab_id):
+        global chatHistory, questionHistory, currentModel
+        self.tab_id=tab_id
+      
+        return self
+
+                      
+    def OnModelChange(self, event):
+        # Get the selected model
+        selected_model = self.model_dropdown.GetValue()
+
+        # Print the selected model
+        print(f"Selected model: {selected_model}")
+
+        # You can add more code here to do something with the selected model
+
+        # Continue processing the event
+        event.Skip()
+
+    def _RestoreQuestionForTabId(self, tab_id):
+        message=tab_id
+        
+        global currentModel
+        if message  in self.tabs:
+            print(self.__class__.__name__, 'RestoreQuestionForTabId', message)
+            assert self.chat_type==message[1]
+            print('Chat restoring', message)
+            pp(self.tabs[message])
+            self.inputCtrl.SetValue(self.tabs[message]['q'])
+            
+            self.model_dropdown.SetValue(currentModel[message])
+            self.tab_id=message
+            #self.q_tab_id=message
+            #self.inputCtrl.SetSelection(0, -1)
+            self.inputCtrl.SetFocus()
+        
+    def _SaveQuestionForTabId(self, message):
+        global currentModel
+        q=self.inputCtrl.GetValue()
+        self.tabs[message]=dict(q=q)
+        currentModel[message]=self.model_dropdown.GetValue()
+        if 0:
+            d={"role": "user", "content":q}
+            if self.tab_id in chatHistory:
+                if d not in chatHistory[self.tab_id]:
+                    chatHistory[self.tab_id] += [{"role": "user", "content":q}]
+
+
+    def SetException(self, message):
+        self.ex=message
+    def onAskButton(self, event):
+        # Code to execute when the Ask button is clicked
+        #print('Ask button clicked')
+        self.AskQuestion()
+    def AskQuestion(self):
+        global chatHistory, questionHistory, currentQuestion,currentModel
+        # Get the content of the StyledTextCtrl
+        #print('current tab_id', self.q_tab_id)
+        
+        #pub.sendMessage('show_tab_id')
+        #pp(chatHistory)
+        self.Base_OnAskQuestion()           
+        question = self.inputCtrl.GetValue()
+        if not question:
+            self.log('There is no question!', color=wx.RED)
+        else:
+            question = self.inputCtrl.GetValue()
+            self.log(f'Asking question: {question}')
+            pub.sendMessage('start_progress')
+            chat=apc.chats[self.tab_id]
+            prompt=evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
+            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+
+            questionHistory[self.tab_id].append(question)
+            currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
+            currentModel[self.tab_id]=self.model_dropdown.GetValue()
+
+            if 0:
+                header=fmt([['\n'.join(self.split_text_into_chunks(question, 80))]], ['User Question'])
+                # DO NOT REMOVE THIS LINE
+                print(header)
+                pub.sendMessage('chat_output', message=f'{header}\n', tab_id=self.tab_id)
+            #pub.sendMessage('chat_output', message=f'{prompt}\n')
+            if 'system_prompt' not in chat:
+                system= chat.get('system', 'SYSTEM')
+               
+                chat.system_prompt=evaluate(all_system_templates[chat.workspace].Chat[system], dict2())
+                pub.sendMessage('set_system_prompt', message=chat.system_prompt, tab_id=self.tab_id)        
+            
+            self.askButton.Disable()
+            threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
+
+    def stream_response(self, prompt, chatHistory, tab_id, model):
+        # Call stream_response and store the result in out
+        self.receiveing_tab_id=tab_id
+        chat=apc.chats[tab_id]
+        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
+
+        assert streamer_name in globals(), streamer_name
+        print(f'\t\Creating streamer:', streamer_name)
+        cls= globals()[streamer_name]
+        # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+        rs = cls ()
+        out = rs.stream_response(prompt, chatHistory, self.receiveing_tab_id, model)
+        if out:
+            #chatHistory[tab_id].append({"role": "assistant", "content": out}) 
+            pass
+        pub.sendMessage('stop_progress')
+        log('Done.')
+        set_status('Done.')  
+        wx.CallAfter(self.askButton.Enable)      
+
+    def PrevQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if qid:
+            q=questionHistory[self.tab_id][qid-1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid-1
+        else:
+            self.log('No previous question.', color=wx.RED)
+    def NextQuestion(self):
+        qid=currentQuestion[self.tab_id]
+        if len(questionHistory[self.tab_id])>qid+1:
+            q=questionHistory[self.tab_id][qid+1]
+            self.inputCtrl.SetValue(q)
+            self.inputCtrl.SetFocus()
+            currentQuestion[self.tab_id]=qid+1
+        else:
+            self.log('No next question.', color=wx.RED)
+    def OnCharHook(self, event):
+        if event.ControlDown() and  event.GetKeyCode() == wx.WXK_RETURN:
+            self.AskQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_RIGHT:
+            log("Ctrl+-> pressed")
+            set_status("Ctrl+-> pressed")
+            self.NextQuestion()
+        elif event.ControlDown() and event.GetKeyCode() == wx.WXK_LEFT:
+            self.log("Ctrl+<- pressed")
+            set_status("Ctrl+<- pressed")
+            self.PrevQuestion()
+                       
+        else:
+            event.Skip()
+
+
+    def log(self, message, color=wx.BLUE):
+        
+        pub.sendMessage('log', message=f'{message}', color=color)
           

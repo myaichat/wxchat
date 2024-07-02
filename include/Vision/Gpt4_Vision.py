@@ -12,7 +12,7 @@ from os.path import join, isfile
 from include.Base_InputPanel_Gpt4 import Base_InputPanel_Gpt4
 import base64
 import requests
-#import openai
+import openai
 
 from pubsub import pub
 from pprint import pprint as pp 

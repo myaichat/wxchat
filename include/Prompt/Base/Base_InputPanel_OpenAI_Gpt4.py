@@ -7,8 +7,10 @@ import include.config.init_config as init_config
 apc = init_config.apc
 import wx.html
 from include.Common import Base_InputPanel, HtmlDialog
-class Base_InputPanel_Gpt4(Base_InputPanel):
-    def AddButtons(self, h_sizer):
+class Base_InputPanel_OpenAI_Gpt4(Base_InputPanel):
+    def AddButtons_Level_2(self, h_sizer):
+        pass
+    def AddButtons_Level_1(self, h_sizer):
         if 1: #second row
 
 

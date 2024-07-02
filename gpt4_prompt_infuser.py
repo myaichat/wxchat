@@ -25,8 +25,6 @@ init_config.init(**{})
 apc = init_config.apc
 apc.pause_output = {}
 apc.stop_output = {}
-DEFAULT_MODEL  = "microsoft/Phi-3-vision-128k-instruct"
-
 
 
 apc.chatHistory = chatHistory={}
@@ -78,8 +76,12 @@ if 0:
     from include.Prompt.Google_Gemma_Prompt import  ChatDisplayNotebookPanel, \
         Copilot_InputPanel, Copilot_DisplayPanel, Chat_InputPanel
 
-if 1:
+if 0:
     import include.Prompt.Google_Gemma_Prompt as Prompt_Infusion_Google_Gemma
+
+    
+if 1:
+    import include.Prompt.OpenAI_Gpt4_Prompt as Prompt_Infusion_OpenAI_Gpt4
         
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -780,7 +782,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Gemma Prompt Infusion')
+        self.frame = MyFrame(f'Gpt4 Prompt Infuser')
         return True
 
 if __name__ == '__main__':

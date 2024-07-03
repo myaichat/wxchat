@@ -13,8 +13,8 @@ templates:
     Chat:
     - vendor: 'Google_Palm2'
       chat_type: 'Chat'
-      streamer_name: 'NoHistory'
-      name: 'Scones'
+      streamer_name: 'TextGenerationModel'
+      name: 'Text'
       model: 'text-bison'
       system: 'SYSTEM'
       question: |
@@ -26,7 +26,7 @@ templates:
     - vendor: 'Google_Palm2'
       chat_type: 'Chat'
       streamer_name: 'History'
-      name: 'Chat'
+      name: 'Text'
       model: 'text-bison'
       system: 'SYSTEM'
       question: |
@@ -37,15 +37,36 @@ templates:
         the image to life in the reader's mind.  
         Just show one promt in <prompt> tags. 
 
-
-
+    - vendor: 'Google_Palm2'
+      chat_type: 'Chat'
+      streamer_name: 'ChatModel'
+      name: 'Chat'
+      model: 'chat-bison'
+      system: 'SYSTEM'
+      question: |
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. use these as inspiration:
+        inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
+    - vendor: 'Google_Palm2'
+      chat_type: 'Chat'
+      streamer_name: 'ChatModel'
+      name: 'Chat 1'
+      model: 'chat-bison'
+      system: 'SYSTEM'
+      question: |
+        Come up with fused prompt for image generation. add intricate details.
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind.  
+        Just show one promt in <prompt> tags. 
 
     Copilot:
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '1'      
-      streamer_name: 'History_Infuser'
+      streamer_name: 'Text_Fuser'
       num_of_prompts: 1
       model: 'text-bison'
       system: 'SYSTEM_ONE'
@@ -60,7 +81,7 @@ templates:
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '2'      
-      streamer_name: 'History_Infuser'
+      streamer_name: 'Text_Fuser'
       num_of_prompts: 2
       model: 'text-bison'
       system: 'SYSTEM_MULTI'
@@ -70,13 +91,12 @@ templates:
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.     
-
+        the image to life in the reader's mind. 
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '3'      
-      streamer_name: 'History_Infuser'
+      streamer_name: 'Text_Fuser'
       num_of_prompts: 3
       model: 'text-bison'
       system: 'SYSTEM_MULTI'
@@ -86,13 +106,12 @@ templates:
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.     
-
+        the image to life in the reader's mind. 
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '4'      
-      streamer_name: 'History_Infuser'
+      streamer_name: 'Text_Fuser'
       num_of_prompts: 4
       model: 'text-bison'
       system: 'SYSTEM_MULTI'
@@ -102,12 +121,13 @@ templates:
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.  
+        the image to life in the reader's mind. 
+
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '5'      
-      streamer_name: 'History_Infuser'
+      streamer_name: 'Text_Fuser'
       num_of_prompts: 5
       model: 'text-bison'
       system: 'SYSTEM_MULTI'
@@ -117,15 +137,29 @@ templates:
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.  
-
+        the image to life in the reader's mind. 
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
-      name: '10'      
-      streamer_name: 'History_Infuser'
-      num_of_prompts: 10
-      model: 'text-bison'
+      name: '1'      
+      streamer_name: 'Chat_Fuser'
+      num_of_prompts: 1
+      model: 'chat-bison'
+      system: 'SYSTEM_ONE'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Palm2'
+      chat_type: 'Copilot'
+      name: '2'      
+      streamer_name: 'Chat_Fuser'
+      num_of_prompts: 2
+      model: 'chat-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
@@ -133,7 +167,56 @@ templates:
         Focus on capturing the essence, mood, and atmosphere. 
         Highlight intricate details, colors, textures, and emotions. 
         Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.  
+        the image to life in the reader's mind. 
+
+
+    - vendor: 'Google_Palm2'
+      chat_type: 'Copilot'
+      name: '3'      
+      streamer_name: 'Chat_Fuser'
+      num_of_prompts: 3
+      model: 'chat-bison'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+    - vendor: 'Google_Palm2'
+      chat_type: 'Copilot'
+      name: '4'      
+      streamer_name: 'Chat_Fuser'
+      num_of_prompts: 4
+      model: 'chat-bison'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+
+    - vendor: 'Google_Palm2'
+      chat_type: 'Copilot'
+      name: '5'      
+      streamer_name: 'Chat_Fuser'
+      num_of_prompts: 5
+      model: 'chat-bison'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        Provide a detailed and artistically 
+        rich description of the image provided by the user. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+
   System:
     Chat:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."
@@ -165,7 +248,7 @@ templates:
         Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.      DESCRIBE_IMAGE: |
         
       SYSTEM_ONE: |
-        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.             
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts.             
       SYSTEM_TWO: |
         you are priovided {params.num_of_images} images. answer in english language
       SYSTEM_MULTI: |

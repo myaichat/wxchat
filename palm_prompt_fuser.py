@@ -437,6 +437,7 @@ class WorkspacePanel(wx.Panel,NewChat):
         #parent = self.GetParent()
         #apc.chats[tab_id]=chat
         chat=apc.chats[tab_id]
+        pp(chat)
         #print('SwapInputPanel', chat.chat_type)
         v_splitter = self.v_splitter
         if resplit:
@@ -786,7 +787,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google Gemini Prompt Fuser')
+        self.frame = MyFrame(f'Google PaLM 2 Prompt Fuser')
         return True
 
 if __name__ == '__main__':

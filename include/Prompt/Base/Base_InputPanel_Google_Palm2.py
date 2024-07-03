@@ -614,8 +614,8 @@ enhancing the quality and coherence of the generated text.
             #pp(self.tabs[message])
             self.inputCtrl.SetValue(self.tabs[message]['q'])
             
-            self.model_dropdown.SetValue(apc.currentModel[message])
-            chat.model = self.model_dropdown.GetValue()
+            self.model_dropdown.SetValue(chat.model)
+            #chat.model = self.model_dropdown.GetValue()
             #self.tab_id=message
             #self.q_tab_id=message
             #self.inputCtrl.SetSelection(0, -1)

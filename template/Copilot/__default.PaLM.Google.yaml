@@ -31,6 +31,7 @@ templates:
       chat_type: 'Chat'
       language_model: 'CodeGenerationModel'
       name: 'Code Gen'
+      system: 'SYSTEM_CODE'
       model_name: 'code-bison'
       question: 'Write a function that checks if a year is a leap year.'
 
@@ -39,7 +40,7 @@ templates:
       language_model: 'CodeChatModel'
       name: 'Code Chat'
       model_name: 'codechat-bison'
-      system: CODE_CHAT
+      system: SYSTEM_DEBUG
       question: 'What kind of questions are you trained to answer?'
 
 
@@ -58,6 +59,8 @@ templates:
   System:
     Chat:
       SYSTEM: "You are general knowledge expert."
+      SYSTEM_CODE: "You are coding expert."
+      SYSTEM_DEBUG: "You are code debugging  expert."
       SYSTEM_ONE: "My name is Miles. You are an astronomer, knowledgeable about the solar system."
       PROMPT: |
         Question: "{params.question}"

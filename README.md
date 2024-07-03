@@ -30,7 +30,7 @@ wxPython UI for Vision API demo
 
 
 # Prompt Fusion
-wxPython UI for Prompt Infusion API demo
+wxPython UI for Prompt Infusion demo
 
 | Vendor   | Model   | Vision | Config | Ueage|Info | 
 |------------|------------|------------|------------|------------|------------|
@@ -94,7 +94,7 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 <br>
 <br>
 
-### Every demo starts as an orphan branch
+### Each demo starts as an orphan branch
 
 git checkout --orphan branchname
 

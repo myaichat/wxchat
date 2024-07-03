@@ -9,7 +9,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_Google_Gemini import Base_InputPanel_Google_Gemini
+from include.Prompt.Base.Base_InputPanel_Google_Palm2 import Base_InputPanel_Google_Palm2
 
 import base64
 import requests
@@ -28,20 +28,8 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 
-DEFAULT_MODEL='models/gemini-1.5-flash'
-model_list=[
-            'models/gemini-1.0-pro', 'models/gemini-1.0-pro-001', 'models/gemini-1.0-pro-latest', 
-            'models/gemini-1.0-pro-vision-latest', 
-            'models/gemini-1.5-flash', 'models/gemini-1.5-flash-001',
-            'models/gemini-1.5-flash-latest', 
-            'models/gemini-1.5-pro', 'models/gemini-1.5-pro-001', 
-            'models/gemini-1.5-pro-latest',
-            'models/gemini-pro', 'models/gemini-pro-vision', 
-            'models/gemini-pro-vision-latest', 
-            'models/gemma-2-27b-it',
-            'models/gemma-2-27b-it-001',
-            'models/gemma-2-27b-it-latest',
-            ]
+DEFAULT_MODEL='text-bison'
+model_list=['text-bison', 'chat-bison', 'code-bison', 'codechat-bison']
 
 dir_path = 'template'
 
@@ -987,7 +975,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Gemini):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Palm2):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -1001,7 +989,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
         #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
-        self.askLabel = wx.StaticText(self, label=f'Ask Claude AI {tab_id}:')
+        self.askLabel = wx.StaticText(self, label=f'{tab_id}:')
         if 1:
             model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -1053,7 +1041,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Gemini.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Google_Palm2.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -1064,7 +1052,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Gemini.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Google_Palm2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1490,7 +1478,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Gemini):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Palm2):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1524,11 +1512,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Gem
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Google_Gemini.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Google_Palm2.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Gemini.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Google_Palm2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        

@@ -80,9 +80,13 @@ if 0:
     import include.Prompt.Google_Gemma_Prompt as Prompt_Infusion_Google_Gemma
 
     
+if 0:
+    import include.Prompt.Google_Palm2_Prompt as Prompt_Infusion_Google_Gemini
+
+
 if 1:
-    import include.Prompt.Google_Gemini_Prompt as Prompt_Infusion_Google_Gemini
-        
+    import include.Prompt.Google_Palm2_Prompt as Prompt_Infusion_Google_Palm2
+    
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
 

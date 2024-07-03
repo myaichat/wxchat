@@ -2,20 +2,20 @@ templates:
   workspace:
 
       name: 'Prompt_Infusion'
-      vendor: 'Google_Gemini'
+      vendor: 'Google_Palm2'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    Google_Gemini:
+    Google_Palm2:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
     Chat:
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Chat'
       streamer_name: 'NoHistory'
       name: 'Scones'
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM'
       question: |
         Come up with fused prompt for image generation. add intricate details. 
@@ -23,11 +23,11 @@ templates:
         inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
 
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Chat'
       streamer_name: 'History'
       name: 'Chat'
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM'
       question: |
         Come up with fused prompt for image generation. add intricate details.
@@ -42,12 +42,12 @@ templates:
 
     Copilot:
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '1'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 1
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_ONE'
       question:  |
         Provide a detailed and artistically 
@@ -57,12 +57,12 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '2'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 2
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
@@ -73,12 +73,12 @@ templates:
         the image to life in the reader's mind.     
 
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '3'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 3
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
@@ -89,12 +89,12 @@ templates:
         the image to life in the reader's mind.     
 
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '4'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 4
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
@@ -104,12 +104,12 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind.  
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '5'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 5
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 
@@ -120,12 +120,12 @@ templates:
         the image to life in the reader's mind.  
 
 
-    - vendor: 'Google_Gemini'
+    - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
       name: '10'      
       streamer_name: 'History_Infuser'
       num_of_prompts: 10
-      model: 'models/gemini-1.5-flash'
+      model: 'text-bison'
       system: 'SYSTEM_MULTI'
       question:  |
         Provide a detailed and artistically 

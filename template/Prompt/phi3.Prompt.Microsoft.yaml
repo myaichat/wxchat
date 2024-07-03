@@ -26,6 +26,18 @@ templates:
     - vendor: 'Microsoft_Phi3'
       chat_type: 'Chat'
       streamer_name: 'Chat'
+      history: True
+      name: 'Hist'
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM'
+      question: |
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. use these as inspiration:
+        inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Chat'
+      streamer_name: 'Chat'
       history: False
       name: 'noHist 2'
       model: 'medium_dml_128k\directml-int4-awq-block-128'
@@ -33,22 +45,84 @@ templates:
       
       question: 'How many Python versions are there?'
 
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Chat'
+      streamer_name: 'Chat'
+      history: True
+      name: 'Hist 2'
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM'
+      
+      question:  |
+        Provide a detailed and artistically 
+        rich description of madeup image. 
+        Focus on capturing the essence, mood, and atmosphere. 
+        Highlight intricate details, colors, textures, and emotions. 
+        Use evocative language to paint a vivid picture that brings 
+        the image to life in the reader's mind. 
+
+      
     Copilot:
 
     - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '1'      
-      streamer_name: 'Text_Fuser'
+      history: True
+      streamer_name: 'Prompt_Fuser'
       num_of_prompts: 1
       model: 'medium_dml_128k\directml-int4-awq-block-128'
       system: 'SYSTEM_ONE'
       question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        add ukrainian essence
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: '2'      
+      history: True
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 2
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: '3'      
+      history: True
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: '4'      
+      history: True
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 4
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: '5'      
+      history: True
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 5
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
 
   System:
     Chat:

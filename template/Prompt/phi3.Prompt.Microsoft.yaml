@@ -2,16 +2,16 @@ templates:
   workspace:
 
       name: 'Prompt_Infusion'
-      vendor: 'Google_Palm2'
+      vendor: 'Microsoft_Phi3'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    Google_Palm2:
+    Microsoft_Phi3:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
     Chat:
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Chat'
       streamer_name: 'TextGenerationModel'
       name: 'Text'
@@ -23,7 +23,7 @@ templates:
         inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Chat'
       streamer_name: 'ChatModel'
       name: 'Chat'
@@ -33,7 +33,7 @@ templates:
         Come up with fused prompt for image generation. add intricate details. 
         Just show one promt in <prompt> tags. use these as inspiration:
         inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Chat'
       streamer_name: 'ChatModel'
       name: 'Chat 1'
@@ -49,7 +49,7 @@ templates:
 
     Copilot:
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '1'      
       streamer_name: 'Text_Fuser'
@@ -64,7 +64,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '2'      
       streamer_name: 'Text_Fuser'
@@ -79,7 +79,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '3'      
       streamer_name: 'Text_Fuser'
@@ -94,7 +94,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '4'      
       streamer_name: 'Text_Fuser'
@@ -110,7 +110,7 @@ templates:
         the image to life in the reader's mind. 
 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '5'      
       streamer_name: 'Text_Fuser'
@@ -125,7 +125,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '1'      
       streamer_name: 'Chat_Fuser'
@@ -140,7 +140,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '2'      
       streamer_name: 'Chat_Fuser'
@@ -156,7 +156,7 @@ templates:
         the image to life in the reader's mind. 
 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '3'      
       streamer_name: 'Chat_Fuser'
@@ -171,7 +171,7 @@ templates:
         Use evocative language to paint a vivid picture that brings 
         the image to life in the reader's mind. 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '4'      
       streamer_name: 'Chat_Fuser'
@@ -187,7 +187,7 @@ templates:
         the image to life in the reader's mind. 
 
 
-    - vendor: 'Google_Palm2'
+    - vendor: 'Microsoft_Phi3'
       chat_type: 'Copilot'
       name: '5'      
       streamer_name: 'Chat_Fuser'

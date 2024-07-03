@@ -81,11 +81,14 @@ if 0:
 
     
 if 0:
-    import include.Prompt.Google_Palm2_Prompt as Prompt_Infusion_Google_Gemini
+    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Google_Gemini
 
+
+if 2:
+    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Google_Palm2
 
 if 1:
-    import include.Prompt.Google_Palm2_Prompt as Prompt_Infusion_Google_Palm2
+    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Microsoft_Phi3
     
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -787,7 +790,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Google PaLM 2 Prompt Fuser')
+        self.frame = MyFrame(f'Microsoft Phi3 Prompt Fuser')
         return True
 
 if __name__ == '__main__':

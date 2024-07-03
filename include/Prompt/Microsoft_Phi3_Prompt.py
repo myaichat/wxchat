@@ -9,7 +9,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_Google_Palm2 import Base_InputPanel_Google_Palm2
+from include.Prompt.Base.Base_InputPanel_Microsoft_Phi3 import Base_InputPanel_Microsoft_Phi3
 
 import base64
 import requests
@@ -38,8 +38,8 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
-import vertexai
-from vertexai.language_models import TextGenerationModel
+#import vertexai
+#from vertexai.language_models import TextGenerationModel
 
 class TextGenerationModel_ResponseStreamer:
     def __init__(self):
@@ -999,7 +999,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google_Palm2):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Microsoft_Phi3):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -1065,7 +1065,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Palm2.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Microsoft_Phi3.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -1076,7 +1076,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Google
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Palm2.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Microsoft_Phi3.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1502,7 +1502,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Palm2):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Microsoft_Phi3):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1536,11 +1536,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Google_Pal
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Google_Palm2.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Microsoft_Phi3.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Google_Palm2.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Microsoft_Phi3.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        

@@ -89,7 +89,7 @@ class ShowSystemPrompts_Chat(wx.Dialog):
 
 
 
-class Base_InputPanel_Google_Palm2(Base_InputPanel):
+class Base_InputPanel_Microsoft_Phi3(Base_InputPanel):
     def AddButtons_Level_1(self, h_sizer):
         if 1: #second row
 

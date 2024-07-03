@@ -30,7 +30,7 @@ wxPython UI for Vision API demo
 
 
 # Prompt Fusion
-wxPython UI for Prompt Infusion demo
+wxPython UI for Prompt Fusion demo
 
 | Vendor   | Model   | Vision | Config | Ueage|Info | 
 |------------|------------|------------|------------|------------|------------|
@@ -108,6 +108,6 @@ add files
 
 git add .
 
-git commit -m "commit message"
+git commit -m "init"
 
 git push -u origin branchname

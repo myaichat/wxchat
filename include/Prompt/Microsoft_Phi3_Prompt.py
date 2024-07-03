@@ -1,5 +1,6 @@
 
 
+import onnxruntime_genai as og
 import argparse
 import time, random
 from datetime import datetime
@@ -11,9 +12,6 @@ import os, sys
 from os.path import join, isfile
 from include.Prompt.Base.Base_InputPanel_Microsoft_Phi3 import Base_InputPanel_Microsoft_Phi3
 
-import base64
-import requests
-#import openai
 
 from pubsub import pub
 from pprint import pprint as pp 
@@ -28,8 +26,9 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 
-DEFAULT_MODEL='text-bison'
-model_list=['text-bison', 'chat-bison', 'code-bison', 'codechat-bison']
+DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
+model_list=[r'mini_dml_4k\directml\directml-int4-awq-block-128', r'mini_dml_128k\directml\directml-int4-awq-block-128', 
+            r'medium_dml_4k\directml-int4-awq-block-128', r'medium_dml_128k\directml-int4-awq-block-128']
 
 dir_path = 'template'
 
@@ -40,6 +39,142 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 
 #import vertexai
 #from vertexai.language_models import TextGenerationModel
+
+
+class ResponseStreamer:
+    def __init__(self,chat, model):
+        # Set your OpenAI API key here
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True) 
+        if chat.verbose: log(f"Loading model '{model}'...")
+        self.model_name=model
+        self.model = og.Model(f'{model}')
+        if chat.verbose: log("Model loaded")
+        self.tokenizer = og.Tokenizer(self.model)
+        self.tokenizer_stream = self.tokenizer.create_stream()  
+        if chat.verbose: log("Tokenizer created")  
+
+
+    def stream_response(self, prompt, chatHistory, receiveing_tab_id):
+        out=[]
+        chat=apc.chats[receiveing_tab_id]
+
+        self.receiveing_tab_id=receiveing_tab_id
+        chat=apc.chats[receiveing_tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True)    
+        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
+        assert chat.max_length,chat.max_length
+        assert chat.min_length,chat.min_length
+        assert chat.top_p is not None,chat.top_p
+        assert chat.top_k,chat.top_k
+        assert chat.temperature is not None,chat.temperature
+        assert chat.repetition_penalty is not None,chat.repetition_penalty
+        chat.model=chat.get('model', DEFAULT_MODEL)
+        
+
+            
+        if chat.timings:
+            started_timestamp = 0
+            first_token_timestamp = 0
+
+
+        
+        #if chat.verbose: print()
+        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+        slog=fmtd([search_options], [])
+        print(slog)
+        log(slog)
+        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
+        # Set the max length to something sensible by default, unless it is specified by the user,
+        # since otherwise it will be set to the entire context length
+        assert 'max_length'  in search_options
+        assert 'min_length'  in search_options
+        assert 'top_p'  in search_options
+        assert 'top_k'  in search_options
+        assert 'temperature'  in search_options
+        assert 'repetition_penalty'  in search_options
+
+        chat_template = '''{input}
+<|assistant|>'''
+
+        # Keep asking for input prompts in a loop
+        try:
+            text = '\n'.join(chatHistory)
+            #pp(chatHistory)
+            #e()
+            if chat.timings: started_timestamp = time.time()
+
+            # If there is a chat template, use it
+            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
+            #pp(text)
+            #e()
+            prompt = f'{chat_template.format(input=text)}'
+            pfmt([[prompt]], ['Prompt'])
+            #pp(prompt)
+            #e()
+            input_tokens = self.tokenizer.encode(prompt)
+
+            params = og.GeneratorParams(self.model)
+            #params.try_graph_capture_with_max_batch_size(10)
+            params.set_search_options(**search_options)
+            params.input_ids = input_tokens
+            generator = og.Generator(self.model, params)
+            if chat.verbose: log("Generator created")
+
+            #if chat.verbose: print("Running generation loop ...")
+            if chat.timings:
+                first = True
+                new_tokens = []
+
+            #print()
+            #print("Output: ", end='', flush=True)
+            pub.sendMessage('chat_output', message=f'Model:{self.model_name}\n\n', tab_id=receiveing_tab_id)
+            if 1:
+                idx=0
+                while not generator.is_done():
+                    generator.compute_logits()
+                    generator.generate_next_token()
+                    if chat.timings:
+                        if first:
+                            first_token_timestamp = time.time()
+                            first = False
+
+                    new_token = generator.get_next_tokens()[0]
+                    chunk=self.tokenizer_stream.decode(new_token)
+                    out.append(chunk)
+                    #print(chunk, end='', flush=True)
+                    
+                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
+                    if idx%10==0:
+                        time.sleep(.0001)
+                        idx=0
+                    if chat.timings: new_tokens.append(new_token)
+                    idx+=1
+
+            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
+            del generator
+
+            if chat.timings:
+                prompt_time = first_token_timestamp - started_timestamp
+                run_time = time.time() - first_token_timestamp
+                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
+                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
+                log(fmtd([stats], []))
+                
+                #pub.sendMessage('chat_output', message=f'\n\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
+        except:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
+
+            pub.sendMessage('stop_progress')
+            return ''
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+    
 
 class TextGenerationModel_ResponseStreamer:
     def __init__(self):

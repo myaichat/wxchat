@@ -1,4 +1,8 @@
+#
+#try: https://ai.azure.com/explore/models/Phi-3-vision-128k-instruct/version/1/registry/azureml
+# 
 import onnxruntime_genai as og
+
 import argparse
 import time
 
@@ -25,6 +29,8 @@ init_config.init(**{})
 apc = init_config.apc
 apc.pause_output = {}
 apc.stop_output = {}
+DEFAULT_MODEL  = "microsoft/Phi-3-vision-128k-instruct"
+
 
 
 apc.chatHistory = chatHistory={}
@@ -44,52 +50,14 @@ from include.Common import *
 apc.all_templates=all_templates=dict2()
 apc.all_chats=all_chats=dict2()
 apc.all_system_templates= all_system_templates=dict2()
-if 0:
-    from include.Phy3_Python import Microsoft_Chat_InputPanel, \
-        Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
-if 0:
-    from include.Copilot.Gpt4_Python import Gpt4_Python_Chat_InputPanel, Gpt4_Python_ChatDisplayNotebookPanel, \
-        Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Python_Copilot_InputPanel
-if 0:
-    from include.Vision.MiniCPM_Vision import  OpenBNB_ChatDisplayNotebookPanel, OpenBNB_Copilot_InputPanel
+
+from include.Phy3_Python import Microsoft_Chat_InputPanel, \
+    Microsoft_ChatDisplayNotebookPanel, Microsoft_Copilot_InputPanel
 
 if 0:
-    from include.Vision.Gpt4_Vision import  Gpt4_Vision_ChatDisplayNotebookPanel, Gpt4_Vision_Copilot_InputPanel, Gpt4_Vision_Copilot_DisplayPanel
+    from include.Gpt4_Python import Gpt4_Chat_InputPanel, Gpt4_ChatDisplayNotebookPanel, \
+        Gpt4_Chat_DisplayPanel, Gpt4_Copilot_DisplayPanel, Gpt4_Copilot_InputPanel
 
-if 0:
-    from include.Vision.Google_GenAI_Vision import  Google_Vision_ChatDisplayNotebookPanel, Google_Vision_Copilot_InputPanel, Google_Vision_Copilot_DisplayPanel
-
-if 0:
-    from include.Copilot.Google_PaLM import Google_PaLM_ChatDisplayNotebookPanel, \
-    Google_PaLM_ChatDisplayNotebookPanel, Google_PaLM_Chat_InputPanel, Google_PaLM_Copilot_InputPanel
-
-if 0:
-    from include.Vision.Google_VertexAI_Vision import  VertexAI_GoogleVision_ChatDisplayNotebookPanel, \
-        VertexAI_GoogleVision_Copilot_InputPanel, VertexAI_GoogleVision_Copilot_DisplayPanel
-    
-if 0:
-    from include.Vision.Anthropic_Claude_Vision import  Claude_AnthropicVision_ChatDisplayNotebookPanel, \
-        Claude_AnthropicVision_Copilot_InputPanel, Claude_AnthropicVision_Copilot_DisplayPanel, \
-        Claude_AnthropicVision_Chat_InputPanel
-
-if 0:
-    from include.Prompt.Google_Gemma_Prompt import  ChatDisplayNotebookPanel, \
-        Copilot_InputPanel, Copilot_DisplayPanel, Chat_InputPanel
-
-if 0:
-    import include.Prompt.Google_Gemma_Prompt as Prompt_Infusion_Google_Gemma
-
-    
-if 0:
-    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Google_Gemini
-
-
-if 2:
-    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Google_Palm2
-
-if 1:
-    import include.Prompt.Microsoft_Phi3_Prompt as Prompt_Infusion_Microsoft_Phi3
-    
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
 
@@ -146,11 +114,11 @@ for yfn in yaml_files:
         all_system_templates[data.templates.workspace.name]=data.templates.System
         #break
 
-#pp(all_templates.keys())
+pp(all_templates.keys())
 #e()
 #all_templates=all_templates.Oracle
 apc.default_workspace = list(all_templates.values())[0].templates.workspace
-apc.home=os.path.dirname(os.path.abspath(__file__))
+
 
 
 
@@ -363,23 +331,10 @@ class VendorNotebook(wx.Notebook):
             #print(f'EXISTING: "{title}" tab [{self.GetPageCount()}] Adding chat tab to existing vendor', page.__class__.__name__)
             page.AddTab(chat)
         else:
-            display_panel = f'{chat.vendor}_{chat.workspace}_ChatDisplayNotebookPanel'
-            display_panel = f'{panels.vendor}'
-
-            mod_name=f'{chat.workspace}_{chat.vendor}'
-
-            #print('display_panel', display_panel)
-           
-            if 1:   
-                
-                assert mod_name in globals(), f"Module '{mod_name}' does not exist."
-                module= globals()[mod_name]
-                assert hasattr(module, display_panel), f"Display class '{display_panel}' is not defined in '{mod_name}'."
-                cls= getattr(module, display_panel)
-
+            display_panel = f'{chat.vendor}_ChatDisplayNotebookPanel'
             try:
                 #assert display_panel in globals()
-                #cls = globals()[display_panel]
+                cls = globals()[display_panel]
                 self.chatDisplay_notebook = cls(self, self.GetPageCount(), self.ws_name)
                 #print(f'Adding {chat.vendor}_ChatDisplayNotebookPanel panel:', display_panel)
                 self.chatDisplay_notebook.AddTab(chat)
@@ -390,7 +345,6 @@ class VendorNotebook(wx.Notebook):
                 #raise AssertionError(f"Display class '{display_panel}' does not exist.")
             self.AddPage(self.chatDisplay_notebook, title)
             self.SetSelection(self.GetPageCount() - 1)
-
 
 
 
@@ -414,7 +368,12 @@ class WorkspacePanel(wx.Panel,NewChat):
             apc.chats[tab_id]=chat
             self.SwapInputPanel(tab_id , resplit=False)
         
+        if 0:
+            self.chatInput = Gpt4_Chat_InputPanel(v_splitter, tab_id=(self.ws_name,0,0))
+            
+            self.chatInputs[(chat.vendor, chat.chat_type)]=self.chatInput
 
+                
         self.chatInput.SetMinSize((300, 200)) 
         
         self.logPanel = LogPanel(v_splitter)
@@ -436,11 +395,10 @@ class WorkspacePanel(wx.Panel,NewChat):
             WorkspacePanel.subscribed = True
 
     def SwapInputPanel(self,  tab_id, resplit=True):
-        print('SwapInputPanel 111', tab_id)
+        print('SwapInputPanel', tab_id)
         #parent = self.GetParent()
         #apc.chats[tab_id]=chat
         chat=apc.chats[tab_id]
-        pp(chat)
         #print('SwapInputPanel', chat.chat_type)
         v_splitter = self.v_splitter
         if resplit:
@@ -460,20 +418,22 @@ class WorkspacePanel(wx.Panel,NewChat):
             self.chatInput.tab_id=tab_id
             self.chatInput.RestoreQuestionForTabId(tab_id)
         else:
+            if 0:
+                if chat.chat_type == 'Chat':
+                    #print(f'NEW Gpt4_Chat_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
+                    self.chatInput = Gpt4_Chat_InputPanel(v_splitter,tab_id=tab_id)
+                else:
+                    #print(f'NEW Gpt4_Copilot_InputPanel [{self.vendor_notebook.GetPageCount()}]', tab_id)
+                    self.chatInput = Gpt4_Copilot_InputPanel(v_splitter,tab_id=tab_id)
 
 
-            chatInput_panel = f'{chat.vendor}_{chat.workspace}_{chat.chat_type}_{panels.input}'
-            chatInput_panel = f'{chat.chat_type}_{panels.input}'
-            mod_name=f'{chat.workspace}_{chat.vendor}'
-
+            chatInput_panel = f'{chat.vendor}_{chat.chat_type}_{panels.input}'
             #print('display_panel', display_panel)
             try:
                 
                 print(f'\t\tWorkspace|resplit[{resplit}]: Adding {chat.workspace} "{chat.chat_type}" panel:', chatInput_panel)
-                assert mod_name in globals(), f"Module '{mod_name}' does not exist."
-                module= globals()[mod_name]
-                assert hasattr(module, chatInput_panel), f"Display class '{chatInput_panel}' is not defined in '{mod_name}'."
-                cls= getattr(module, chatInput_panel)
+                assert chatInput_panel in globals(), f"Display class '{chatInput_panel}' does not exist."
+                cls= globals()[chatInput_panel]
                 # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
                 try:
                     self.chatInput = cls (v_splitter, tab_id=tab_id)
@@ -488,9 +448,6 @@ class WorkspacePanel(wx.Panel,NewChat):
                 raise
 
             self.chatInputs[input_id]=self.chatInput
-            #self.chatInput.tab_id=tab_id
-            
-            self.chatInput.RestoreQuestionForTabId(tab_id)
         #print('SwapInputPanel', self.chatInputs.keys())
         
  
@@ -601,33 +558,35 @@ class MyFrame(wx.Frame, NewChat):
 
         self.Show()
         self.AddMenuBar()
-        self.statusBar = self.CreateStatusBar(3)
+        self.statusBar = self.CreateStatusBar(2)
         self.statusBar.SetStatusText('Ready')
-        self.statusBar.SetStatusText('System', 1)
         #pub.subscribe(self.SetStatusText, 'set_status')
         #pub.subscribe(self.SetStatusText, 'log')
         self.progressBar = wx.Gauge(self.statusBar, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
-        self.statusBar.SetStatusWidths([50, -1,200])
+        self.statusBar.SetStatusWidths([-1, 200])
         
-        rect = self.statusBar.GetFieldRect(2)
+        rect = self.statusBar.GetFieldRect(1)
         self.progressBar.SetPosition((rect.x, rect.y))
         self.progressBar.SetSize((rect.width, rect.height))  
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)   
         pub.subscribe(self.StartProgress, 'start_progress')  
         pub.subscribe(self.StopProgress, 'stop_progress') 
-        pub.subscribe(self.SetSystemPrompt, 'set_system_prompt')
-        self.system_prompt={} 
+        if 0:
+            apc.conda_env=get_current_conda_env()
+            print(apc.conda_env)
+            if apc.conda_env.endswith('test'):
+                
+                x, y = self.GetPosition() 
+                self.SetPosition((x+100, y+100))
 
+        
 
         pub.sendMessage('add_default_tabs')
         pub.subscribe(self.SetStatus, 'set_status')
         #self.workspace.set_focus_on_last_tab()
         #self.workspace.workspace_notebook.SetSelection(0)
         #self.workspace.workspace_notebook.SetSelection(1)
-    def SetSystemPrompt(self, message,tab_id):
-        self.system_prompt[tab_id]=message
-        self.statusBar.SetStatusText(message, 1)    
     def SetStatus(self, message):
         self.statusBar.SetStatusText(message, 0)
     def StartProgress(self):
@@ -790,7 +749,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Microsoft Phi3 Prompt Fuser')
+        self.frame = MyFrame(f'Phi-3 ONNX Copilot')
         return True
 
 if __name__ == '__main__':

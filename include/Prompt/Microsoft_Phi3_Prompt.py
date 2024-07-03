@@ -41,24 +41,37 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 #from vertexai.language_models import TextGenerationModel
 
 
-class ResponseStreamer:
-    def __init__(self,chat, model):
+class Chat_ResponseStreamer:
+    def __init__(self):
         # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.tokenizer_stream={}
+    def setup(self, tab_id):
+        chat=apc.chats[tab_id]
         chat.verbose=chat.get('verbose', True)
         chat.timings=chat.get('timings', True) 
+        model=chat.model
         if chat.verbose: log(f"Loading model '{model}'...")
-        self.model_name=model
-        self.model = og.Model(f'{model}')
-        if chat.verbose: log("Model loaded")
-        self.tokenizer = og.Tokenizer(self.model)
-        self.tokenizer_stream = self.tokenizer.create_stream()  
-        if chat.verbose: log("Tokenizer created")  
+        if tab_id not in self.model:
+            self.model[tab_id] = og.Model(f'{model}')
+            if chat.verbose: log("Model loaded")
+        else:
+            if chat.verbose: log("Model already loaded")
+        if tab_id not in self.tokenizer:
+            self.tokenizer[tab_id] = og.Tokenizer(self.model[tab_id])
+            self.tokenizer_stream[tab_id] = self.tokenizer[tab_id].create_stream() 
+            if chat.verbose: log("Tokenizer created")
+        else:    
+            if chat.verbose: log("Tokenizer already created")
+ 
 
 
-    def stream_response(self, prompt, chatHistory, receiveing_tab_id):
+    def stream_response(self, text_input, chatHistory, receiveing_tab_id, model):
+        self.setup( receiveing_tab_id)
         out=[]
         chat=apc.chats[receiveing_tab_id]
-
+        chatHistory=chatHistory[receiveing_tab_id]
         self.receiveing_tab_id=receiveing_tab_id
         chat=apc.chats[receiveing_tab_id]
         chat.verbose=chat.get('verbose', True)
@@ -99,6 +112,14 @@ class ResponseStreamer:
 <|assistant|>'''
 
         # Keep asking for input prompts in a loop
+
+
+        if chat.history:
+
+            chatHistory += [f"<|user|>\n{text_input} <|end|>"  ]
+        else:
+            chatHistory = [f"<|user|>\n{text_input} <|end|>"  ]
+
         try:
             text = '\n'.join(chatHistory)
             #pp(chatHistory)
@@ -113,13 +134,13 @@ class ResponseStreamer:
             pfmt([[prompt]], ['Prompt'])
             #pp(prompt)
             #e()
-            input_tokens = self.tokenizer.encode(prompt)
+            input_tokens = self.tokenizer[receiveing_tab_id].encode(prompt)
 
-            params = og.GeneratorParams(self.model)
+            params = og.GeneratorParams(self.model[receiveing_tab_id])
             #params.try_graph_capture_with_max_batch_size(10)
             params.set_search_options(**search_options)
             params.input_ids = input_tokens
-            generator = og.Generator(self.model, params)
+            generator = og.Generator(self.model[receiveing_tab_id], params)
             if chat.verbose: log("Generator created")
 
             #if chat.verbose: print("Running generation loop ...")
@@ -141,7 +162,7 @@ class ResponseStreamer:
                             first = False
 
                     new_token = generator.get_next_tokens()[0]
-                    chunk=self.tokenizer_stream.decode(new_token)
+                    chunk=self.tokenizer_stream[receiveing_tab_id].decode(new_token)
                     out.append(chunk)
                     #print(chunk, end='', flush=True)
                     

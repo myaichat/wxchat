@@ -13,8 +13,9 @@ templates:
     Chat:
     - vendor: 'Microsoft_Phi3'
       chat_type: 'Chat'
-      streamer_name: 'TextGenerationModel'
-      name: 'Text'
+      streamer_name: 'Chat'
+      history: False
+      name: 'noHist'
       model: 'medium_dml_128k\directml-int4-awq-block-128'
       system: 'SYSTEM'
       question: |
@@ -22,7 +23,15 @@ templates:
         Just show one promt in <prompt> tags. use these as inspiration:
         inspiration: gs://cloud-samples-data/generative-ai/image/scones.jpg
 
-
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Chat'
+      streamer_name: 'Chat'
+      history: False
+      name: 'noHist 2'
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM'
+      
+      question: 'How many Python versions are there?'
 
     Copilot:
 

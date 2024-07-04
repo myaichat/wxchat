@@ -124,6 +124,65 @@ templates:
       question:  |
         add ukrainian essence
 
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: 'NoHist 1'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 1
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: 'NoHist 2'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 2
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: 'NoHist 3'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: 'NoHist 4'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 4
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
+
+
+    - vendor: 'Microsoft_Phi3'
+      chat_type: 'Copilot'
+      name: 'NoHist 5'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 5
+      model: 'medium_dml_128k\directml-int4-awq-block-128'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence
+
   System:
     Chat:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."

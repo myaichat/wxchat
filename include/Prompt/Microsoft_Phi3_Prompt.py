@@ -257,6 +257,7 @@ class Prompt_Fuser_ResponseStreamer:
 
         
         #if chat.verbose: print()
+        chat.temperature=float(chat.temperature)
         search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
         slog=fmtd([search_options], [])
         print(slog)

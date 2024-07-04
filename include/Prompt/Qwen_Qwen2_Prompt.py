@@ -1,5 +1,6 @@
 
 
+#import onnxruntime_genai as og
 import argparse
 import time, random
 from datetime import datetime
@@ -9,11 +10,8 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_OpenAI_Gpt4 import Base_InputPanel_OpenAI_Gpt4
+from include.Prompt.Base.Base_InputPanel_Qwen_Qwen2 import Base_InputPanel_Qwen_Qwen2
 
-import base64
-import requests
-import openai
 
 from pubsub import pub
 from pprint import pprint as pp 
@@ -28,9 +26,10 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 
-DEFAULT_MODEL='gpt-4o'
+DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
+model_list=[r'mini_dml_4k\directml\directml-int4-awq-block-128', r'mini_dml_128k\directml\directml-int4-awq-block-128', 
+            r'medium_dml_4k\directml-int4-awq-block-128', r'medium_dml_128k\directml-int4-awq-block-128']
 
-model_list=['gpt-4o', 'gpt-4-turbo', 'gpt-4-turbo-2024-04-09', 'gpt-4-vision-preview']
 dir_path = 'template'
 
 chatHistory,  currentQuestion, currentModel = apc.chatHistory,  apc.currentQuestion, apc.currentModel
@@ -38,96 +37,245 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
+#import vertexai
+#from vertexai.language_models import TextGenerationModel
 
 
-
-class Hist_Chat_ResponseStreamer:
+class Chat_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
-        
+        self.model={}
+        self.tokenizer={}
+        self.tokenizer_stream={}
+    def setup(self, tab_id):
+        chat=apc.chats[tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True) 
+        model=chat.model
+        if chat.verbose: log(f"Loading model '{model}'...")
+        if tab_id not in self.model:
+            self.model[tab_id] = og.Model(f'{model}')
+            if chat.verbose: log("Model loaded")
+        else:
+            if chat.verbose: log("Model already loaded")
+        if tab_id not in self.tokenizer:
+            self.tokenizer[tab_id] = og.Tokenizer(self.model[tab_id])
+            self.tokenizer_stream[tab_id] = self.tokenizer[tab_id].create_stream() 
+            if chat.verbose: log("Tokenizer created")
+        else:    
+            if chat.verbose: log("Tokenizer already created")
+ 
 
-        # Initialize the client
-        self.client = openai.OpenAI()
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
-        # Create a chat completion request with streaming enabled
-        #pp(chatHistory)
+    def stream_response(self, text_input, chatHistory, receiveing_tab_id, model):
+        self.setup( receiveing_tab_id)
         out=[]
-        from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        txt='\n'.join(split_text_into_chunks(text_prompt,80))
-        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-        start = time.time()
-        content = []
+        chatHistory=chatHistory[receiveing_tab_id]
+        self.receiveing_tab_id=receiveing_tab_id
+        chat=apc.chats[receiveing_tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True)    
+        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
+        assert chat.max_length,chat.max_length
+        assert chat.min_length,chat.min_length
+        assert chat.top_p is not None,chat.top_p
+        assert chat.top_k,chat.top_k
+        assert chat.temperature is not None,chat.temperature
+        assert chat.repetition_penalty is not None,chat.repetition_penalty
+        chat.model=chat.get('model', DEFAULT_MODEL)
+        
 
+            
+        if chat.timings:
+            started_timestamp = 0
+            first_token_timestamp = 0
 
-           
-        chatHistory[receiveing_tab_id] += [{"role": "user", "content": text_prompt}]
-        response = self.client.chat.completions.create(
-            model=chat.model,
-            messages=chatHistory[receiveing_tab_id],
-            stream=True
-        )
-        out = []
-        # Print each response chunk as it arrives
-        stop_output=apc.stop_output[receiveing_tab_id]
-        pause_output=apc.pause_output[receiveing_tab_id]
-        for chunk in response:
-            if stop_output[0] or pause_output[0] :
-                
-                if stop_output[0] :
-                    print('\n-->Stopped\n')
-                    pub.sendMessage("stopped")
-                    break
-                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                else:
-                    while pause_output[0] :
-                        time.sleep(0.1)
-                        if stop_output[0]:
-                            print('\n-->Stopped\n')
-                            pub.sendMessage("stopped")
-                            break
-                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                                            
-            if hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                #print(content, end='', flush=True)
-                #pp(content)
-                if content:
-                    out.append(content)
-                    #print(content, receiveing_tab_id)
-                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
 
         
-        print("\nElapsed:", time.time() - start)
-        log(f'\nElapsed: {time.time() - start}')
+        #if chat.verbose: print()
+        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+        slog=fmtd([search_options], [])
+        print(slog)
+        log(slog)
+        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
+        # Set the max length to something sensible by default, unless it is specified by the user,
+        # since otherwise it will be set to the entire context length
+        assert 'max_length'  in search_options
+        assert 'min_length'  in search_options
+        assert 'top_p'  in search_options
+        assert 'top_k'  in search_options
+        assert 'temperature'  in search_options
+        assert 'repetition_penalty'  in search_options
 
+        chat_template = '''{input}
+<|assistant|>'''
+
+        # Keep asking for input prompts in a loop
+
+
+        if chat.history:
+
+            chatHistory += [f"<|user|>\n{text_input} <|end|>"  ]
+        else:
+            chatHistory = [f"<|user|>\n{text_input} <|end|>"  ]
+
+        try:
+            # pp(chatHistory)
+            text = '\n'.join(chatHistory)
+            #pp(chatHistory)
+            #e()
+            if chat.timings: started_timestamp = time.time()
+
+            # If there is a chat template, use it
+            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
+            #pp(text)
+            #e()
+            prompt = f'{chat_template.format(input=text)}'
+            pfmt([[prompt]], ['Prompt'])
+            #pp(prompt)
+            #e()
+            input_tokens = self.tokenizer[receiveing_tab_id].encode(prompt)
+
+            params = og.GeneratorParams(self.model[receiveing_tab_id])
+            #params.try_graph_capture_with_max_batch_size(10)
+            params.set_search_options(**search_options)
+            params.input_ids = input_tokens
+            generator = og.Generator(self.model[receiveing_tab_id], params)
+            if chat.verbose: log("Generator created")
+
+            #if chat.verbose: print("Running generation loop ...")
+            if chat.timings:
+                first = True
+                new_tokens = []
+
+            #print()
+            #print("Output: ", end='', flush=True)
+            pub.sendMessage('chat_output', message=f'Model:{chat.model}\n\n', tab_id=receiveing_tab_id)
+            if 1:
+                idx=0
+                while not generator.is_done():
+                    generator.compute_logits()
+                    generator.generate_next_token()
+                    if chat.timings:
+                        if first:
+                            first_token_timestamp = time.time()
+                            first = False
+
+                    new_token = generator.get_next_tokens()[0]
+                    chunk=self.tokenizer_stream[receiveing_tab_id].decode(new_token)
+                    out.append(chunk)
+                    #print(chunk, end='', flush=True)
+                    
+                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
+                    if idx%10==0:
+                        time.sleep(.0001)
+                        idx=0
+                    if chat.timings: new_tokens.append(new_token)
+                    idx+=1
+
+            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
+            del generator
+
+            if out:
+                if chat.history:
+
+                    chatHistory += [''.join(out)+" <|end|>\n"  ]
+
+
+            if chat.timings:
+                prompt_time = first_token_timestamp - started_timestamp
+                run_time = time.time() - first_token_timestamp
+                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
+                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
+                pfmtd([stats], [])
+                
+                #pub.sendMessage('chat_output', message=f'\n\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
+        except:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
+
+            pub.sendMessage('stop_progress')
+            raise
         if out:
-            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
-        return ''.join(out)    
+        return ''.join(out)
+    
 
-class Hist_Infuser_ResponseStreamer:
+class Prompt_Fuser_ResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.tokenizer_stream={}
+    def setup(self, tab_id):
+        chat=apc.chats[tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True) 
+        model=chat.model
+        if chat.verbose: log(f"Loading model '{model}'...")
+        if tab_id not in self.model:
+            self.model[tab_id] = og.Model(f'{model}')
+            if chat.verbose: log("Model loaded")
+        else:
+            if chat.verbose: log("Model already loaded")
+        if tab_id not in self.tokenizer:
+            self.tokenizer[tab_id] = og.Tokenizer(self.model[tab_id])
+            self.tokenizer_stream[tab_id] = self.tokenizer[tab_id].create_stream() 
+            if chat.verbose: log("Tokenizer created")
+        else:    
+            if chat.verbose: log("Tokenizer already created")
+ 
+
+
+    def stream_response(self, text_input, chatHistory, receiveing_tab_id, prompt_path):
+        self.setup( receiveing_tab_id)
+        out=[]
+        chat=apc.chats[receiveing_tab_id]
+        chatHistory=chatHistory[receiveing_tab_id]
+        self.receiveing_tab_id=receiveing_tab_id
+        chat=apc.chats[receiveing_tab_id]
+        chat.verbose=chat.get('verbose', True)
+        chat.timings=chat.get('timings', True)    
+        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
+        assert chat.max_length,chat.max_length
+        assert chat.min_length,chat.min_length
+        assert chat.top_p is not None,chat.top_p
+        assert chat.top_k,chat.top_k
+        assert chat.temperature is not None,chat.temperature
+        assert chat.repetition_penalty is not None,chat.repetition_penalty
+        chat.model=chat.get('model', DEFAULT_MODEL)
         
 
-        # Initialize the client
-        self.client = openai.OpenAI()
+            
+        if chat.timings:
+            started_timestamp = 0
+            first_token_timestamp = 0
 
-    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
-        # Create a chat completion request with streaming enabled
-        #pp(chatHistory)
-        out=[]
-        from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
-        txt='\n'.join(split_text_into_chunks(text_prompt,80))
-        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-        start = time.time()
-        content = []
+
+        
+        #if chat.verbose: print()
+        chat.temperature=float(chat.temperature)
+        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
+        slog=fmtd([search_options], [])
+        print(slog)
+        log(slog)
+        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
+        # Set the max length to something sensible by default, unless it is specified by the user,
+        # since otherwise it will be set to the entire context length
+        assert 'max_length'  in search_options
+        assert 'min_length'  in search_options
+        assert 'top_p'  in search_options
+        assert 'top_k'  in search_options
+        assert 'temperature'  in search_options
+        assert 'repetition_penalty'  in search_options
+
+        chat_template = '''{input}
+<|assistant|>'''
+
+        # Keep asking for input prompts in a loop
 
 
 
@@ -140,7 +288,7 @@ class Hist_Infuser_ResponseStreamer:
 
 
 
-        prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+        text_prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
         Here are the descriptions of the input images:
 
         {descriptions_text}
@@ -150,56 +298,396 @@ class Hist_Infuser_ResponseStreamer:
         Be specific about colors, shapes, textures, and composition. 
         Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
 
-        Before Providing the final description in <fused_image> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
-        {text_prompt}"""
-           
-        chatHistory[receiveing_tab_id] += [{"role": "user", "content": prompt}]
-        response = self.client.chat.completions.create(
-            model=chat.model,
-            messages=chatHistory[receiveing_tab_id],
-            stream=True
-        )
-        out = []
-        # Print each response chunk as it arrives
-        stop_output=apc.stop_output[receiveing_tab_id]
-        pause_output=apc.pause_output[receiveing_tab_id]
-        for chunk in response:
-            if stop_output[0] or pause_output[0] :
+        Before Providing the final description in <fused_prompt> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+        Do not mention weights in fused_prompt.
+        {text_input}"""
+    
+
+        if chat.history:
+
+            chatHistory += [f"<|user|>\n{text_prompt} <|end|>"  ]
+        else:
+            chatHistory = [f"<|user|>\n{text_prompt} <|end|>"  ]
+
+        try:
+            #pp(chatHistory)
+            #return
+            text = '\n'.join(chatHistory)
+            #pp(chatHistory)
+            #e()
+            if chat.timings: started_timestamp = time.time()
+
+            # If there is a chat template, use it
+            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
+            #pp(text)
+            #e()
+            prompt = f'{chat_template.format(input=text)}'
+            pfmt([[prompt]], ['Prompt'])
+            #pp(prompt)
+            #e()
+            input_tokens = self.tokenizer[receiveing_tab_id].encode(prompt)
+
+            params = og.GeneratorParams(self.model[receiveing_tab_id])
+            #params.try_graph_capture_with_max_batch_size(10)
+            params.set_search_options(**search_options)
+            params.input_ids = input_tokens
+            generator = og.Generator(self.model[receiveing_tab_id], params)
+            if chat.verbose: log("Generator created")
+
+            #if chat.verbose: print("Running generation loop ...")
+            if chat.timings:
+                first = True
+                new_tokens = []
+
+            #print()
+            #print("Output: ", end='', flush=True)
+            pub.sendMessage('chat_output', message=f'Model:{chat.model}\n\n', tab_id=receiveing_tab_id)
+            if 1:
+                idx=0
+                while not generator.is_done():
+                    generator.compute_logits()
+                    generator.generate_next_token()
+                    if chat.timings:
+                        if first:
+                            first_token_timestamp = time.time()
+                            first = False
+
+                    new_token = generator.get_next_tokens()[0]
+                    chunk=self.tokenizer_stream[receiveing_tab_id].decode(new_token)
+                    out.append(chunk)
+                    #print(chunk, end='', flush=True)
+                    
+                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
+                    if idx%10==0:
+                        time.sleep(.0001)
+                        idx=0
+                    if chat.timings: new_tokens.append(new_token)
+                    idx+=1
+
+            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
+            del generator
+
+            if out:
+                if chat.history:
+
+                    chatHistory += [''.join(out)+" <|end|>\n"  ]
+
+
+            if chat.timings:
+                prompt_time = first_token_timestamp - started_timestamp
+                run_time = time.time() - first_token_timestamp
+                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
+                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
+                pfmtd([stats], [])
                 
-                if stop_output[0] :
-                    print('\n-->Stopped\n')
-                    pub.sendMessage("stopped")
-                    break
-                    #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                else:
-                    while pause_output[0] :
-                        time.sleep(0.1)
-                        if stop_output[0]:
-                            print('\n-->Stopped\n')
-                            pub.sendMessage("stopped")
-                            break
-                            #pub.sendMessage("append_text", text='\n-->Stopped\n')
-                                            
-            if hasattr(chunk.choices[0].delta, 'content'):
-                content = chunk.choices[0].delta.content
-                #print(content, end='', flush=True)
-                #pp(content)
-                if content:
-                    out.append(content)
-                    #print(content, receiveing_tab_id)
-                    pub.sendMessage('chat_output', message=f'{content}', tab_id=receiveing_tab_id)
+                #pub.sendMessage('chat_output', message=f'\n\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
+        except:
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
 
-        
-        print("\nElapsed:", time.time() - start)
-        log(f'\nElapsed: {time.time() - start}')
-
+            pub.sendMessage('stop_progress')
+            raise
         if out:
-            chatHistory[receiveing_tab_id].append({"role": "assistant", "content": ''.join(out)}) 
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)
     
+
+class Text_Fuser_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)  
+        try:
+
+      
+      
+            import vertexai
+            from vertexai.language_models import TextGenerationModel
+
+          
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+            from google.cloud.aiplatform_v1beta1.types import (
+                content as gapic_content_types,
+            )
+            #text_generation_model = TextGenerationModel.from_pretrained("text-bison")
+            if 1:
+                text_generation_model = TextGenerationModel.from_pretrained(chat.model)
+      
         
+            parameters = {
+                "temperature": chat.temperature,  
+                "max_output_tokens": int(chat.max_tokens), 
+                "top_p": chat.top_p, 
+                "top_k": chat.top_k
+            }
+            pp(parameters)
+
+
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_prompt> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            {text_prompt}"""
+
+
+            responses = text_generation_model.predict_streaming(prompt=prompt, **parameters)
+            for chunk in responses:
+                
+                #print(type(chunk))
+                #pp(chunk)
+                if chunk.text:
+                    print(chunk.text, end='', flush=True)
+                    out.append(chunk.text)
+                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+            
+            
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+    
+
+class ChatModel_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  image_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)        
+        try:
+
+      
+      
+            import vertexai
+            from vertexai.language_models import ChatModel
+
+       
+           
+           
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+            chat_model = ChatModel.from_pretrained(chat.model)
+            parameters = {
+                "temperature": chat.temperature,  
+                "max_output_tokens": int(chat.max_tokens), 
+                "top_p": chat.top_p, 
+                "top_k": chat.top_k
+            }
+
+            pp(chat)
+            chat = chat_model.start_chat(
+                context=chat.system_prompt,
+
+            )
+
+            '''
+                examples=[
+                    InputOutputTextPair(
+                        input_text="How many moons does Mars have?",
+                        output_text="The planet Mars has two moons, Phobos and Deimos.",
+                    ),
+                ],
+            '''
+            responses = chat.send_message_streaming(
+                message=text_prompt, **parameters)
+
+            for chunk in responses:
+                
+                #print(type(chunk))
+                #pp(chunk)
+                if chunk.text:
+                    print(chunk.text, end='', flush=True)
+                    out.append(chunk.text)
+                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+            
+            
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
+
+
+class Chat_Fuser_ResponseStreamer:
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id,  prompt_path):
+        # Create a chat completion request with streaming enabled
+       
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)        
+        try:
+
+      
+      
+            import vertexai
+            from vertexai.language_models import ChatModel
+
+       
+           
+           
+            PROJECT_ID = "spatial-flag-427113-n0"
+            LOCATION="us-central1"
+            vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+            chat_model = ChatModel.from_pretrained(chat.model)
+            parameters = {
+                "temperature": chat.temperature,  
+                "max_output_tokens": int(chat.max_tokens), 
+                "top_p": chat.top_p, 
+                "top_k": chat.top_k
+            }
+
+            pp(chat)
+            chat = chat_model.start_chat(
+                context=chat.system_prompt,
+
+            )
+
+            '''
+                examples=[
+                    InputOutputTextPair(
+                        input_text="How many moons does Mars have?",
+                        output_text="The planet Mars has two moons, Phobos and Deimos.",
+                    ),
+                ],
+            '''
+
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_prompt> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            {text_prompt}"""
+
+            responses = chat.send_message_streaming(
+                message=prompt, **parameters)
+
+            for chunk in responses:
+                
+                #print(type(chunk))
+                #pp(chunk)
+                if chunk.text:
+                    print(chunk.text, end='', flush=True)
+                    out.append(chunk.text)
+                    pub.sendMessage('chat_output', message=f'{chunk.text}', tab_id=receiveing_tab_id)
+
+            
+            
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            #pub.sendMessage('stop_progress', tab_id=receiveing_tab_id)
+            return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):
         super(StyledTextDisplay, self).__init__(parent, style=wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP)
@@ -789,7 +1277,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI_Gpt4):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Qwen_Qwen2):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -802,12 +1290,12 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI
         chat=   apc.chats[tab_id]
         self.chat_type=chat.chat_type
         chatHistory[self.tab_id]=[]
-        #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
-        self.askLabel = wx.StaticText(self, label=f'Ask Claude AI {tab_id}:')
+        chatHistory[self.tab_id]= [] #[{"role": "system", "content": all_system_templates[chat.workspace].Copilot[default_copilot_template]}]
+        self.askLabel = wx.StaticText(self, label=f'{tab_id}:')
         if 1:
             model_names = model_list  # Add more model names as needed
             self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-            self.model_dropdown.SetValue(DEFAULT_MODEL)
+            self.model_dropdown.SetValue(chat.model)
             
             self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
             chat.model = self.model_dropdown.GetValue()
@@ -855,7 +1343,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -866,7 +1354,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_OpenAI
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1292,7 +1780,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt4):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Qwen_Qwen2):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1303,12 +1791,12 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         chat=   apc.chats[tab_id]
         chatHistory[self.tab_id]=[]
         #pp(chat)
-        chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+        #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
         self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
-        model_names = [DEFAULT_MODEL, 'gpt-4-turbo', 'gpt-4']  # Add more model names as needed
+        model_names = model_list  # Add more model names as needed
         self.chat_type=chat.chat_type
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
-        self.model_dropdown.SetValue(DEFAULT_MODEL)
+        self.model_dropdown.SetValue(chat.model)
         
         self.model_dropdown.Bind(wx.EVT_COMBOBOX, self.OnModelChange)
 
@@ -1326,11 +1814,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_OpenAI_Gpt4.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        
@@ -1345,7 +1833,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
             currentModel[self.tab_id]=DEFAULT_MODEL
 
             chat=apc.chats[tab_id]
-            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
          
 
 
@@ -1376,7 +1864,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
             #e()
             self.tabs[self.tab_id]=dict(q=apc.chats[tab_id].question)
             chat=apc.chats[tab_id]
-            chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
+            chatHistory[self.tab_id]= [] #[{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
             questionHistory[self.tab_id]=[]
             currentModel[self.tab_id]=DEFAULT_MODEL
         self.RestoreQuestionForTabId(tab_id)
@@ -1398,6 +1886,8 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         # You can add more code here to do something with the selected model
 
         # Continue processing the event
+        chat=apc.chats[self.tab_id]
+        chat.model=selected_model
         event.Skip()
 
     def _RestoreQuestionForTabId(self, tab_id):
@@ -1452,7 +1942,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
             pub.sendMessage('start_progress')
             chat=apc.chats[self.tab_id]
             prompt=evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
-            chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
+            #chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
 
             questionHistory[self.tab_id].append(question)
             currentQuestion[self.tab_id]=len(questionHistory[self.tab_id])-1
@@ -1477,13 +1967,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_OpenAI_Gpt
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id
         chat=apc.chats[tab_id]
-        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
-
-        assert streamer_name in globals(), streamer_name
-        print(f'\t\Creating streamer:', streamer_name)
-        cls= globals()[streamer_name]
-        # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
-        rs = cls ()
+        rs=self.get_rs(tab_id)
         out = rs.stream_response(prompt, chatHistory, self.receiveing_tab_id, model)
         if out:
             #chatHistory[tab_id].append({"role": "assistant", "content": out}) 

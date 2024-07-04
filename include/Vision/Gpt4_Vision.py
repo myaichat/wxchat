@@ -36,6 +36,9 @@ questionHistory= apc.questionHistory
 all_templates, all_chats, all_system_templates = apc.all_templates, apc.all_chats, apc.all_system_templates
 panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebookPanel',chat='DisplayPanel', input='InputPanel'))
 
+
+
+
 class VisionResponseStreamer:
     def __init__(self):
         # Set your OpenAI API key here

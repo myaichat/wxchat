@@ -80,9 +80,11 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 
 
 
-Dedicated infer
+#### Dedicated infer
 https://docs.api.nvidia.com/nim/reference/google-gemma7b-infer
+
 https://huggingface.co/docs/inference-endpoints/guides/create_endpoint
+
 
 
 

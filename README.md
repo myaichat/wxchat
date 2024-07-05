@@ -27,14 +27,14 @@ wxPython UI for Vision API demo
 # Prompt Fusion
 wxPython UI for Prompt Fusion demo
 
-| Vendor   | Model   | Vision | Config | Ueage|Info | 
-|------------|------------|------------|------------|------------|------------|
-| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_prompt_fusion/claude_prompt_fusion.py)| []()| [Medium](https://medium.com/p/4bd85eb997ec), []()|[]()|
-| Google Gemma 2| gemma-2-* | [Source](https://github.com/myaichat/wxchat/blob/gemma_prompt_fusion/include/Prompt/Google_Gemma_Prompt.py)| [Medium](https://medium.com/p/0d7dc430b72c)| [Medium](https://medium.com/p/40e30431d9ac), []()|[]()|
-|  Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_prompt_infuser/gpt4_prompt_infuser.py)| []()| [Medium](https://medium.com/me/stats/post/d8b41ec9e482), []()|[]()|
-|  Google Vertex AI| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/gemini_prompt_fuser/gemini_prompt_fuser.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](), []()|[]()|
-|  Google AI| PaLM 2 | [Source](https://github.com/myaichat/wxchat/blob/palm_prompt_fuser/palm_prompt_fuser.py)| [Medium]( https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/3d3d3f42895d), []()|[]()|
-| Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phi3_prompt_fuser/phi3_prompt_fuser.py)| []()| [Medium]()|[]()|
+| Vendor   | API| Model   | Vision | Config | Ueage|Info | 
+|------------|------------|------------|------------|------------|------------|------------|
+| Anthropic |anthropic| claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_prompt_fusion/claude_prompt_fusion.py)| []()| [Medium](https://medium.com/p/4bd85eb997ec), []()|[]()|
+| Google Gemma 2| transformers|gemma-2-* | [Source](https://github.com/myaichat/wxchat/blob/gemma_prompt_fusion/include/Prompt/Google_Gemma_Prompt.py)| [Medium](https://medium.com/p/0d7dc430b72c)| [Medium](https://medium.com/p/40e30431d9ac), []()|[]()|
+|  Open AI|openai| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_prompt_infuser/gpt4_prompt_infuser.py)| []()| [Medium](https://medium.com/me/stats/post/d8b41ec9e482), []()|[]()|
+|  Google Vertex AI|vertexai| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/gemini_prompt_fuser/gemini_prompt_fuser.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](), []()|[]()|
+|  Google AI|vertexai |PaLM 2 | [Source](https://github.com/myaichat/wxchat/blob/palm_prompt_fuser/palm_prompt_fuser.py)| [Medium]( https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/3d3d3f42895d), []()|[]()|
+| Microsoft|onnxruntime_genai| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phi3_prompt_fuser/phi3_prompt_fuser.py)| []()| [Medium]()|[]()|
 
 
 

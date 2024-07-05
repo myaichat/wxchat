@@ -20,6 +20,17 @@ templates:
       system: 'SYSTEM_ASSISTANT'
       question: |
         Give me a short introduction to large language model.
+
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Chat'
+      streamer_name: 'ChatHist'
+      history: False
+      name: 'Hist'
+      model: 'Qwen/Qwen2-7B-Instruct'
+      system: 'SYSTEM_ASSISTANT'
+      question: |
+        Give me a short introduction to large language model.
+
     - vendor: 'Qwen_Qwen2'
       chat_type: 'Chat'
       streamer_name: 'Chat'

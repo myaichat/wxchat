@@ -179,6 +179,11 @@ class Base_InputPanel_Qwen_Qwen2(Base_InputPanel):
             self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
             chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )             
 
+            self.length_penalty_dropdown = wx.ComboBox(self, choices=['1.0',  '1.1',  '1.2',  '1.3',  '1.4',  '1.5',  '1.6',  '1.7',  '1.8',  '1.9',  '2.0',  '2.1','2.5','3.0','5.0','10.0',], style=wx.CB_READONLY)
+            self.length_penalty_dropdown.SetValue('1.1')  # Default value
+            self.length_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnLengthPenaltyChange)
+            chat.length_penalty = float(self.length_penalty_dropdown.GetValue()  )    
+
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
             dos = wx.StaticText(self, label="do_sample")
             dos.html_content="""<!DOCTYPE html>
@@ -608,7 +613,7 @@ class Base_InputPanel_Qwen_Qwen2(Base_InputPanel):
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="repeti")
+            dos = wx.StaticText(self, label="repeti_pen")
             dos.html_content ="""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -706,7 +711,64 @@ class Base_InputPanel_Qwen_Qwen2(Base_InputPanel):
             sizer_0.Add(self.repetition_penalty_dropdown, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
-           
+            sizer_0 = wx.BoxSizer(wx.VERTICAL)
+            dos = wx.StaticText(self, label="length_pen")
+            dos.html_content ="""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Length Penalty Ranges Explained</title>
+</head>
+<body>
+    <h1>Length Penalty Ranges Explained</h1>
+    
+    <h2>Length Penalty Range Effects:</h2>
+    
+    <h3>Low Length Penalty (0.1 to 0.5):</h3>
+    <ul>
+        <li><strong>Behavior:</strong> The model applies a slight penalty to longer sequences, mildly discouraging lengthy outputs.</li>
+        <li><strong>Output:</strong> The text will be concise and to the point, with a focus on brevity and clarity.</li>
+        <li><strong>Use Case:</strong> Suitable for tasks requiring short, direct responses, such as chatbots or concise summaries.</li>
+    </ul>
+    
+    <h3>Moderate Length Penalty (0.6 to 1.0):</h3>
+    <ul>
+        <li><strong>Behavior:</strong> The model applies a moderate penalty to longer sequences, balancing between conciseness and detail.</li>
+        <li><strong>Output:</strong> The text will be balanced, providing sufficient detail while avoiding unnecessary length.</li>
+        <li><strong>Use Case:</strong> Suitable for general-purpose text generation, where a balance between brevity and detail is desired, such as news articles or reports.</li>
+    </ul>
+    
+    <h3>High Length Penalty (1.1 to 1.5):</h3>
+    <ul>
+        <li><strong>Behavior:</strong> The model applies a higher penalty to longer sequences, strongly discouraging lengthy outputs.</li>
+        <li><strong>Output:</strong> The text will be very concise, potentially omitting some details to maintain brevity.</li>
+        <li><strong>Use Case:</strong> Ideal for tasks where brevity is crucial, such as headlines, tweets, or text messages.</li>
+    </ul>
+    
+    <h3>Very High Length Penalty (>1.5):</h3>
+    <ul>
+        <li><strong>Behavior:</strong> The model applies a severe penalty to longer sequences, strongly promoting short outputs.</li>
+        <li><strong>Output:</strong> The text will be extremely concise, potentially at the cost of omitting important information.</li>
+        <li><strong>Use Case:</strong> Best for scenarios where extreme brevity is required, even if it means losing some context, such as quick alerts or prompts.</li>
+    </ul>
+    
+    <h2>Example Configurations:</h2>
+    
+    <h3>Low Length Penalty:</h3>
+    <pre>
+
+    
+</body>
+</html>
+>"""   
+
+            # Modify the event binding to use a lambda function
+            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
+            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.length_penalty_dropdown, 0, wx.ALIGN_CENTER)
+            h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
+
             
             v_sizer.Add(h_sizer_1, 0, wx.ALIGN_CENTER) 
     def OnClickDos(self, event):
@@ -810,6 +872,16 @@ enhancing the quality and coherence of the generated text.
         # Continue processing the event
         event.Skip()
 
+    def OnLengthPenaltyChange(self, event):
+        # Get the selected do_sample value
+        selected_length_penalty = self.length_penalty_dropdown.GetValue()
+
+        # Print the selected model
+        chat = apc.chats[self.tab_id]
+        chat.length_penalty = float(selected_length_penalty )
+
+        # Continue processing the event
+        event.Skip()
     def Base_OnAskQuestion(self):
         self.pause_panel.pause_output(False)
         self.pause_panel.stop_output(False)   
@@ -879,6 +951,13 @@ enhancing the quality and coherence of the generated text.
                 self.repetition_penalty_dropdown.SetValue(str(chat.repetition_penalty))
             else:
                 chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue())
+
+
+            if chat.get('length_penalty', None):
+                self.length_penalty_dropdown.SetValue(str(chat.length_penalty))
+            else:
+                chat.length_penalty = float(self.length_penalty_dropdown.GetValue())
+
 
             if chat.get('do_sample', None) is not None:
                 

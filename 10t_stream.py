@@ -1,4 +1,3 @@
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 
 device = "cuda"  # the device to load the model onto
@@ -12,7 +11,8 @@ model = AutoModelForCausalLM.from_pretrained(
     torch_dtype="auto",
     device_map="auto",
     cache_dir="./cache",
-    attn_implementation="flash_attention_2",
+    # flashattention=True,    
+    # use_cuda=True,
 )
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-7B-Instruct")
 
@@ -30,39 +30,12 @@ text = tokenizer.apply_chat_template(
 )
 model_inputs = tokenizer([text], return_tensors="pt").to(device)
 
-class CustomTextStreamer(TextStreamer):
-    skip_special_tokens=True
-    def put(self, value, **kwargs):
-        # Ensure value is a tensor and convert to a list of token IDs
-        if self.skip_prompt:
-            self.skip_prompt = False  # Reset the flag after skipping the prompt
-            return        
-        if isinstance(value, torch.Tensor):
-            value = value.tolist()
-        # Decode the list of token IDs to text
-        text = self.tokenizer.decode(value[0], skip_special_tokens=self.skip_special_tokens, **kwargs)
-
-        # Print or process the custom output as needed
-        print(text, end='', flush=True)
-
-
 # Setting up the streamer for streaming output
-streamer = CustomTextStreamer(tokenizer, skip_special_tokens=True, skip_prompt=True,)
+streamer = TextStreamer(tokenizer, skip_special_tokens=True)
 
 # Generating the response with streaming enabled
 model.generate(
     model_inputs.input_ids,
     max_new_tokens=4096,
-    min_new_tokens=1,
-    do_sample=True,
-    top_p=0.95,
-    top_k=40,
-    temperature=float(0.8),
-    repetition_penalty=1.2,   
-    length_penalty=1.0,  
-    num_beams = 1,
-    use_cache = True,
-    pad_token_id=tokenizer.pad_token_id,
-    eos_token_id=tokenizer.eos_token_id,    
     streamer=streamer
 )

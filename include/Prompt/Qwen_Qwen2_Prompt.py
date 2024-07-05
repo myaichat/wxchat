@@ -26,9 +26,8 @@ default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
 
 
-DEFAULT_MODEL  = r'medium_dml_128k\directml-int4-awq-block-128'
-model_list=[r'mini_dml_4k\directml\directml-int4-awq-block-128', r'mini_dml_128k\directml\directml-int4-awq-block-128', 
-            r'medium_dml_4k\directml-int4-awq-block-128', r'medium_dml_128k\directml-int4-awq-block-128']
+DEFAULT_MODEL  = r'Qwen/Qwen2-7B-Instruct'
+model_list=[DEFAULT_MODEL]
 
 dir_path = 'template'
 
@@ -39,169 +38,149 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 
 #import vertexai
 #from vertexai.language_models import TextGenerationModel
-
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 class Chat_ResponseStreamer:
+    subscribed=False
     def __init__(self):
         # Set your OpenAI API key here
         self.model={}
         self.tokenizer={}
-        self.tokenizer_stream={}
-    def setup(self, tab_id):
-        chat=apc.chats[tab_id]
-        chat.verbose=chat.get('verbose', True)
-        chat.timings=chat.get('timings', True) 
-        model=chat.model
-        if chat.verbose: log(f"Loading model '{model}'...")
-        if tab_id not in self.model:
-            self.model[tab_id] = og.Model(f'{model}')
-            if chat.verbose: log("Model loaded")
-        else:
-            if chat.verbose: log("Model already loaded")
-        if tab_id not in self.tokenizer:
-            self.tokenizer[tab_id] = og.Tokenizer(self.model[tab_id])
-            self.tokenizer_stream[tab_id] = self.tokenizer[tab_id].create_stream() 
-            if chat.verbose: log("Tokenizer created")
-        else:    
-            if chat.verbose: log("Tokenizer already created")
- 
+        self.chat_history={}
 
-
-    def stream_response(self, text_input, chatHistory, receiveing_tab_id, model):
-        self.setup( receiveing_tab_id)
-        out=[]
-        chat=apc.chats[receiveing_tab_id]
-        chatHistory=chatHistory[receiveing_tab_id]
-        self.receiveing_tab_id=receiveing_tab_id
-        chat=apc.chats[receiveing_tab_id]
-        chat.verbose=chat.get('verbose', True)
-        chat.timings=chat.get('timings', True)    
-        assert chat.do_sample in [True, False], f'do_sample must be True or False, not {chat.do_sample}'
-        assert chat.max_length,chat.max_length
-        assert chat.min_length,chat.min_length
-        assert chat.top_p is not None,chat.top_p
-        assert chat.top_k,chat.top_k
-        assert chat.temperature is not None,chat.temperature
-        assert chat.repetition_penalty is not None,chat.repetition_penalty
-        chat.model=chat.get('model', DEFAULT_MODEL)
+    def get_model(self, model_id):
         
-
+        if model_id not in self.model:
             
-        if chat.timings:
-            started_timestamp = 0
-            first_token_timestamp = 0
+            
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype="auto",
+                device_map="auto",
+                cache_dir="./cache",
+                attn_implementation="flash_attention_2",
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
 
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Tokenizer already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        try:
+
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+
+            device = "cuda"  # the device to load the model onto
+
+
+            model = self.get_model(chat.model)
+            tokenizer = self.get_tokenizer(chat.model)   
+
+            #prompt = "Give me a short introduction to large language model."
+
+            messages = [
+                {"role": "system", "content": chat.system_prompt},
+                #{"role": "system", "content": "You are transformers lib API expert."},
+                {"role": "user", "content": text_prompt}
+            ]
+            #pp(messages)
+            #return ''
+            text = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True, skip_prompt=True
+            )
+            model_inputs = tokenizer([text], return_tensors="pt").to(device)
+
+            class CustomTextStreamer(TextStreamer):
+                skip_special_tokens=True
+                def put(self, value, **kwargs):
+                    # Ensure value is a tensor and convert to a list of token IDs
+
+                    if self.skip_prompt:
+                        self.skip_prompt = False  # Reset the flag after skipping the prompt
+                        return
+        
+                    if isinstance(value, torch.Tensor):
+                        value = value.tolist()
+                    # Decode the list of token IDs to text
+                    text = self.tokenizer.decode(value[0], skip_special_tokens=self.skip_special_tokens, **kwargs)
+                    # Customize your output handling here
+                    #custom_output = f"Custom processed output: {text}"
+                    # Print or process the custom output as needed
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+                    print(text, end='', flush=True)
+
+
+            # Setting up the streamer for streaming output
+            streamer = CustomTextStreamer(tokenizer, skip_special_tokens=True, skip_prompt=True,)
+            gen_start = time.time()
+            # Generating the response with streaming enabled
+            if 1:
+                model.generate(
+                    model_inputs.input_ids,
+                    max_new_tokens=int(chat.max_length),
+                    min_new_tokens=int(chat.min_length),
+                    do_sample=chat.do_sample,
+                    top_p=float(chat.top_p),
+                    top_k=int(chat.top_k),
+                    temperature=float(chat.temperature),
+                    repetition_penalty=float(chat.repetition_penalty),   
+                    length_penalty=1.0,  
+                    num_beams = 1,
+                    use_cache = True,
+                    streamer=streamer
+                )
+            else:
+                model.generate(
+                    model_inputs.input_ids,
+                    max_new_tokens=4096,
+                    #do_sample=True,
+                    streamer=streamer
+                )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
 
         
-        #if chat.verbose: print()
-        search_options = {name:getattr(chat, name) for name in ['do_sample', 'max_length', 'min_length', 'top_p', 'top_k', 'temperature', 'repetition_penalty'] if name in chat}
-        slog=fmtd([search_options], [])
-        print(slog)
-        log(slog)
-        pub.sendMessage('chat_output', message=f'{slog}\n', tab_id=receiveing_tab_id)
-        # Set the max length to something sensible by default, unless it is specified by the user,
-        # since otherwise it will be set to the entire context length
-        assert 'max_length'  in search_options
-        assert 'min_length'  in search_options
-        assert 'top_p'  in search_options
-        assert 'top_k'  in search_options
-        assert 'temperature'  in search_options
-        assert 'repetition_penalty'  in search_options
-
-        chat_template = '''{input}
-<|assistant|>'''
-
-        # Keep asking for input prompts in a loop
+        except Exception as e:    
 
 
-        if chat.history:
-
-            chatHistory += [f"<|user|>\n{text_input} <|end|>"  ]
-        else:
-            chatHistory = [f"<|user|>\n{text_input} <|end|>"  ]
-
-        try:
-            # pp(chatHistory)
-            text = '\n'.join(chatHistory)
-            #pp(chatHistory)
-            #e()
-            if chat.timings: started_timestamp = time.time()
-
-            # If there is a chat template, use it
-            #text=chatHistory[-1]['content'].replace('Question:', '').replace('Answer:', '').replace('\n', '')
-            #pp(text)
-            #e()
-            prompt = f'{chat_template.format(input=text)}'
-            pfmt([[prompt]], ['Prompt'])
-            #pp(prompt)
-            #e()
-            input_tokens = self.tokenizer[receiveing_tab_id].encode(prompt)
-
-            params = og.GeneratorParams(self.model[receiveing_tab_id])
-            #params.try_graph_capture_with_max_batch_size(10)
-            params.set_search_options(**search_options)
-            params.input_ids = input_tokens
-            generator = og.Generator(self.model[receiveing_tab_id], params)
-            if chat.verbose: log("Generator created")
-
-            #if chat.verbose: print("Running generation loop ...")
-            if chat.timings:
-                first = True
-                new_tokens = []
-
-            #print()
-            #print("Output: ", end='', flush=True)
-            pub.sendMessage('chat_output', message=f'Model:{chat.model}\n\n', tab_id=receiveing_tab_id)
-            if 1:
-                idx=0
-                while not generator.is_done():
-                    generator.compute_logits()
-                    generator.generate_next_token()
-                    if chat.timings:
-                        if first:
-                            first_token_timestamp = time.time()
-                            first = False
-
-                    new_token = generator.get_next_tokens()[0]
-                    chunk=self.tokenizer_stream[receiveing_tab_id].decode(new_token)
-                    out.append(chunk)
-                    #print(chunk, end='', flush=True)
-                    
-                    pub.sendMessage('chat_output', message=f'{chunk}', tab_id=receiveing_tab_id)
-                    if idx%10==0:
-                        time.sleep(.0001)
-                        idx=0
-                    if chat.timings: new_tokens.append(new_token)
-                    idx+=1
-
-            # Delete the generator to free the captured graph for the next generator, if graph capture is enabled
-            del generator
-
-            if out:
-                if chat.history:
-
-                    chatHistory += [''.join(out)+" <|end|>\n"  ]
-
-
-            if chat.timings:
-                prompt_time = first_token_timestamp - started_timestamp
-                run_time = time.time() - first_token_timestamp
-                stats={'Prompt length':f"{len(input_tokens)}",'New tokens':f"{len(new_tokens)}", 'Time to first':f"{(prompt_time):.2f}s",
-                       'Prompt tokens per second': f"{len(input_tokens)/prompt_time:.2f} tps", 'New tokens per second': f"{len(new_tokens)/run_time:.2f} tps"}
-                pfmtd([stats], [])
-                
-                #pub.sendMessage('chat_output', message=f'\n\n{fmtd([stats], [])}\n', tab_id=receiveing_tab_id)
-        except:
             log(f'Error in stream_response', 'red')
             log(format_stacktrace(), 'red')
-            pub.sendMessage('chat_output', message=fmt([[format_stacktrace()]], ['EXCEPTION']), tab_id=receiveing_tab_id)
 
-            pub.sendMessage('stop_progress')
+            print(f"An error occurred: {e}")
             raise
+            #return ''
+        
+
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
-        return ''.join(out)
+        return ''.join(out)  
     
 
 class Prompt_Fuser_ResponseStreamer:
@@ -1852,6 +1831,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Qwen_Qwen2
         #pub.subscribe(self.SaveQuestionForTabId  ,  'save_question_for_tab_id')
         #pub.subscribe(self.RestoreQuestionForTabId  ,  'restore_question_for_tab_id')
         wx.CallAfter(self.inputCtrl.SetFocus)
+        self.rs={}
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
         self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
@@ -1962,7 +1942,16 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Qwen_Qwen2
             
             self.askButton.Disable()
             threading.Thread(target=self.stream_response, args=(prompt, chatHistory, self.tab_id, self.model_dropdown.GetValue())).start()
-
+    def get_rs(self, tab_id):
+        chat=apc.chats[tab_id]
+        streamer_name = f'{chat.streamer_name}_ResponseStreamer'
+        if streamer_name not in self.rs:
+            
+            print(f'\t\Creating streamer:', streamer_name)
+            cls= globals()[streamer_name]
+            # Gpt4_Chat_DisplayPanel/ Gpt4_Copilot_DisplayPanel
+            self.rs[streamer_name] = cls ()
+        return self.rs [streamer_name] 
     def stream_response(self, prompt, chatHistory, tab_id, model):
         # Call stream_response and store the result in out
         self.receiveing_tab_id=tab_id

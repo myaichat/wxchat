@@ -1,5 +1,5 @@
-# *Your Header Text*
-
+# *NEW!* Dwang 2 Prompt Fuser
+[Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)
 
 # Chat/Copilot
 wxPython UI for inference API demo
@@ -38,6 +38,8 @@ wxPython UI for Prompt Fusion demo
 |  Google Vertex AI|vertexai| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/gemini_prompt_fuser/gemini_prompt_fuser.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](), []()|[]()|
 |  Google AI|vertexai |PaLM 2 | [Source](https://github.com/myaichat/wxchat/blob/palm_prompt_fuser/palm_prompt_fuser.py)| [Medium]( https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/3d3d3f42895d), []()|[]()|
 | Microsoft|onnxruntime_genai| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phi3_prompt_fuser/phi3_prompt_fuser.py)| []()| [Medium]()|[]()|
+| Quen|transformers| Qwen2-***-Instruct| [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)| []()| [Medium]()|[]()|
+
 
 
 

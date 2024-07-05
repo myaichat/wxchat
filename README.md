@@ -1,5 +1,5 @@
-# *NEW!* Qwen 2 Prompt Fuser
-[Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py) [Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f)
+# *NEW!* 
+Qwen 2 Prompt Fuser: [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py) [Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f)
 
 # Chat/Copilot
 wxPython UI for inference API demo

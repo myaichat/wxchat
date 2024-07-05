@@ -1,3 +1,6 @@
+<h1 style="color:red;"><i>New !</i></h1>
+
+
 # Chat/Copilot
 wxPython UI for inference API demo
 | Vendor   | API | Model   | Chat/Copilot | Config | Usage|Info | 

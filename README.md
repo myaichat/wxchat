@@ -2,18 +2,16 @@
 wxPython UI for inference API demo
 | Vendor   | API | Model   | Chat/Copilot | Config | Usage|Info | 
 |------------|------------|------------|------------|------------|------------|------------|
-| Open AI|| gpt-4o| [Source](https://github.com/myaichat/wxchat/blob/feature/poor_mans_copilot/poor_mans/copilot/7d_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/6f03ca3b5569), [YouTube]
-| Anthropic|anthropic | claude-3.x*| [Source](https://github.com/myaichat/wxchat/blob/claude_copilot/include/Copilot/Anthropic_Claude.py)| []()| [Medium](https://medium.com/p/6d295d10e357)|[]()|
 | Google AI|vertexai| PaLM 2| [Source](https://github.com/myaichat/wxchat/blob/google_palm_copilot/include/Copilot/Google_PaLM.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/@alexbuzunov/introducing-palm-2-copilot-your-google-ai-powered-coding-assistant-1dddbf4fc1d0)|[]()|
 | Microsoft|onnxruntime_genai | Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_copilot/include/Phy3_Python.py)| []()| [Medium](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|[CookBook](https://github.com/microsoft/Phi-3CookBook?WT.mc_id=aiml-138114-kinfeylo)|
-(https://www.youtube.com/watch?v=Yh1_YGSjTVQ&t=14s)|[]()|
+| Open AI|openai| gpt-4o| [Source](https://github.com/myaichat/wxchat/blob/feature/poor_mans_copilot/poor_mans/copilot/7d_copilot.py)| [Medium](https://medium.com/p/ec1b62354bfa)| [Medium](https://medium.com/p/6f03ca3b5569), [YouTube](https://www.youtube.com/watch?v=Yh1_YGSjTVQ&t=14s)|[]()|
 | Google Vertex AI|vertexai| gemini-pro-*| [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_copilot/include/Copilot/Google_VertexAI.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/4b06f4f19937)|[]()|
-
+| Anthropic|anthropic | claude-3.x*| [Source](https://github.com/myaichat/wxchat/blob/claude_copilot/include/Copilot/Anthropic_Claude.py)| []()| [Medium](https://medium.com/p/6d295d10e357)|[]()|
 | Google Gemma 2|transformers | gemma-2-*| [Source](https://github.com/myaichat/wxchat/blob/google_gemma/include/Copilot/Google_Gemma.py)| [Medium](https://medium.com/p/0d7dc430b72c)| [Medium](https://medium.com/p/4bd85eb997ec)|[]()|
 
 
 
-
+ 
 
 
 
@@ -21,15 +19,14 @@ wxPython UI for inference API demo
 # Vision/Image Fusion
 wxPython UI for Vision API demo
 
-| Vendor  | API  | Model   | Vision | Config | Usage|Info | 
-|------------|------------|------------|------------|------------|------------|------------|
-| Open AI| openai|gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/include/Gpt4_Vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
-| Anthropic |anthropic| claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
-| Microsoft|onnxruntime_genai |Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
-| OpenBMB|| MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
-| Google Gen AI| |gemini-pro-vision | [Source](https://github.com/myaichat/wxchat/blob/google_vision/google_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/c75adecb16eb), []()|[]()|
-| Google Vertex AI|vertexai| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_vision/google_vertexai_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/0d3e1c0e1fb1), []()|[]()|
-
+| Vendor   | Model   | Vision | Config | Usage|Info | 
+|------------|------------|------------|------------|------------|------------|
+| Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/include/Gpt4_Vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
+| Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
+| OpenBMB| MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
+| Google Gen AI| gemini-pro-vision | [Source](https://github.com/myaichat/wxchat/blob/google_vision/google_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/c75adecb16eb), []()|[]()|
+| Google Vertex AI| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_vision/google_vertexai_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/0d3e1c0e1fb1), []()|[]()|
+| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
 
 
 # Prompt Fusion

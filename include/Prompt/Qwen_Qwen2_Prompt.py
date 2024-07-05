@@ -181,7 +181,154 @@ class Chat_ResponseStreamer:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)  
-    
+
+class ChatHist_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        
+        if model_id not in self.model:
+            
+            
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype="auto",
+                device_map="auto",
+                cache_dir="./cache",
+                attn_implementation="flash_attention_2",
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Tokenizer already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
+        # Create a chat completion request with streaming enabled
+        chat=apc.chats[receiveing_tab_id]
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[{"role": "system", "content": chat.system_prompt},]
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        try:
+
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+
+            device = "cuda"  # the device to load the model onto
+
+
+            model = self.get_model(chat.model)
+            tokenizer = self.get_tokenizer(chat.model)   
+
+            #prompt = "Give me a short introduction to large language model."
+
+            messages = [
+                {"role": "user", "content": text_prompt}
+            ]
+            chat_history += messages
+            #pp(messages)
+            #return ''
+            text = tokenizer.apply_chat_template(
+                chat_history,
+                tokenize=False,
+                add_generation_prompt=True, skip_prompt=True
+            )
+            model_inputs = tokenizer([text], return_tensors="pt").to(device)
+
+            class CustomTextStreamer(TextStreamer):
+                skip_special_tokens=True
+                generated_text=''
+                def put(self, value, **kwargs):
+                    # Ensure value is a tensor and convert to a list of token IDs
+
+                    if self.skip_prompt:
+                        self.skip_prompt = False  # Reset the flag after skipping the prompt
+                        return
+        
+                    if isinstance(value, torch.Tensor):
+                        value = value.tolist()
+                    # Decode the list of token IDs to text
+                    text = self.tokenizer.decode(value[0], skip_special_tokens=self.skip_special_tokens, **kwargs)
+                    # Customize your output handling here
+                    #custom_output = f"Custom processed output: {text}"
+                    # Print or process the custom output as needed
+                    self.generated_text += text
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+                    print(text, end='', flush=True)
+
+
+            # Setting up the streamer for streaming output
+            streamer = CustomTextStreamer(tokenizer, skip_special_tokens=True, skip_prompt=True,)
+            gen_start = time.time()
+            # Generating the response with streaming enabled
+            if 1:
+                model.generate(
+                    model_inputs.input_ids,
+                    max_new_tokens=int(chat.max_length),
+                    min_new_tokens=int(chat.min_length),
+                    do_sample=chat.do_sample,
+                    top_p=float(chat.top_p),
+                    top_k=int(chat.top_k),
+                    temperature=float(chat.temperature),
+                    repetition_penalty=float(chat.repetition_penalty),   
+                    length_penalty=1.0,  
+                    num_beams = 1,
+                    use_cache = True,
+                    streamer=streamer
+                )
+            else:
+                model.generate(
+                    model_inputs.input_ids,
+                    max_new_tokens=4096,
+                    #do_sample=True,
+                    streamer=streamer
+                )
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+            assistant = {"role": "assistant", "content": streamer.generated_text}
+            pp(assistant)
+            chat_history += assistant
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)    
 
 class Prompt_Fuser_ResponseStreamer:
     def __init__(self):

@@ -11,22 +11,17 @@ wxPython UI for inference API demo
 
 
 
- 
-
-
-
-
 # Vision/Image Fusion
 wxPython UI for Vision API demo
 
-| Vendor   | Model   | Vision | Config | Usage|Info | 
-|------------|------------|------------|------------|------------|------------|
-| Open AI| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/include/Gpt4_Vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
-| Microsoft| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
-| OpenBMB| MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
-| Google Gen AI| gemini-pro-vision | [Source](https://github.com/myaichat/wxchat/blob/google_vision/google_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/c75adecb16eb), []()|[]()|
-| Google Vertex AI| gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_vision/google_vertexai_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/0d3e1c0e1fb1), []()|[]()|
-| Anthropic | claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
+| Vendor   | API| Model   | Vision | Config | Usage|Info | 
+|------------|------------|------------|------------|------------|------------|------------|
+| Open AI|openai| gpt-4o | [Source](https://github.com/myaichat/wxchat/blob/gpt4_vision/include/Gpt4_Vision.py)| []()| [Medium](https://medium.com/p/2031397e3ceb), []()|
+| Microsoft|onnxruntime_genai| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phy3_vision/phy3_vision.py)| [Medium](https://medium.com/p/affb8f129332)| [Medium](https://medium.com/p/2d5dd6c0de2d), [YouTube](https://www.youtube.com/watch?v=dQM7_tNfkjs&t=1s)|[]()|
+| OpenBMB| |MiniCPM-Llama3-V-2_5 (int4) | [Source](https://github.com/myaichat/wxchat/blob/minicpm_vision/minicpm_vision.py)| []()| [Medium](https://medium.com/p/42bf91aa1c86), []()|[]()|
+| Google Gen AI| |gemini-pro-vision | [Source](https://github.com/myaichat/wxchat/blob/google_vision/google_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/c75adecb16eb), []()|[]()|
+| Google Vertex AI|vertexai |gemini-pro-* | [Source](https://github.com/myaichat/wxchat/blob/google_vertexai_vision/google_vertexai_vision.py)| [Medium](https://medium.com/p/aa05cb233f2f)| [Medium](https://medium.com/p/0d3e1c0e1fb1), []()|[]()|
+| Anthropic |anthropic |claude-3.x* | [Source](https://github.com/myaichat/wxchat/blob/claude_vision/claude_vision.py)| []()| [Medium](https://medium.com/p/1e0f89300754), []()|[]()|
 
 
 # Prompt Fusion

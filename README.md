@@ -1,4 +1,4 @@
-# *NEW!* Dwang 2 Prompt Fuser
+# *NEW!* Qwen 2 Prompt Fuser
 [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)
 
 # Chat/Copilot

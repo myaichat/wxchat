@@ -10,7 +10,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_Nvidia_Nemotron import Base_InputPanel_Nvidia_Nemotron
+from include.Prompt.Base.Base_InputPanel_Qwen_Qwen2 import Base_InputPanel_Qwen_Qwen2
 
 
 from pubsub import pub
@@ -1102,7 +1102,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia_Nemotron):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Qwen_Qwen2):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -1168,7 +1168,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -1179,7 +1179,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1605,7 +1605,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Nvidia_Nemotron):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Qwen_Qwen2):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1639,11 +1639,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Nvidia_Nem
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Qwen_Qwen2.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        

@@ -56,7 +56,7 @@ templates:
       model: 'nvidia/nemotron-4-340b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
-        add ukrainian essence, be as wierd and concise as possible
+         add depth and originality, impress me
 
 
 

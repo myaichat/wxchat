@@ -81,7 +81,7 @@ if 0:
 
     
 if 1:
-    import include.Prompt.Qwen_Qwen2_Prompt as Prompt_Infusion_Qwen_Qwen2
+    import include.Prompt.Nvidia_Nemotron_Prompt as Prompt_Infusion_Nvidia_Nemotron
         
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()

@@ -37,24 +37,72 @@ templates:
 
     - vendor: 'Nvidia_Nemotron'
       chat_type: 'Copilot'
-      name: '1h'      
-      history: True
+      name: '1noh'      
+      history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 1
       model: 'nvidia/nemotron-4-340b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
-        add ukrainian essence
+        add ukrainian essence, be as wierd and concise as possible
 
+
+    - vendor: 'Nvidia_Nemotron'
+      chat_type: 'Copilot'
+      name: '2 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 2
+      model: 'nvidia/nemotron-4-340b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
 
 
 
     - vendor: 'Nvidia_Nemotron'
       chat_type: 'Copilot'
-      name: '1noh'      
+      name: '3 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
-      num_of_prompts: 1
+      num_of_prompts: 3
+      model: 'nvidia/nemotron-4-340b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Nvidia_Nemotron'
+      chat_type: 'Copilot'
+      name: '4 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 4
+      model: 'nvidia/nemotron-4-340b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Nvidia_Nemotron'
+      chat_type: 'Copilot'
+      name: '5 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 5
+      model: 'nvidia/nemotron-4-340b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+
+    - vendor: 'Nvidia_Nemotron'
+      chat_type: 'Copilot'
+      name: '10 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 10
       model: 'nvidia/nemotron-4-340b-instruct'
       system: 'SYSTEM_ONE'
       question:  |

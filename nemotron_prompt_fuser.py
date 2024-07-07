@@ -782,7 +782,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Qwen2 Prompt Fuser')
+        self.frame = MyFrame(f'Nvidia Nemotron Prompt Fuser')
         return True
 
 if __name__ == '__main__':

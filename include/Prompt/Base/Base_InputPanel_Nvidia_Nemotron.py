@@ -150,7 +150,7 @@ class Base_InputPanel_Nvidia_Nemotron(Base_InputPanel):
             chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
         
             self.max_length_dropdown = wx.ComboBox(self, choices=['512', '768','1024','1536', '2048', '4096', str(1024* 10), str(1024* 20), str(1024* 40)], style=wx.CB_READONLY)
-            self.max_length_dropdown.SetValue('4096')  # Default value
+            self.max_length_dropdown.SetValue('1024')  # Default value
             self.max_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxLengthChange)
             chat.max_length = int(self.max_length_dropdown.GetValue())
 
@@ -170,7 +170,7 @@ class Base_InputPanel_Nvidia_Nemotron(Base_InputPanel):
             chat.top_k = int(self.top_k_dropdown.GetValue()  )     
 
             self.temp_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0', '1.2', '1.4', '1.7',  '2.0', '5.0', '10.0', '50.0'], style=wx.CB_READONLY)
-            self.temp_dropdown.SetValue('1.2')  # Default value
+            self.temp_dropdown.SetValue('1.0')  # Default value
             self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
             chat.temperature = float(self.temp_dropdown.GetValue()  )  
             #repetition_penalty

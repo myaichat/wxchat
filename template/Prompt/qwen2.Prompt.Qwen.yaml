@@ -79,7 +79,7 @@ templates:
       model: 'Qwen/Qwen2-7B-Instruct'
       system: 'SYSTEM_ONE'
       question:  |
-        add ukrainian essence
+        add ukrainian essence, be as wierd and concise as possible
 
 
     - vendor: 'Qwen_Qwen2'
@@ -91,7 +91,7 @@ templates:
       model: 'Qwen/Qwen2-7B-Instruct'
       system: 'SYSTEM_MULTI'
       question:  |
-        add ukrainian essence
+        add ukrainian essence, be as wierd and concise as possible
 
     - vendor: 'Qwen_Qwen2'
       chat_type: 'Copilot'
@@ -102,7 +102,7 @@ templates:
       model: 'Qwen/Qwen2-7B-Instruct'
       system: 'SYSTEM_MULTI'
       question:  |
-        add ukrainian essence
+        add ukrainian essence, be as wierd and concise as possible
 
   System:
     Chat:

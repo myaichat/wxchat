@@ -27,7 +27,7 @@ default_copilot_template='SYSTEM_CHATTY'
 
 
 DEFAULT_MODEL  = r'Qwen/Qwen2-7B-Instruct'
-model_list=[DEFAULT_MODEL]
+model_list=[DEFAULT_MODEL, 'Qwen/Qwen2-1.5B-Instruct', 'Qwen/Qwen2-0.5B-Instruct', 'Qwen/Qwen2-57B-A14B-Instruct']
 
 dir_path = 'template'
 
@@ -396,9 +396,9 @@ class Prompt_Fuser_ResponseStreamer:
 
             descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
 
+           
 
-
-            text_prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
             Here are the descriptions of the input images:
 
             {descriptions_text}
@@ -411,10 +411,19 @@ class Prompt_Fuser_ResponseStreamer:
             Before Providing the final description in <fused_prompt> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
             Do not mention weights in fused_prompt.
             {text_prompt}"""
-
-            messages = [
-                {"role": "user", "content": text_prompt}
-            ]
+            if chat.history:
+                if len(chat_history)==1:
+                    messages = [
+                        {"role": "user", "content": prompt}
+                    ]
+                else:
+                    messages = [
+                        {"role": "user", "content": text_prompt}
+                    ]
+            else:
+                messages = [
+                    {"role": "user", "content": prompt}
+                ]                            
             chat_history += messages
             #pp(chat_history)
             #return ''

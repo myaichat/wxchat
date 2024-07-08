@@ -32,6 +32,7 @@ templates:
         Give me a short introduction to large language model.
 
 
+
       
     Copilot:
 
@@ -103,6 +104,32 @@ templates:
       system: 'SYSTEM_MULTI'
       question:  |
         add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Copilot'
+      name: 'NoHist'      
+      history: False
+      streamer_name: 'Deepinfra_Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'Qwen/Qwen2-72B-Instruct'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Copilot'
+      name: 'Hist'      
+      history: True
+      streamer_name: 'Deepinfra_Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'Qwen/Qwen2-72B-Instruct'
+      system: 'SYSTEM_MULTI'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+        
+
+
 
   System:
     Chat:

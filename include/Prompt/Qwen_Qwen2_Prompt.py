@@ -27,7 +27,8 @@ default_copilot_template='SYSTEM_CHATTY'
 
 
 DEFAULT_MODEL  = r'Qwen/Qwen2-7B-Instruct'
-model_list=[DEFAULT_MODEL, 'Qwen/Qwen2-1.5B-Instruct', 'Qwen/Qwen2-0.5B-Instruct', 'Qwen/Qwen2-57B-A14B-Instruct']
+model_list=[DEFAULT_MODEL, 'Qwen/Qwen2-1.5B-Instruct', 'Qwen/Qwen2-0.5B-Instruct', 'Qwen/Qwen2-57B-A14B-Instruct',
+            'Qwen/Qwen2-72B-Instruct']
 
 dir_path = 'template'
 
@@ -511,7 +512,159 @@ class Prompt_Fuser_ResponseStreamer:
         return ''.join(out)
     
 
+class Deepinfra_Prompt_Fuser_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
 
+    def get_model(self, model_id):
+        
+        if model_id not in self.model:
+            
+            
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype="auto",
+                device_map="auto",
+                cache_dir="./cache",
+                attn_implementation="flash_attention_2",
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Tokenizer already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
+        # Create a chat completion request with streaming enabled
+        chat=apc.chats[receiveing_tab_id]
+        if chat.model !='Qwen/Qwen2-72B-Instruct'   :
+            log(f'Invalid model "{chat.model}", expecting "Qwen/Qwen2-72B-Instruct"', 'red')
+            return ''
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[{"role": "system", "content": chat.system_prompt},]
+
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        gen_start=time.time()
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        try:
+            import os
+            from openai import OpenAI
+
+            # Create an OpenAI client with your deepinfra token and endpoint
+            openai = OpenAI(
+                api_key=os.getenv("DEEPINFRA_API_KEY"),
+                base_url="https://api.deepinfra.com/v1/openai",
+            )
+
+            
+
+
+            #prompt = "Give me a short introduction to large language model."
+
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+           
+
+            prompt = f"""I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+
+            Before Providing the final description in <fused_prompt> tag, list weights of each emage use used in description and short info about it in <weights> tags. .
+            Do not mention weights in fused_prompt.
+            {text_prompt}"""
+
+
+            if chat.history:
+                if len(chat_history)==1:
+                    messages = [
+                        {"role": "user", "content": prompt}
+                    ]
+                else:
+                    messages = [
+                        {"role": "user", "content": text_prompt}
+                    ]
+            else:
+                messages = [
+                    {"role": "user", "content": prompt}
+                ]                            
+            chat_history += messages
+            #pp(chat_history)
+            #return ''
+
+            chat_completion = openai.chat.completions.create(
+                model=chat.model,
+                messages=messages,
+                stream =True
+            )
+          
+            for chunk in chat_completion:
+
+                if chunk.choices[0].finish_reason:
+                    log(chunk.choices[0].finish_reason + chunk.usage["prompt_tokens"] + chunk.usage["completion_tokens"], 'red')
+                    print(chunk.choices[0].finish_reason, chunk.usage["prompt_tokens"], chunk.usage["completion_tokens"])
+                else:
+                
+                    text=chunk.choices[0].delta.content
+                    if text is not None:
+                        out.append(text)
+                        pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+                        print(text, end="")
+
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+            if chat.history:
+                assistant = [{"role": "assistant", "content": ''.join(out)}]
+                #pp(assistant)
+                chat_history += assistant
+            else:
+                del self.chat_history[receiveing_tab_id]
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
 
 class StyledTextDisplay(stc.StyledTextCtrl, GetClassName, NewChat, Scroll_Handlet):
     def __init__(self, parent):

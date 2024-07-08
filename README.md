@@ -44,7 +44,7 @@ wxPython UI for Prompt Fusion demo
 | Microsoft|onnxruntime_genai| Phi-3 ONNX | [Source](https://github.com/myaichat/wxchat/blob/phi3_prompt_fuser/phi3_prompt_fuser.py)| []()| [Medium]()|[]()|
 | Qwen|transformers| Qwen2-***-Instruct| [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)| []()| [Medium]()|[Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f)|
 | Nvidia<br>(runs on Nvidia NIM) |openai| nemotron-4-340b| [Source](https://github.com/myaichat/wxchat/blob/nvidia_nemotron_prompt_fuser/include/Prompt/Nvidia_Nemotron_Prompt.py)| []()| [Medium](https://medium.com/p/f9d55677d01a)|[Model](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/nemo/models/nemotron-4-340b-instruct)|
-| Qwen|transformers| Qwen2-***-Instruct| [](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)| []()| []()|[Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f),[Gihub](https://github.com/QwenLM/Qwen)|
+| Qwen|transformers| Qwen2-***-Instruct,[72B](https://deepinfra.com/Qwen/Qwen2-72B-Instruct/api?example=openai-python)| [](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)| []()| []()|[Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f),[Gihub](https://github.com/QwenLM/Qwen)|
 
 
 

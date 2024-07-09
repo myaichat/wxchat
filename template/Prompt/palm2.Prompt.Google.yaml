@@ -25,20 +25,6 @@ templates:
 
     - vendor: 'Google_Palm2'
       chat_type: 'Chat'
-      streamer_name: 'History'
-      name: 'Text'
-      model: 'text-bison'
-      system: 'SYSTEM'
-      question: |
-        Come up with fused prompt for image generation. add intricate details.
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind.  
-        Just show one promt in <prompt> tags. 
-
-    - vendor: 'Google_Palm2'
-      chat_type: 'Chat'
       streamer_name: 'ChatModel'
       name: 'Chat'
       model: 'chat-bison'
@@ -162,12 +148,8 @@ templates:
       model: 'chat-bison'
       system: 'SYSTEM_MULTI'
       question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. 
 
 
     - vendor: 'Google_Palm2'
@@ -178,12 +160,8 @@ templates:
       model: 'chat-bison'
       system: 'SYSTEM_MULTI'
       question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. 
 
     - vendor: 'Google_Palm2'
       chat_type: 'Copilot'
@@ -193,12 +171,8 @@ templates:
       model: 'chat-bison'
       system: 'SYSTEM_MULTI'
       question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. 
 
 
     - vendor: 'Google_Palm2'
@@ -209,12 +183,8 @@ templates:
       model: 'chat-bison'
       system: 'SYSTEM_MULTI'
       question:  |
-        Provide a detailed and artistically 
-        rich description of the image provided by the user. 
-        Focus on capturing the essence, mood, and atmosphere. 
-        Highlight intricate details, colors, textures, and emotions. 
-        Use evocative language to paint a vivid picture that brings 
-        the image to life in the reader's mind. 
+        Come up with fused prompt for image generation. add intricate details. 
+        Just show one promt in <prompt> tags. 
 
 
   System:

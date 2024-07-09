@@ -93,6 +93,11 @@ https://huggingface.co/docs/inference-endpoints/guides/create_endpoint
 
 https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints
 
+### Deepseek
+https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat
+
+### Api-gen
+https://apigen-pipeline.github.io/
 
 
 

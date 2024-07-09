@@ -81,7 +81,7 @@ if 0:
 
     
 if 1:
-    import include.Prompt.Nvidia_Nemotron_Prompt as Prompt_Infusion_Nvidia_Nemotron
+    import include.Prompt.Meta_Llama3_Prompt as Prompt_Infusion_Meta_Llama3
         
 #print('Microsoft_ChatDisplayNotebookPanel' in globals())
 #e()
@@ -782,7 +782,7 @@ class MyFrame(wx.Frame, NewChat):
 
 class MyApp(wx.App):
     def OnInit(self):
-        self.frame = MyFrame(f'Nvidia Nemotron Prompt Fuser')
+        self.frame = MyFrame(f'Meta Llama3 Prompt Fuser')
         return True
 
 if __name__ == '__main__':

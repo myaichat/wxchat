@@ -89,7 +89,7 @@ class ShowSystemPrompts_Chat(wx.Dialog):
 
 
 
-class Base_InputPanel_Nvidia_Nemotron(Base_InputPanel):
+class Base_InputPanel_Meta_Llama3(Base_InputPanel):
     def AddButtons_Level_1(self, h_sizer):
         if 1: #second row
 

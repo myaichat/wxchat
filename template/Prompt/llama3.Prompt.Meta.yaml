@@ -2,31 +2,31 @@ templates:
   workspace:
 
       name: 'Prompt_Infusion'
-      vendor: 'Nvidia_Nemotron'
+      vendor: 'Meta_Llama3'
       chat: 'Chat'
       copilot: 'Copilot'
   vendor_api:      
-    Nvidia_Nemotron:
+    Meta_Llama3:
       chat: 'Chat'
       copilot: 'Copilot'
   tabs:
     Chat:
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Chat'
-      streamer_name: 'Chat'
+      streamer_name: 'NoHist_Chat'
       history: False
       name: 'noHist'
-      model: 'nvidia/nemotron-4-340b-instruct'
-      system: 'SYSTEM_ASSISTANT'
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_GENERAL'
       question: |
         Give me a short introduction to large language model.
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Chat'
       streamer_name: 'ChatHist'
       history: False
       name: 'Hist'
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ASSISTANT'
       question: |
         Give me a short introduction to large language model.
@@ -35,75 +35,75 @@ templates:
       
     Copilot:
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '1noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 1
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
         add ukrainian essence, be as wierd and concise as possible
 
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '2 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 2
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
          add depth and originality, impress me
 
 
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '3 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 3
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
         add ukrainian essence, be as wierd and concise as possible
 
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '4 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 4
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
         add ukrainian essence, be as wierd and concise as possible
 
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '5 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 5
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
         add ukrainian essence, be as wierd and concise as possible
 
 
 
-    - vendor: 'Nvidia_Nemotron'
+    - vendor: 'Meta_Llama3'
       chat_type: 'Copilot'
       name: '10 noh'      
       history: False
       streamer_name: 'Prompt_Fuser'
       num_of_prompts: 10
-      model: 'nvidia/nemotron-4-340b-instruct'
+      model: 'meta/llama3-70b-instruct'
       system: 'SYSTEM_ONE'
       question:  |
         add ukrainian essence, be as wierd and concise as possible

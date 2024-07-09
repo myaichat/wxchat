@@ -10,7 +10,7 @@ import wx.lib.agw.aui as aui
 import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
-from include.Prompt.Base.Base_InputPanel_Nvidia_Nemotron import Base_InputPanel_Nvidia_Nemotron
+from include.Prompt.Base.Base_InputPanel_Meta_Llama3 import Base_InputPanel_Meta_Llama3
 
 
 from pubsub import pub
@@ -24,9 +24,10 @@ import include.config.init_config as init_config
 apc = init_config.apc
 default_chat_template='SYSTEM'
 default_copilot_template='SYSTEM_CHATTY'
+import os
+from openai import OpenAI
 
-
-DEFAULT_MODEL  = r'nvidia/nemotron-4-340b-instruct'
+DEFAULT_MODEL  = r'meta/llama3-70b-instruct'
 model_list=[DEFAULT_MODEL]
 
 dir_path = 'template'
@@ -38,7 +39,7 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 
 #import vertexai
 #from vertexai.language_models import TextGenerationModel
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+
 
 class Chat_ResponseStreamer:
     subscribed=False
@@ -87,8 +88,7 @@ class Chat_ResponseStreamer:
         start = time.time()
         try:
 
-            import os
-            from openai import OpenAI
+
 
             NVIDIA_API_KEY= os.getenv("NVIDIA_API_KEY")
             client = OpenAI(
@@ -140,6 +140,101 @@ class Chat_ResponseStreamer:
 
         return ''.join(out)  
 
+class NoHist_Chat_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
+        
+        if model_id not in self.model:
+            
+            
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype="auto",
+                device_map="auto",
+                cache_dir="./cache",
+                attn_implementation="flash_attention_2",
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Tokenizer already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        gen_start=start
+        try:
+
+
+
+            NVIDIA_API_KEY= os.getenv("NVIDIA_API_KEY")
+            client = OpenAI(
+                base_url = "https://integrate.api.nvidia.com/v1",
+
+                api_key = NVIDIA_API_KEY
+            )
+
+            completion = client.chat.completions.create(
+                model="nvidia/nemotron-4-340b-instruct",
+                messages=[{"role":"user","content":text_prompt}],
+                temperature=0.2,
+                top_p=0.7,
+                max_tokens=1024,
+                stream=True
+            )
+
+            for chunk in completion:
+                text=chunk.choices[0].delta.content
+                if text is not None:
+                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
+                    print(text, end="")
+
+            # After generation, print the total time and the full generated text
+            print("\nGenerate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out) 
+    
 class Prompt_Fuser_ResponseStreamer:
     subscribed=False
     def __init__(self):
@@ -1178,7 +1273,7 @@ class ChatDisplayNotebookPanel(wx.Panel):
     def get_latest_chat_tab_id(self):
         return self.GetPageCount() - 1
 #old
-class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia_Nemotron):
+class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Meta_Llama3):
     subscribed=False
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
@@ -1244,7 +1339,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia
             self.pause_panel=pause_panel=PausePanel(self, self.tab_id)
             askSizer.Add(pause_panel, 0, wx.ALL)
         #h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Meta_Llama3.AddButtons_Level_1(self, askSizer)
         #askSizer.Add(h_sizer, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.randomButton, 0, wx.ALIGN_CENTER)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
@@ -1255,7 +1350,7 @@ class Copilot_InputPanel(wx.Panel, NewChat, GetClassName, Base_InputPanel_Nvidia
         #askSizer.Add(self.tabsButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Meta_Llama3.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)
@@ -1681,7 +1776,7 @@ class MyNotebookCodePanel(wx.Panel):
             self.output(stdout.decode())
  
 
-class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Nvidia_Nemotron):
+class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Meta_Llama3):
     def __init__(self, parent, tab_id):
         global chatHistory,  currentQuestion, currentModel
         super(Chat_InputPanel, self).__init__(parent)
@@ -1715,11 +1810,11 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Nvidia_Nem
         askSizer.Add(pause_panel, 0, wx.ALL)
    
         askSizer.Add((1,1), 1, wx.ALIGN_CENTER|wx.ALL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_1(self, askSizer)
+        Base_InputPanel_Meta_Llama3.AddButtons_Level_1(self, askSizer)
         askSizer.Add(self.askButton, 0, wx.ALIGN_CENTER)
         sizer = wx.BoxSizer(wx.VERTICAL)
         h_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        Base_InputPanel_Nvidia_Nemotron.AddButtons_Level_2(self, h_sizer)
+        Base_InputPanel_Meta_Llama3.AddButtons_Level_2(self, h_sizer)
 
         sizer.Add(askSizer, 0, wx.ALIGN_LEFT)
         sizer.Add(h_sizer, 0, wx.ALIGN_LEFT)        

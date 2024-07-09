@@ -93,6 +93,9 @@ https://huggingface.co/docs/inference-endpoints/guides/create_endpoint
 
 https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints
 
+https://huggingface.co/docs/inference-endpoints/supported_tasks
+
+
 ### Deepseek
 https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat
 

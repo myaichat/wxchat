@@ -128,9 +128,38 @@ templates:
       question:  |
         add ukrainian essence, be as wierd and concise as possible
         
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Copilot'
+      name: '1 NH'      
+      history: False
+      streamer_name: 'Deepinfra_Prompt_Fuser'
+      num_of_prompts: 1
+      model: 'Qwen/Qwen2-72B-Instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
 
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Copilot'
+      name: '2 NH'      
+      history: False
+      streamer_name: 'Deepinfra_Prompt_Fuser'
+      num_of_prompts: 2
+      model: 'Qwen/Qwen2-72B-Instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
 
-
+    - vendor: 'Qwen_Qwen2'
+      chat_type: 'Copilot'
+      name: '3 NH'      
+      history: False
+      streamer_name: 'Deepinfra_Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'Qwen/Qwen2-72B-Instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible        
   System:
     Chat:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."

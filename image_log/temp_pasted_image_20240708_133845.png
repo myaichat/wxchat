@@ -1,0 +1,1 @@
+                    with open(temp_prompt_path, 'wb') as f:

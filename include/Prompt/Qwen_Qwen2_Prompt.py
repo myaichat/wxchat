@@ -627,8 +627,8 @@ class Deepinfra_Prompt_Fuser_ResponseStreamer:
             for chunk in chat_completion:
 
                 if chunk.choices[0].finish_reason:
-                    log(chunk.choices[0].finish_reason + chunk.usage["prompt_tokens"] + chunk.usage["completion_tokens"], 'red')
-                    print(chunk.choices[0].finish_reason, chunk.usage["prompt_tokens"], chunk.usage["completion_tokens"])
+                    log(chunk.choices[0].finish_reason, 'red' ) #+ chunk.usage["prompt_tokens"] + chunk.usage["completion_tokens"], 'red')
+                    print(chunk.choices[0].finish_reason) #, chunk.usage["prompt_tokens"], chunk.usage["completion_tokens"])
                 else:
                 
                     text=chunk.choices[0].delta.content
@@ -779,8 +779,8 @@ class PromptCtrl(StyledTextDisplay):
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     temp_prompt_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
                     
-                    with open(temp_prompt_path, 'wb') as f:
-                        f.write(data_object.GetData(text))
+                    with open(temp_prompt_path, 'w') as f:
+                        f.write(data_object.GetText())
                     self.load_prompt_file(temp_prompt_path)
 
                 else:

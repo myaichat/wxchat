@@ -1885,8 +1885,8 @@ class PromptCtrl(StyledTextDisplay):
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     temp_prompt_path = join('image_log',f'temp_pasted_image_{timestamp}.png' )                  
                     
-                    with open(temp_prompt_path, 'wb') as f:
-                        f.write(data_object.GetData(text))
+                    with open(temp_prompt_path, 'w') as f:
+                        f.write(data_object.GetText())
                     self.load_prompt_file(temp_prompt_path)
 
                 else:

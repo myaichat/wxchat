@@ -101,6 +101,8 @@ https://huggingface.co/docs/inference-endpoints/supported_tasks
 
 ### Deepseek
 https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat
+https://deepseekcoder.github.io/
+
 
 ### Api-gen
 https://apigen-pipeline.github.io/

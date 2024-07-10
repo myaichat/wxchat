@@ -1,0 +1,168 @@
+templates:
+  workspace:
+
+      name: 'Prompt_Infusion'
+      vendor: 'Meta_Llama3'
+      chat: 'Chat'
+      copilot: 'Copilot'
+  vendor_api:      
+    Meta_Llama3:
+      chat: 'Chat'
+      copilot: 'Copilot'
+  tabs:
+    Chat:
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Chat'
+      streamer_name: 'NoHist_Chat'
+      history: False
+      name: 'noHist'
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_GENERAL'
+      question: |
+        Give me a short introduction to large language model.
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Chat'
+      streamer_name: 'ChatHist'
+      history: False
+      name: 'Hist'
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ASSISTANT'
+      question: |
+        Give me a short introduction to large language model.
+
+
+      
+    Copilot:
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '1noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 1
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '2 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 2
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+         add depth and originality, impress me
+
+
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '3 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 3
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '4 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 4
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '5 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 5
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+
+    - vendor: 'Meta_Llama3'
+      chat_type: 'Copilot'
+      name: '10 noh'      
+      history: False
+      streamer_name: 'Prompt_Fuser'
+      num_of_prompts: 10
+      model: 'meta/llama3-70b-instruct'
+      system: 'SYSTEM_ONE'
+      question:  |
+        add ukrainian essence, be as wierd and concise as possible
+
+
+
+  System:
+    Chat:
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."
+      SYSTEM_GENERAL: |
+        You are general knowledge expert  
+      SYSTEM_ASSISTANT: |
+        You are a helpful assistant.          
+      PROMPT: |
+        {params.question}        
+    Copilot:
+ 
+      NO_SYSTEM: |
+        '  '
+      DESCRIBE_IMAGE: |
+        {params.input}
+      SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images."
+      SYSTEM_CLAUDE: |
+        You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
+        Providing the answer in <fused_image> tags.
+        do not start with "The resulting image is a captivating fusion of" in  <fused_image>
+        do not start with "The resulting image is a" in <fused_image>
+        do not start with 'A striking, captivating image emerges, blending elements from the three descriptions.'
+        do not mention fusion in <fused_image> section
+      SYSTEM_FUSION: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at describing images.
+        Your job is to imagine and describe in detail a single image that fuses 
+        elements from all the provided images. 
+        Focus on how the elements from each image interact and blend together. 
+        Be specific about colors, shapes, textures, and composition. 
+        Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+        Before providing the final description in <fused_image> tags, think through your process step-by-step in <thinking> tags.      DESCRIBE_IMAGE: |
+        
+      SYSTEM_ONE: |
+        You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts.             
+      SYSTEM_TWO: |
+        you are priovided {params.num_of_images} images. answer in english language
+      SYSTEM_MULTI: |
+        Give detailed creative mix of all image decriptions as one 
+        be as creative and wierd as possible.        
+      SECOND: |
+        is there a second image?  creatively mix it's description with first image description in english
+      BLEND: |
+        create detailed description that blends the content of both pictures in english
+      HOW_MANY: |
+        how many images are there to describe? describe all of them in english
+      UKRA: |
+        dd ukrainian essence to each description
+      FIRST: |
+        give detailed description of first image description in english
+      BLEND_2: |
+        blend all image descriptions  in english
+      PINUP: |
+        you are priovided images having modern pinup art or ukrainian theme. answer in english language
+      LIST_ALL: |
+        list descriptions for all images
+

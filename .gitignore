@@ -1,0 +1,17 @@
+cuda
+mini_dml_4k
+mini_dml_128k
+medium_dml_4k
+medium_dml_128k
+_directml
+.huggingface
+myenv
+pyenv
+*.pyc
+cuda-fp16
+cuda_myenv
+cuda_myenv
+MiniCPM-V
+.cache
+cache
+image_log

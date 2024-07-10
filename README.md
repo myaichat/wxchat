@@ -1,6 +1,8 @@
 # *New!* 
 Qwen 2 Prompt Fuser: [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py), [Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f)
 <br>Nvidia  nemotron-4-340b Prompt Fuser (runs on Nvidia NIM): [Source](https://github.com/myaichat/wxchat/blob/nvidia_nemotron_prompt_fuser/include/Prompt/Nvidia_Nemotron_Prompt.py), [Model](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/nemo/models/nemotron-4-340b-instruct)
+Meta llama3 70b prompt fuser : [Source]{https://github.com/myaichat/wxchat/blob/meta_llama3_prompt_fuser/include/Prompt/Meta_Llama3_Prompt.py} [API] (https://build.nvidia.com/meta/llama3-70b)
+
 
 # Chat/Copilot
 wxPython UI for inference API demo

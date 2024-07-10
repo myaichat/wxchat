@@ -102,7 +102,7 @@ https://huggingface.co/deepseek-ai/DeepSeek-V2-Chat
 ### Api-gen
 https://apigen-pipeline.github.io/
 
-
+Openchat: https://github.com/imoneoi/openchat#installation
 
 
 

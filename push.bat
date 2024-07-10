@@ -1,3 +1,3 @@
 git add .
 git commit -m "%1"
-git push -u origin meta_llama3_prompt_fuser
+git push -u origin deepseek_prompt_fuser

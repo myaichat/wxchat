@@ -99,6 +99,7 @@ https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints
 [Tasks](https://huggingface.co/docs/inference-endpoints/supported_tasks )
 [Control Space programmatically](https://huggingface.co/docs/huggingface_hub/en/guides/manage-spaces )
 [Custom handler](https://huggingface.co/docs/inference-endpoints/guides/custom_handler)
+[Deploy Llama3](https://huggingface.co/blog/llama3#inference-integrations)
 
 
 ### Deepseek

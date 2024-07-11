@@ -93,11 +93,11 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 https://docs.api.nvidia.com/nim/reference/google-gemma7b-infer
 
 https://huggingface.co/docs/inference-endpoints/guides/create_endpoint
-### Creating endpoint
 
-https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints
-
-https://huggingface.co/docs/inference-endpoints/supported_tasks
+### Huggingface Creating endpoint
+https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints 
+https://huggingface.co/docs/inference-endpoints/supported_tasks 
+https://huggingface.co/docs/huggingface_hub/en/guides/manage-spaces 
 
 
 ### Deepseek

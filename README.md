@@ -103,6 +103,7 @@ https://huggingface.co/learn/cookbook/enterprise_dedicated_endpoints
 [Use via API](https://www.gradio.app/guides/getting-started-with-the-python-client#the-view-api-page)
 [OpenAI  Inference API](https://huggingface.co/blog/tgi-messages-api#using-inference-endpoints-with-openai-client-libraries)
 [Serverless Inference API](https://huggingface.co/docs/api-inference/en/index)
+[HF Chat](https://huggingface.co/chat/)
 
 
 ### Deepseek

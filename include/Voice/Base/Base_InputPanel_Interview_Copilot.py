@@ -41,6 +41,9 @@ class Base_InputPanel_Interview_Copilot(Base_InputPanel):
         # Get the selected do_sample value
         print('OnRecord', self.tab_id)
         # Continue processing the event
+        chat=apc.chats[self.tab_id]
+        chat.record=True        
+        self.AskQuestion()        
         event.Skip()
     def OnMaxTokensChange(self, event):
         # Get the selected do_sample value

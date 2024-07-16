@@ -23,7 +23,7 @@ templates:
       system: 'SYSTEM_AI'
       question: |
         Give me a short introduction to large language model.
-            
+
     - vendor: 'OpenAI_Voice'
       chat_type: 'Chat'
       streamer_name: 'Record or Ask'
@@ -52,10 +52,14 @@ templates:
       SYSTEM_GENERAL: |
         You are general knowledge expert. Return your answer as markdown text.
       SYSTEM_AI: |
-        You are general AI knowledge expert. Return your answer as markdown text.
+        You are a chatbot that assists with Technical interview for AI developer.  
+        numerate answert options globally with one sequence.
+        Answer in english. do not add extra new lines. output your answer as markdown text
 
       SYSTEM_PYTHON: |
-        You are general AI knowledge expert. Return your answer as markdown text.
+        You are a chatbot that assists with Technical interview for Python developer.  
+        numerate answert options globally with one sequence.
+        Answer in english. do not add extra new lines. output your answer as markdown text
       SYSTEM_ASSISTANT: |
         You are a helpful assistant.          
       PROMPT: |

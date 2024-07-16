@@ -67,56 +67,14 @@ def listen():
     transcript_result = transcriber.transcribe_audio(file_path)
     #print(f"Transcription Result: {transcript_result}")
     return transcript_result
-def echo_output(content):
-    inside_stars = False
-    inside_backticks = False
-    inside_hash = False 
-    new_content = ''
-    i = 0
-    if not content:
-        return
-    while i < len(content):
-        if content[i:i+2] == '**':
-            if inside_stars:
-                new_content += f"{Style.RESET_ALL}"
-                inside_stars = False
-            else:
-                new_content += f"{Fore.GREEN}{Style.BRIGHT}"
-                inside_stars = True
-            i += 2  # Skip the next character
-        elif content[i:i+3] == '```':
-            if inside_backticks:
-                new_content += f"{Style.RESET_ALL}"
-                inside_backticks = False
-                i += 3 
-            else:
-                new_content += f"{Fore.RED}{Style.BRIGHT}"
-                inside_backticks = True
-                i += 3
-                # Skip the next two characters
-        elif content[i] == '#' and (i == 0 or content[i-1] == '\n'):  # If the line starts with '#'
-            new_content += f"{Fore.BLUE}{Style.BRIGHT}" + content[i]
-            inside_hash = True
-            i += 1
-        elif content[i] == '\n' and inside_hash:  # If the line ends and we're inside a hash line
-            new_content += f"{Style.RESET_ALL}" + content[i]
-            inside_hash = False
-            i += 1
-        else:
-            new_content += content[i]
-            i += 1
-    print(new_content, end='', flush=True)  
-    if inside_backticks:  # If we're still inside a code block, add the reset code
-        print(Style.RESET_ALL)
+
 
 def stream_response(tab_id):
     global exit_loop, pause_stream
+    chat=apc.chats[tab_id]
+
     conversation_history=apc.chatHistory[tab_id]
-    if not conversation_history:
-        conversation_history.append({"role": "system", "content": """You are a chatbot that assists with Technical interview for Python developer.  
-        numerate answert options globally with one sequence.
-        Answer in english. do not add extra new lines. output your answer as markdown text """})
-        
+    assert conversation_history
     model_voice.delete_mp3_files()  # delete all the model response audio files
     transcriber.delete_wav_audio_files()    # delete all the user recorded speech       
     if 1:
@@ -128,7 +86,7 @@ def stream_response(tab_id):
             print('No input')
             user_input = listen()
     prompt= user_input
-    chat=apc.chats[tab_id]
+    
     txt='\n'.join(split_text_into_chunks(prompt,80))
     header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
     pub.sendMessage('chat_output', message=f'{header}\n', tab_id=tab_id)

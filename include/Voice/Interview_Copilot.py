@@ -50,24 +50,27 @@ class Ask_ResponseStreamer:
 
     def stream_response(self, text_prompt, _chatHistory, receiveing_tab_id, prompt_path):
         # Create a chat completion request with streaming enabled
+        chat=apc.chats[receiveing_tab_id]
         if receiveing_tab_id not in apc.chatHistory:
-            self.chat_history[receiveing_tab_id]=[]
+            apc.chatHistory[receiveing_tab_id]=[]
         chat_history=apc.chatHistory[receiveing_tab_id] 
+        if not chat_history:
+            chat_history.append({"role": "system", "content": chat.system_prompt})
         out=[]
         from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
+
         txt='\n'.join(split_text_into_chunks(text_prompt,80))
         header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
         pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         start = time.time()
         content = []
 
-
+        
            
         chat_history += [{"role": "user", "content": text_prompt}]
         response = self.client.chat.completions.create(
             model=chat.model,
-            messages=chatHistory[receiveing_tab_id],
+            messages=chat_history,
             stream=True
         )
         out = []
@@ -107,7 +110,7 @@ class Ask_ResponseStreamer:
         if out:
             chat_history.append({"role": "assistant", "content": ''.join(out)}) 
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
-
+        #pp(chat_history)
         return ''.join(out)  
     
 
@@ -122,13 +125,15 @@ class Record_ResponseStreamer:
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
         # Create a chat completion request with streaming enabled
-        if receiveing_tab_id not in apc.chatHistory:
-            self.chat_history[receiveing_tab_id]=[]
-        chat_history=apc.chatHistory[receiveing_tab_id]    
+        chat=apc.chats[receiveing_tab_id]
+        if receiveing_tab_id not in apc.chatHistory or not apc.chatHistory[receiveing_tab_id]:
+            apc.chatHistory[receiveing_tab_id]=[{"role": "system", "content": chat.system_prompt}]
+
+          
         out=[]
        
         from os.path import isfile
-        chat=apc.chats[receiveing_tab_id]
+        
         if 0:
             txt='\n'.join(split_text_into_chunks(text_prompt,80))
             header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])

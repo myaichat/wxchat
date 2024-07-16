@@ -35,12 +35,34 @@ templates:
       model: 'gpt-4o'
       system: 'SYSTEM_PYTHON'
       question: |
-        Tell me more about new python features.
+        Show 10 very hard Python interview questions.
+
+    - vendor: 'OpenAI_Voice'
+      chat_type: 'Chat'
+      streamer_name: 'Record or Ask'
+      record_streamer_name: 'Record'
+      ask_streamer_name: 'Ask'
+      record: True
+      history: True
+      name: 'Behavoral'
+      model: 'gpt-4o'
+      system: 'SYSTEM_BEHAVORAL'
+      question: |
+        Give 10  sample behavoral inteview questions.
 
 
-
-
-      
+    - vendor: 'OpenAI_Voice'
+      chat_type: 'Chat'
+      streamer_name: 'Record or Ask'
+      record_streamer_name: 'Record'
+      ask_streamer_name: 'Ask'
+      record: True
+      history: True
+      name: 'Random'
+      model: 'gpt-4o'
+      system: 'SYSTEM_RANDOM'
+      question: |
+        Show 10 very hard random interview questions.     
 
 
  
@@ -53,13 +75,25 @@ templates:
         You are general knowledge expert. Return your answer as markdown text.
       SYSTEM_AI: |
         You are a chatbot that assists with Technical interview for AI developer.  
-        numerate answert options globally with one sequence.
+        numerate answer options globally with one sequence.
         Answer in english. do not add extra new lines. output your answer as markdown text
 
       SYSTEM_PYTHON: |
         You are a chatbot that assists with Technical interview for Python developer.  
-        numerate answert options globally with one sequence.
+        numerate answer options globally with one sequence.
         Answer in english. do not add extra new lines. output your answer as markdown text
+
+
+      SYSTEM_BEHAVORAL: |
+        You are a chatbot that assists with Behavoral interview.  
+        numerate answer options globally with one sequence.
+        Answer in english. do not add extra new lines. output your answer as markdown text
+
+      SYSTEM_RANDOM: |
+        You are a chatbot that assists with technical job interview.  
+        numerate answer options globally with one sequence.
+        Answer in english. do not add extra new lines. output your answer as markdown text
+
       SYSTEM_ASSISTANT: |
         You are a helpful assistant.          
       PROMPT: |

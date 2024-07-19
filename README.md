@@ -1,5 +1,7 @@
 # *New!* 
-[AI Inteview Assistant](https://medium.com/@alexbuzunov/starting-with-ai-interview-assistant-cli-on-windows-d2d8e0f4edb1)
+[AI Inteview Assistant Streamlit UI with voice](https://medium.com/p/56c2cd360a8b)
+[AI Inteview Assistant xwPython UI](https://medium.com/p/55b1852b9541)
+[AI Inteview Assistant CLI](https://medium.com/@alexbuzunov/starting-with-ai-interview-assistant-cli-on-windows-d2d8e0f4edb1)
 
 Florence 2 config:  https://medium.com/p/722f035caba1 
 <br>Qwen 2 Prompt Fuser: [Source](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py), [Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f)

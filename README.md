@@ -1,6 +1,6 @@
 # *New!* 
 
-[Groq Llama3 function calling](https://medium.com/me/stats/post/dd9d33af6ad6) <br>
+[Groq Llama3 function calling](https://medium.com/p/dd9d33af6ad6) <br>
 [AI Inteview Assistant Streamlit UI with voice](https://medium.com/p/56c2cd360a8b) <br>
 [AI Inteview Assistant xwPython UI](https://medium.com/p/55b1852b9541)<br>
 [AI Inteview Assistant CLI](https://medium.com/@alexbuzunov/starting-with-ai-interview-assistant-cli-on-windows-d2d8e0f4edb1)<br>

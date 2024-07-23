@@ -89,6 +89,7 @@ ChatGPT streaming chat: [wxPython chat](https://www.youtube.com/watch?v=Jb886h3k
 wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [Create gist](https://www.youtube.com/watch?v=FFqcDB1Yytw),  [Diagrammer](https://www.youtube.com/watch?v=TdXTu1l2Rz0&t=18s)
 
 [Stabiliti.ai](https://platform.stability.ai/docs/legacy/grpc-api/features/image-to-image#Python)
+[img-2-img](https://huggingface.co/docs/diffusers/en/using-diffusers/img2img)
 
 
 

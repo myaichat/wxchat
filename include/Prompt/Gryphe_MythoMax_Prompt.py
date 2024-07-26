@@ -11,7 +11,7 @@ import time, glob,threading, traceback
 import os, sys  
 from os.path import join, isfile
 from include.Prompt.Base.Base_InputPanel_Gryphe_MythoMax import Base_InputPanel_Gryphe_MythoMax
-
+import torch
 
 from pubsub import pub
 from pprint import pprint as pp 
@@ -27,7 +27,7 @@ default_copilot_template='SYSTEM_CHATTY'
 
 
 DEFAULT_MODEL  = r'Gryphe/MythoMax-L2-13b'
-model_list=[DEFAULT_MODEL]
+model_list=[DEFAULT_MODEL, 'PygmalionAI/mythalion-13b']
 
 dir_path = 'template'
 
@@ -54,11 +54,13 @@ class Chat_ResponseStreamer:
             
             
             self.model[model_id] = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype="auto",
+                model_id, 
+                torch_dtype=torch.float16, 
                 device_map="auto",
                 cache_dir="./cache",
-                attn_implementation="flash_attention_2",
+                trust_remote_code=True,
+                low_cpu_mem_usage=True,
+                attn_implementation="flash_attention_2"
             )
         else:
             print("Model already loaded")
@@ -67,7 +69,7 @@ class Chat_ResponseStreamer:
     def get_tokenizer(self, model_id):
         if model_id not in self.tokenizer:
 
-            self.tokenizer[model_id] =  AutoTokenizer.from_pretrained(model_id)
+            self.tokenizer[model_id] =   AutoTokenizer.from_pretrained(model_id)
         
         else:
             print("Tokenizer already loaded")
@@ -87,78 +89,59 @@ class Chat_ResponseStreamer:
         start = time.time()
         try:
 
+            from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
             import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
 
-            device = "cuda"  # the device to load the model onto
-
-
+            # Load the model and tokenizer
+            if chat.model not in ["PygmalionAI/mythalion-13b"]:
+                log(f'Unsupported model: {chat.model}', 'red')
+                return ''
+            tokenizer = self.get_tokenizer( chat.model)
             model = self.get_model(chat.model)
-            tokenizer = self.get_tokenizer(chat.model)   
 
-            #prompt = "Give me a short introduction to large language model."
+            # Prepare the input text
+            input_text =f"""
+            ### Instruction:
+            Create amazing detailed image description infused with ukrainian essence like this: 
+            "{text_prompt}"
+            Do not give image references. do not use html. Do not use special characters. Do not use emojis. Do not use urls. Do not use any other language than English. Do not
+            return detailed description in <fused_image> tags.
+            ### Response:
+            """
 
-            messages = [
-                {"role": "system", "content": chat.system_prompt},
-                #{"role": "system", "content": "You are transformers lib API expert."},
-                {"role": "user", "content": text_prompt}
-            ]
-            #pp(messages)
-            #return ''
-            text = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True, skip_prompt=True
-            )
-            model_inputs = tokenizer([text], return_tensors="pt").to(device)
+            # Tokenize the input
+            inputs = tokenizer(input_text, return_tensors="pt")
+            input_ids = inputs["input_ids"].to(model.device)
+            attention_mask = inputs["attention_mask"].to(model.device)
 
-            class CustomTextStreamer(TextStreamer):
-                skip_special_tokens=True
-                def put(self, value, **kwargs):
-                    # Ensure value is a tensor and convert to a list of token IDs
-
-                    if self.skip_prompt:
-                        self.skip_prompt = False  # Reset the flag after skipping the prompt
-                        return
-        
-                    if isinstance(value, torch.Tensor):
-                        value = value.tolist()
-                    # Decode the list of token IDs to text
-                    text = self.tokenizer.decode(value[0], skip_special_tokens=self.skip_special_tokens, **kwargs)
-                    # Customize your output handling here
-                    #custom_output = f"Custom processed output: {text}"
-                    # Print or process the custom output as needed
-                    pub.sendMessage('chat_output', message=f'{text}', tab_id=receiveing_tab_id)
-                    print(text, end='', flush=True)
-
-
-            # Setting up the streamer for streaming output
-            streamer = CustomTextStreamer(tokenizer, skip_special_tokens=True, skip_prompt=True,)
+            # Set up the streamer
+            streamer = TextIteratorStreamer(tokenizer)
             gen_start = time.time()
-            # Generating the response with streaming enabled
-            if 1:
-                model.generate(
-                    model_inputs.input_ids,
-                    max_new_tokens=int(chat.max_length),
-                    min_new_tokens=int(chat.min_length),
-                    do_sample=chat.do_sample,
-                    top_p=float(chat.top_p),
-                    top_k=int(chat.top_k),
-                    temperature=float(chat.temperature),
-                    repetition_penalty=float(chat.repetition_penalty),   
-                    length_penalty=1.0,  
-                    num_beams = 1,
-                    use_cache = True,
-                    streamer=streamer
-                )
-            else:
-                model.generate(
-                    model_inputs.input_ids,
-                    max_new_tokens=4096,
-                    #do_sample=True,
-                    streamer=streamer
-                )
+            # Generate text using streaming
+            generation_kwargs = dict(
+                input_ids=input_ids,
+                max_length=chat.max_length,
+                min_length=chat.min_length,
+                num_return_sequences=1,
+                no_repeat_ngram_size=2,
+                temperature=chat.temperature,
+                top_k=chat.top_k,
+                top_p=chat.top_p,
+                #presence_penalty=chat.presence_penalty, 
+                #frequency_penalty=chat.frequency_penalty,                
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id,
+                attention_mask=attention_mask,
+                streamer=streamer,
+            )
 
+            # Generate and print the text as it's produced
+            model.generate(**generation_kwargs)
+            for text in streamer:
+                pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
+                print(text, end="", flush=True)
+
+            print()  # Print a newline at the end
             # After generation, print the total time and the full generated text
             print("\Generate:", time.time() - gen_start)
             print("\nTotal:", time.time() - start)
@@ -180,7 +163,8 @@ class Chat_ResponseStreamer:
         if out:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
-        return ''.join(out)  
+        return ''.join(out)
+        
 
 class ChatHist_ResponseStreamer:
     subscribed=False

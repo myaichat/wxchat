@@ -31,7 +31,18 @@ templates:
       question: 'Come up with fused prompt for image generation. add intricate details. use these as inspiration:'  
 
 
-      
+
+    - vendor: 'Gryphe_MythoMax'
+      chat_type: 'Chat'
+      streamer_name: 'Chat'
+      name: 'Spicy'
+      model: 'PygmalionAI/mythalion-13b'
+      system: 'SYSTEM_FUSED'
+      history: False
+      question: 'Come up with fused prompt for image generation. add intricate details. use these as inspiration:'  
+
+
+            
 
       
     Copilot:

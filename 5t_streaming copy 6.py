@@ -1,29 +1,16 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 import time
-
-
-class CustomTextStreamer(TextStreamer):
-    def __init__(self, tokenizer, skip_special_tokens=True):
-        super().__init__(tokenizer, skip_special_tokens)
-        self.generated_text = ""
-        self.skip_special_tokens=skip_special_tokens
-        print("CustomTextStreamer initialized")
-
-    def __call__(self, token_ids, **kwargs):
-        #print("CustomTextStreamer __call__ invoked")
-        # Decode the token ids and append to the generated text
-        text = self.tokenizer.decode(token_ids, skip_special_tokens=self.skip_special_tokens)
-        self.generated_text += text
-        print(123)
-        print(text, end='', flush=True)  # Print each chunk of text
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import TextStreamer
+import torch
+import time
 
 start = time.time()
 
 # Load the model and tokenizer
 model_name = "PygmalionAI/mythalion-13b"
-tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name, 
     torch_dtype=torch.float16, 
@@ -47,8 +34,7 @@ inputs = tokenizer(input_text, return_tensors="pt")
 input_ids = inputs["input_ids"].to(model.device)
 attention_mask = inputs["attention_mask"].to(model.device)
 
-streamer = CustomStreamer(tokenizer)
-
+streamer = TextStreamer(tokenizer, skip_special_tokens=True)
 # Generate text using streaming
 generation_kwargs = dict(
     input_ids=input_ids,
@@ -60,12 +46,13 @@ generation_kwargs = dict(
     top_k=150,
     top_p=0.95,
     do_sample=True,
-    pad_token_id=tokenizer.pad_token_id,
+    pad_token_id=tokenizer.eos_token_id,
     attention_mask=attention_mask,
     streamer=streamer
 )
 
 print("\nStreaming:", time.time() - start)
 model.generate(**generation_kwargs)
+
 
 print("\nTotal:", time.time() - start)

@@ -1,29 +1,25 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 import time
+from threading import Thread
 
-
-class CustomTextStreamer(TextStreamer):
-    def __init__(self, tokenizer, skip_special_tokens=True):
+class CustomStreamer(TextIteratorStreamer):
+    def __init__(self, tokenizer, skip_special_tokens=False, custom_function=None):
         super().__init__(tokenizer, skip_special_tokens)
-        self.generated_text = ""
-        self.skip_special_tokens=skip_special_tokens
-        print("CustomTextStreamer initialized")
+        self.custom_function = custom_function
 
-    def __call__(self, token_ids, **kwargs):
-        #print("CustomTextStreamer __call__ invoked")
-        # Decode the token ids and append to the generated text
-        text = self.tokenizer.decode(token_ids, skip_special_tokens=self.skip_special_tokens)
-        self.generated_text += text
-        print(123)
-        print(text, end='', flush=True)  # Print each chunk of text
+    def on_finalized_text(self, text):
+        print(text.upper(), end="", flush=True)
+
+def custom_function(text):
+    # Apply your custom processing here
+    return text.upper()  # Example: convert to uppercase
 
 start = time.time()
 
 # Load the model and tokenizer
 model_name = "PygmalionAI/mythalion-13b"
-tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name, 
     torch_dtype=torch.float16, 
@@ -47,7 +43,7 @@ inputs = tokenizer(input_text, return_tensors="pt")
 input_ids = inputs["input_ids"].to(model.device)
 attention_mask = inputs["attention_mask"].to(model.device)
 
-streamer = CustomStreamer(tokenizer)
+streamer = CustomStreamer(tokenizer, skip_special_tokens=True, custom_function=custom_function)
 
 # Generate text using streaming
 generation_kwargs = dict(
@@ -60,12 +56,18 @@ generation_kwargs = dict(
     top_k=150,
     top_p=0.95,
     do_sample=True,
-    pad_token_id=tokenizer.pad_token_id,
+    pad_token_id=tokenizer.eos_token_id,
     attention_mask=attention_mask,
     streamer=streamer
 )
 
 print("\nStreaming:", time.time() - start)
-model.generate(**generation_kwargs)
+
+# Run the generation in a separate thread
+thread = Thread(target=model.generate, kwargs=generation_kwargs)
+thread.start()
+
+# Wait for the generation to complete
+thread.join()
 
 print("\nTotal:", time.time() - start)

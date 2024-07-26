@@ -17,18 +17,18 @@ templates:
       streamer_name: 'Deepinfra_Chat'
       name: 'Art Chat'
       model: 'Gryphe/MythoMax-L2-13b'
-      system: 'SYSTEM_PINUP'
+      system: 'SYSTEM_FUSED'
       history: False
-      question: 'Come up with fused prompt for image generation. add intricate details. Just show one promt in <prompt> tags. use these as inspiration:'  
+      question: 'Come up with fused prompt for image generation. add intricate details. use these as inspiration:'  
 
     - vendor: 'Gryphe_MythoMax'
       chat_type: 'Chat'
       streamer_name: 'Deepinfra_Chat'
       name: 'HIST Chat'
       model: 'Gryphe/MythoMax-L2-13b'
-      system: 'SYSTEM_PINUP'
+      system: 'SYSTEM_FUSED'
       history: True
-      question: 'Come up with fused prompt for image generation. add intricate details. Just show one promt in <prompt> tags. use these as inspiration:'  
+      question: 'Come up with fused prompt for image generation. add intricate details. use these as inspiration:'  
 
 
       
@@ -94,6 +94,10 @@ templates:
   System:
     Chat:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."
+      SYSTEM_FUSED: |
+        You have perfect artistic sence and pay great attention to detail which makes you an expert at describing images.        
+        Providing the answer in <fused_image> tags.
+
       SYSTEM_PINUP: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating pinup art prompts. Answer in english"
       SYSTEM_GENERAL: |
         You are general knowledge expert  

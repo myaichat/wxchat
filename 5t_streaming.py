@@ -16,7 +16,7 @@ model = AutoModelForCausalLM.from_pretrained(
     )
 # Prepare the input text
 input_text ="""
-Create amazing image prompt.add ukrainian essence to it.
+Create amazing image prompt like this 1950s Pinup Girl inspired by the Wildflowers of Ukraine's Summer Fields
 
 """
 

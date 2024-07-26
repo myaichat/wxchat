@@ -127,7 +127,7 @@ Openchat: https://github.com/imoneoi/openchat#installation
 
 #### Salesforce
 https://github.com/SalesforceAIResearch/xLAM
-
+[stablediffusionap img2img](https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothimg2img/)
 
 People to follow:
 | #  | Name                        | LinkedIn                                                   | Twitter                   | Newsletter/Blog                                       | Website/YouTube/Podcast                                 | Top Audience                         | Why Follow                              | Usual Location         |

@@ -1,6 +1,6 @@
 
 
-#import onnxruntime_genai as og
+
 import argparse
 import time, random
 from datetime import datetime

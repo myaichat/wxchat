@@ -1,5 +1,6 @@
 # *New!* 
 
+[ GrypheMythoMax Prompt fuser](https://medium.com/p/fc3918f756de)<br>
 [Groq Llama3 function calling](https://medium.com/p/dd9d33af6ad6) <br>
 [AI Inteview Assistant Streamlit UI with voice](https://medium.com/p/56c2cd360a8b) <br>
 [AI Inteview Assistant xwPython UI](https://medium.com/p/55b1852b9541)<br>

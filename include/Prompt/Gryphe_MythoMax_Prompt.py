@@ -38,8 +38,22 @@ panels     = AttrDict(dict(workspace='WorkspacePanel', vendor='ChatDisplayNotebo
 
 #import vertexai
 #from vertexai.language_models import TextGenerationModel
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
+class CustomTextStreamer(TextIteratorStreamer):
+    def __init__(self, tokenizer,tab_id, skip_special_tokens=True):
+        super().__init__(tokenizer, skip_special_tokens)
+        self.generated_text = ""
+        self.tab_id=tab_id
+        print("CustomTextStreamer initialized")
 
+    def on_finalized_text(self, text: str, stream_end: bool = False):
+        #print("CustomTextStreamer on_finalized_text invoked")
+        # Remove special tokens from the end of the text
+        #text = text.replace("<end_of_turn>", "").replace("<eos>", "").strip()
+        if 1:
+            self.generated_text += text
+            pub.sendMessage('chat_output', message=text, tab_id=self.tab_id)
+            print(text, end='', flush=True)  # Print each chunk of text
 class Chat_ResponseStreamer:
     subscribed=False
     def __init__(self):
@@ -115,7 +129,7 @@ class Chat_ResponseStreamer:
             attention_mask = inputs["attention_mask"].to(model.device)
 
             # Set up the streamer
-            streamer = TextIteratorStreamer(tokenizer)
+            streamer = CustomTextStreamer(tokenizer, receiveing_tab_id)
             gen_start = time.time()
             # Generate text using streaming
             generation_kwargs = dict(
@@ -137,9 +151,7 @@ class Chat_ResponseStreamer:
 
             # Generate and print the text as it's produced
             model.generate(**generation_kwargs)
-            for text in streamer:
-                pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
-                print(text, end="", flush=True)
+
 
             print()  # Print a newline at the end
             # After generation, print the total time and the full generated text
@@ -164,7 +176,153 @@ class Chat_ResponseStreamer:
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
 
         return ''.join(out)
+
+
+class Fuser_ResponseStreamer:
+    subscribed=False
+    def __init__(self):
+        # Set your OpenAI API key here
+        self.model={}
+        self.tokenizer={}
+        self.chat_history={}
+
+    def get_model(self, model_id):
         
+        if model_id not in self.model:
+            
+            
+            self.model[model_id] = AutoModelForCausalLM.from_pretrained(
+                model_id, 
+                torch_dtype=torch.float16, 
+                device_map="auto",
+                cache_dir="./cache",
+                trust_remote_code=True,
+                low_cpu_mem_usage=True,
+                attn_implementation="flash_attention_2"
+            )
+        else:
+            print("Model already loaded")
+        return self.model[model_id]
+        
+    def get_tokenizer(self, model_id):
+        if model_id not in self.tokenizer:
+
+            self.tokenizer[model_id] =   AutoTokenizer.from_pretrained(model_id)
+        
+        else:
+            print("Tokenizer already loaded")
+        return self.tokenizer[model_id]
+
+    def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
+        # Create a chat completion request with streaming enabled
+        if receiveing_tab_id not in self.chat_history:
+            self.chat_history[receiveing_tab_id]=[]
+        chat_history=self.chat_history[receiveing_tab_id]    
+        out=[]
+        from os.path import isfile
+        chat=apc.chats[receiveing_tab_id]
+        txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        start = time.time()
+        try:
+
+            from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
+            import torch
+
+            # Load the model and tokenizer
+            if chat.model not in ["PygmalionAI/mythalion-13b"]:
+                log(f'Unsupported model: {chat.model}', 'red')
+                return ''
+            tokenizer = self.get_tokenizer( chat.model)
+            model = self.get_model(chat.model)
+
+            # Prepare the input text
+            input_text =f"""
+            ### Instruction:
+            Create amazing detailed image description infused with ukrainian essence like this: 
+            "{text_prompt}"
+            Do not give image references. do not use html. Do not use special characters. Do not use emojis. Do not use urls. Do not use any other language than English. Do not
+            return detailed description in <fused_image> tags.
+            ### Response:
+            """
+            image_descriptions=[]
+            for pfn in prompt_path:
+                with open(pfn, 'r') as f:
+                    image_descriptions.append(f.read()) 
+
+            descriptions_text = "\n\n".join([f"Image {i+1}: {desc}" for i, desc in enumerate(image_descriptions)])
+
+           
+
+            input_text = f"""### Instruction:
+            I want you to imagine and describe in detail a single image that fuses elements from multiple image descriptions. 
+            Here are the descriptions of the input images:
+
+            {descriptions_text}
+
+            Please create a vivid, detailed description of a single imaginary image that combines elements from all of these descriptions. 
+            Focus on how the elements from each description interact and blend together. 
+            Be specific about colors, shapes, textures, and composition. 
+            Your description should be cohesive, as if describing a real painting or photograph that fuses these elements.
+            ### Response:
+            """
+
+
+            # Tokenize the input
+            inputs = tokenizer(input_text, return_tensors="pt")
+            input_ids = inputs["input_ids"].to(model.device)
+            attention_mask = inputs["attention_mask"].to(model.device)
+
+            # Set up the streamer
+            streamer = CustomTextStreamer(tokenizer, receiveing_tab_id)
+            gen_start = time.time()
+            pp(chat)
+            # Generate text using streaming
+            generation_kwargs = dict(
+                input_ids=input_ids,
+                max_length=chat.max_length,
+                min_length=chat.min_length,
+                num_return_sequences=1,
+                no_repeat_ngram_size=2,
+                temperature=float(chat.temperature),
+                top_k=chat.top_k,
+                top_p=chat.top_p,
+                #presence_penalty=chat.presence_penalty, 
+                #frequency_penalty=chat.frequency_penalty,                
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id,
+                attention_mask=attention_mask,
+                streamer=streamer,
+            )
+
+            # Generate and print the text as it's produced
+            model.generate(**generation_kwargs)
+
+
+            print()  # Print a newline at the end
+            # After generation, print the total time and the full generated text
+            print("\Generate:", time.time() - gen_start)
+            print("\nTotal:", time.time() - start)
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+            log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
+
+        
+        except Exception as e:    
+
+
+            log(f'Error in stream_response', 'red')
+            log(format_stacktrace(), 'red')
+
+            print(f"An error occurred: {e}")
+            raise
+            #return ''
+        
+
+        if out:
+            pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
+
+        return ''.join(out)
 
 class ChatHist_ResponseStreamer:
     subscribed=False

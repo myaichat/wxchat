@@ -1,22 +1,20 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
 import torch
 import time
 
-
-class CustomTextStreamer(TextStreamer):
+class CustomTextStreamer(TextIteratorStreamer):
     def __init__(self, tokenizer, skip_special_tokens=True):
         super().__init__(tokenizer, skip_special_tokens)
         self.generated_text = ""
-        self.skip_special_tokens=skip_special_tokens
         print("CustomTextStreamer initialized")
 
-    def __call__(self, token_ids, **kwargs):
-        #print("CustomTextStreamer __call__ invoked")
-        # Decode the token ids and append to the generated text
-        text = self.tokenizer.decode(token_ids, skip_special_tokens=self.skip_special_tokens)
-        self.generated_text += text
-        print(123)
-        print(text, end='', flush=True)  # Print each chunk of text
+    def on_finalized_text(self, text: str, stream_end: bool = False):
+        #print("CustomTextStreamer on_finalized_text invoked")
+        # Remove special tokens from the end of the text
+        #text = text.replace("<end_of_turn>", "").replace("<eos>", "").strip()
+        if 1:
+            self.generated_text += text
+            print(text, end='', flush=True)  # Print each chunk of text
 
 start = time.time()
 
@@ -47,7 +45,7 @@ inputs = tokenizer(input_text, return_tensors="pt")
 input_ids = inputs["input_ids"].to(model.device)
 attention_mask = inputs["attention_mask"].to(model.device)
 
-streamer = CustomStreamer(tokenizer)
+streamer = CustomTextStreamer(tokenizer)
 
 # Generate text using streaming
 generation_kwargs = dict(

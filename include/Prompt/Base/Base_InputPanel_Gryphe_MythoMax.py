@@ -150,12 +150,12 @@ class Base_InputPanel_Gryphe_MythoMax(Base_InputPanel):
             chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
         
             self.max_length_dropdown = wx.ComboBox(self, choices=['128', '256','512', '768','1024','1536', '2048', '4096', str(1024* 10), str(1024* 20), str(1024* 40)], style=wx.CB_READONLY)
-            self.max_length_dropdown.SetValue('1024')  # Default value
+            self.max_length_dropdown.SetValue('512')  # Default value
             self.max_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMaxLengthChange)
             chat.max_length = int(self.max_length_dropdown.GetValue())
 
             self.min_length_dropdown = wx.ComboBox(self, choices=['1','128', '256', '512', '1024', '2048', '4096'], style=wx.CB_READONLY)
-            self.min_length_dropdown.SetValue('512')  # Default value
+            self.min_length_dropdown.SetValue('256')  # Default value
             self.min_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMinLengthChange)
             chat.min_length = int(self.min_length_dropdown.GetValue()  )
 

@@ -42,6 +42,8 @@ templates:
       question: 'Come up with fused prompt for image generation. add intricate details. use these as inspiration:'  
 
 
+
+
             
 
       
@@ -101,7 +103,38 @@ templates:
       model: 'Gryphe/MythoMax-L2-13b'
       system: 'SYSTEM_ONE'
       question:  |
-        add ukrainian essence, be as wierd and concise as possible        
+        add ukrainian essence, be as wierd and concise as possible    
+
+
+    - vendor: 'Gryphe_MythoMax'
+      chat_type: 'Copilot'
+      streamer_name: 'Fuser'
+      name: 'Spicy'
+      model: 'PygmalionAI/mythalion-13b'
+      system: 'SYSTEM_ONE'
+      history: False
+      question: 'Ignored'  
+
+    - vendor: 'Gryphe_MythoMax'
+      chat_type: 'Copilot'
+      streamer_name: 'Fuser'
+      name: 'Spicy 2'
+      num_of_prompts: 2
+      model: 'PygmalionAI/mythalion-13b'
+      system: 'SYSTEM_ONE'
+      history: False
+      question: 'Ignored' 
+
+    - vendor: 'Gryphe_MythoMax'
+      chat_type: 'Copilot'
+      streamer_name: 'Fuser'
+      name: 'Spicy 3'
+      num_of_prompts: 3
+      model: 'PygmalionAI/mythalion-13b'
+      system: 'SYSTEM_ONE'
+      history: False
+      question: 'Ignored' 
+
   System:
     Chat:
       SYSTEM: "You have perfect artistic sense and pay great attention to detail which makes you an expert at generating image and art prompts."

@@ -84,6 +84,44 @@ class Chat_ResponseStreamer:
         else:
             print("Tokenizer already loaded")
         return self.tokenizer[model_id]
+    def generate_response(self, input_ids, chat, receiveing_tab_id,attention_mask, model , tokenizer):
+        
+        eos_id = tokenizer.eos_token_id
+        # Stream generation
+        
+        assert type(chat.top_p) is tuple, type(chat.top_p)
+        for top_p in range(*[int(x*10) for x in chat.top_p]):
+            top_p=top_p/10
+            header = fmt([[f'top_p = {top_p}']],[])
+            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+            gen_start = time.time()
+            outputs = model.generate(input_ids, 
+                                            attention_mask=attention_mask,
+                                            do_sample=chat.do_sample,
+                                            temperature=chat.temperature, 
+                                            max_new_tokens=chat.max_length, 
+                                            min_new_tokens=chat.min_length, 
+                                            num_beams=8, 
+                                            top_k=chat.top_k,
+                                            top_p=top_p,
+                                            num_return_sequences=1, 
+                                            eos_token_id=eos_id, 
+                                            pad_token_id=eos_id,
+                                            
+                                            length_penalty=chat.length_penalty,
+                                            repetition_penalty=chat.repetition_penalty,
+                                            return_dict_in_generate=True,
+                                            output_scores=True)
+
+            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
+
+
+            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
+            
+
+            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
+            pub.sendMessage('chat_output', message='\n', tab_id=receiveing_tab_id)
+            print(f"{top_p}: Generate:", time.time() - gen_start)
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
         # Create a chat completion request with streaming enabled
@@ -106,38 +144,13 @@ class Chat_ResponseStreamer:
             inputs = tokenizer(text_prompt.strip() + " Rephrase:", return_tensors="pt", padding=True)
             input_ids = inputs.input_ids.to(device)
             attention_mask = inputs.attention_mask.to(device)
-            eos_id = tokenizer.eos_token_id
-            
-            # Stream generation
+            #eos_id = tokenizer.eos_token_id
             gen_start = time.time()
-            outputs = model.generate(input_ids, 
-                                            attention_mask=attention_mask,
-                                            do_sample=chat.do_sample,
-                                            temperature=chat.temperature, 
-                                            max_new_tokens=chat.max_length, 
-                                            min_new_tokens=chat.min_length, 
-                                            num_beams=8, 
-                                            top_k=chat.top_k,
-                                            top_p=chat.top_p,
-                                            num_return_sequences=1, 
-                                            eos_token_id=eos_id, 
-                                            pad_token_id=eos_id,
-                                           
-                                            length_penalty=chat.length_penalty,
-                                            repetition_penalty=chat.repetition_penalty,
-                                            return_dict_in_generate=True,
-                                            output_scores=True)
+            self.generate_response( input_ids, chat, receiveing_tab_id,attention_mask, model , tokenizer)
 
-            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
-
-
-            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
-         
-
-            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
-
-            print("\Generate:", time.time() - gen_start)
+            
             print("\nTotal:", time.time() - start)
+            print("\Generate:", time.time() - gen_start)
             pub.sendMessage('chat_output', message=f'\n', tab_id=receiveing_tab_id)
             log(f'\nElapsed {time.time() - gen_start}, Total: {time.time() - start}')
 

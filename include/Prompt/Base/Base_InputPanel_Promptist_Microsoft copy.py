@@ -87,7 +87,7 @@ class ShowSystemPrompts_Chat(wx.Dialog):
     def on_close(self, event):
         self.Close()         
 
-from range_slider import RangeSlider
+
 
 class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
     def AddButtons_Level_1(self, h_sizer):
@@ -135,16 +135,7 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
         # Split the text into chunks of specified length
         chunks = [text[i:i+chunk_length] for i in range(0, len(text), chunk_length)]
         return chunks
-    def rangeslider_changed(self, evt):
-        obj = evt.GetEventObject()
-        lv, hv = obj.GetValues()
-        self.top_p_dos.SetLabel('top_p: {:.1f},{:.1f}'.format(lv, hv))
-        #format top_p to  {:.1f}
-        self.top_p=(lv,hv )
-        print ( 'top_p: {:.1f},{:.1f}'.format(lv/100, hv/100), self.top_p)
-        chat = apc.chats[self.tab_id]
-        chat.top_p = self.top_p
-        
+
 
     def AddButtons_Level_2(self, v_sizer):
         if 1: #second row
@@ -154,7 +145,7 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
             h_sizer_1 = wx.BoxSizer(wx.HORIZONTAL)
             chat=apc.chats[self.tab_id] 
             self.do_sample_dropdown = wx.ComboBox(self, choices=['True', 'False'], style=wx.CB_READONLY)
-            self.do_sample_dropdown.SetValue('True')  # Default value
+            self.do_sample_dropdown.SetValue('False')  # Default value
             self.do_sample_dropdown.Bind(wx.EVT_COMBOBOX, self.OnDoSampleChange)
             chat.do_sample = (self.do_sample_dropdown.GetValue() == 'True')
         
@@ -167,21 +158,11 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
             self.min_length_dropdown.SetValue('256')  # Default value
             self.min_length_dropdown.Bind(wx.EVT_COMBOBOX, self.OnMinLengthChange)
             chat.min_length = int(self.min_length_dropdown.GetValue()  )
-            if 0:
-                self.top_p_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9','0.95',  '1.0',  '1.1',], style=wx.CB_READONLY)
-                self.top_p_dropdown.SetValue('0.95')  # Default value
-                self.top_p_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopPChange)
-                chat.top_p = float(self.top_p_dropdown.GetValue()  )
 
-                self.top_p_slider = wx.Slider(self, value=9, minValue=0, maxValue=11, style=wx.SL_HORIZONTAL)
-                self.top_p_slider.SetValue(9)
-                self.top_p_slider.Bind(wx.EVT_SLIDER, self.OnTopPChange)
-                chat.top_p = float(self.top_p_slider.GetValue()  )/10
-
-            self.top_p_slider = RangeSlider(parent=self, lowValue=0.0, highValue=1.1, minValue=0.0, maxValue=1.1,
-                                       step=0.1, size=(100, 26))
-            self.top_p_slider.Bind(wx.EVT_SLIDER, self.rangeslider_changed)            
-            chat.top_p = (0.8, 1.1)
+            self.top_p_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9','0.95',  '1.0',  '1.1',], style=wx.CB_READONLY)
+            self.top_p_dropdown.SetValue('0.95')  # Default value
+            self.top_p_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopPChange)
+            chat.top_p = float(self.top_p_dropdown.GetValue()  )
             #top_k
             self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '50',  '75',  '100',  '150', '200','300',], style=wx.CB_READONLY)
             self.top_k_dropdown.SetValue('150')  # Default value
@@ -433,10 +414,10 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            self.top_p_dos = wx.StaticText(self, label="top_p            ")
+            dos = wx.StaticText(self, label="top_p")
             
             # Assuming "some_text" is the text you want to pass as a parameter
-            self.top_p_dos.html_content ="""<!DOCTYPE html>
+            dos.html_content ="""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -519,14 +500,14 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 </html>"""   
 
             # Modify the event binding to use a lambda function
-            self.top_p_dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
+            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
 
             #dos.Bind(wx.EVT_ENTER_WINDOW, self.onHover)
             #dos.Bind(wx.EVT_LEAVE_WINDOW, self.onLeave)
     
    
-            sizer_0.Add(self.top_p_dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.top_p_slider, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.top_p_dropdown, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
 
@@ -879,13 +860,13 @@ enhancing the quality and coherence of the generated text.
 
         # Continue processing the event
         event.Skip()     
-    def _OnTopPChange(self, event):
+    def OnTopPChange(self, event):
         # Get the selected do_sample value
-        selected_top_p = self.top_p_slider.GetValue()
+        selected_top_p = self.top_p_dropdown.GetValue()
         print('OnTopPChange',selected_top_p, self.tab_id)
         # Print the selected model
         chat = apc.chats[self.tab_id]
-        chat.top_p = float(selected_top_p )/10
+        chat.top_p = float(selected_top_p )
 
         # Continue processing the event
         pp(chat)
@@ -980,15 +961,11 @@ enhancing the quality and coherence of the generated text.
 
             if chat.get('top_p', None):
                 
-                self.top_p_slider.SetValues(*chat.top_p)
+                self.top_p_dropdown.SetValue(str(chat.top_p))
                 
                 #wx.MessageBox(f"top_p {chat.top_p} {self.top_p_dropdown.GetValue()}", "top_p"   )
             else:
-                lv, hv = self.top_p_slider.GetValues()
-                
-                
-                chat.top_p=(lv, hv )
-                
+                chat.top_p= float(self.top_p_dropdown.GetValue())
 
             
             if chat.get('top_k', None):

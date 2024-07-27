@@ -12,6 +12,11 @@ Florence 2 config:  https://medium.com/p/722f035caba1
 <br>
 Meta llama3 70b prompt fuser : [Source](https://github.com/myaichat/wxchat/blob/meta_llama3_prompt_fuser/include/Prompt/Meta_Llama3_Prompt.py) [API](https://build.nvidia.com/meta/llama3-70b) [HF](https://huggingface.co/blog/llama3#inference-integrations)
 
+# Finction Calling/Tools
+wxPython UI for function calling  API demo
+| Vendor   | API | Model   | Tool | Config | Usage|Info | 
+|------------|------------|------------|------------|------------|------------|------------|
+|Groq|Transformers| Llama3| [Source](https://github.com/myaichat/wxchat/blob/groq_function_calling/parallel.py)| []()| [Medium](https://medium.com/p/dd9d33af6ad6)|[]()|
 
 # Chat/Copilot
 wxPython UI for inference API demo

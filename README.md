@@ -1,6 +1,6 @@
 # *New!* 
 
-[Microsoft Promptist](https://github.com/myaichat/wxchat/blob/microsoft_promptist/include/Prompt/Promptist_Microsoft_Prompt.py)<br>
+[Microsoft Promptist](https://medium.com/p/e0ef47ea192b)<br>
 [ GrypheMythoMax Prompt fuser](https://medium.com/p/fc3918f756de)<br>
 [Groq Llama3 function calling](https://medium.com/p/dd9d33af6ad6) <br>
 [AI Inteview Assistant Streamlit UI with voice](https://medium.com/p/56c2cd360a8b) <br>
@@ -64,7 +64,7 @@ wxPython UI for Prompt Fusion demo
 | Qwen|transformers| Qwen2-***-Instruct,[72B deepinfra](https://deepinfra.com/Qwen/Qwen2-72B-Instruct/api?example=openai-python)| [](https://github.com/myaichat/wxchat/blob/qwen2_prompt_fuser/include/Prompt/Qwen_Qwen2_Prompt.py)| []()| [Medium](https://medium.com/p/1ee0e47bfaf2)|[Model](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f),[Gihub](https://github.com/QwenLM/Qwen)|
 | Meta|openai|  llama3 70b,[70B](https://build.nvidia.com/meta/llama3-70b),[HF](https://huggingface.co/blog/llama3#inference-integrations)| [Source](https://github.com/myaichat/wxchat/blob/meta_llama3_prompt_fuser/include/Prompt/Meta_Llama3_Prompt.py)| []()| [Medium](https://medium.com/p/a29c396f73c1)|[]()|
 |  Gryphe| MythoMax | [Source](https://github.com/myaichat/wxchat/blob/mythomax_prompt_fuser/include/Prompt/Gryphe_MythoMax_Prompt.py)| []()| [Medium](https://medium.com/p/fc3918f756de), []()|[]()|
-|  Microsoft | Promptist | [Source](https://github.com/myaichat/wxchat/blob/microsoft_promptist/include/Prompt/Promptist_Microsoft_Prompt.py)| []()| [Medium](), []()|[]()|
+|  Microsoft | Promptist | [Source](https://github.com/myaichat/wxchat/blob/microsoft_promptist/include/Prompt/Promptist_Microsoft_Prompt.py)| []()| [Medium](https://medium.com/p/e0ef47ea192b), []()|[]()|
 
 
 

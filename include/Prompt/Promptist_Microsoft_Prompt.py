@@ -222,13 +222,16 @@ class Fuser_ResponseStreamer:
         # Stream generation
         
         assert type(chat.top_p) is tuple, type(chat.top_p)
-        assert type(chat.top_p) is tuple, type(chat.top_p)
+        assert type(chat.top_k) is tuple, type(chat.top_k)
+        assert type(chat.temperature) is tuple, type(chat.temperature)
+        assert type(chat.temperature) is tuple, type(chat.temperature)
+        assert type(chat.repetition_penalty) is tuple, type(chat.repetition_penalty)
         for top_p in range(*[int(x*10) for x in chat.top_p]):
             top_p=top_p/10
-            for top_k in range(*chat.top_k, 30):
+            for top_k in range(*[int(x) for x in chat.top_k], 30):
                 for temp in range(*[int(x*10) for x in chat.temperature], 3):
                     temp=temp/10
-                    for length_penalty in range(*[int(x) for x in chat.length_penalty]):
+                    for length_penalty in range(*[int(x) for x in chat.temperature]):
                         #print (f'top_p = {top_p}, top_k = {top_k}, temp = {temp}')
                         for repetition_penalty in range(*[int(x*10) for x in chat.repetition_penalty], 3):
                             repetition_penalty=repetition_penalty/10
@@ -270,9 +273,9 @@ class Fuser_ResponseStreamer:
         out=[]
         from os.path import isfile
         chat=apc.chats[receiveing_tab_id]
-        txt='\n'.join(split_text_into_chunks(text_prompt,80))
-        header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
-        pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+        #txt='\n'.join(split_text_into_chunks(text_prompt,80))
+        # header = fmt([[f'{txt}Answer:\n']],['Question | '+chat.model])
+        #pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
         start = time.time()
         try:
 
@@ -284,7 +287,9 @@ class Fuser_ResponseStreamer:
 
             prompts=self.get_prompts()
             descriptions_text=prompts[0]
-
+            txt='\n'.join(split_text_into_chunks(descriptions_text,80))
+            header = fmt([[f'{txt}\nAnswer:\n']],['Prompt | '+chat.model])
+            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)            
 
             tokenizer=self.get_tokenizer(chat.model)
             model, device = self.get_model(chat.model)
@@ -1587,7 +1592,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Promptist_
         chatHistory[self.tab_id]=[]
         #pp(chat)
         #chatHistory[self.tab_id]= [{"role": "system", "content": all_system_templates[chat.workspace].Chat[default_chat_template]}]
-        self.askLabel = wx.StaticText(self, label=f'Ask chatgpt {tab_id}:')
+        self.askLabel = wx.StaticText(self, label=f'{tab_id}:')
         model_names = model_list  # Add more model names as needed
         self.chat_type=chat.chat_type
         self.model_dropdown = wx.ComboBox(self, choices=model_names, style=wx.CB_READONLY)
@@ -1650,7 +1655,7 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Promptist_
         self.rs={}
     def SetTabId(self, tab_id):
         self.tab_id=tab_id
-        self.askLabel.SetLabel(f'Ask chatgpt {tab_id}:')
+        self.askLabel.SetLabel(f'{tab_id}:')
     def SetChatDefaults(self, tab_id):
         global chatHistory, questionHistory, currentModel
         if tab_id ==self.tab_id:

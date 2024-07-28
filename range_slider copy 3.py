@@ -107,11 +107,13 @@ class SliderThumb:
         wx.PostEvent(self.parent.GetEventHandler(), event)
 
     def GetMin(self):
-        return self.parent.border_width + self.size[0] / 2
+        min_x = self.parent.border_width + self.size[0] / 2
+        return min_x
 
     def GetMax(self):
         parent_size = self.parent.GetSize()
-        return parent_size[0] - self.parent.border_width - self.size[0] / 2
+        max_x = parent_size[0] - self.parent.border_width - self.size[0] / 2
+        return max_x
 
     def IsMouseOver(self, mouse_pos):
         in_hitbox = True
@@ -179,7 +181,7 @@ class RangeSlider(wx.Panel):
         lowValue = max(lowValue, self.min_value)
         highValue = min(highValue, self.max_value)
 
-        self.border_width = 10  # Increased from 8 to 10
+        self.border_width = 8
 
         self.thumbs = {
             'low': SliderThumb(parent=self, value=lowValue),
@@ -285,22 +287,18 @@ class RangeSlider(wx.Panel):
 
     def OnPaint(self, evt):
         w, h = self.GetSize()
+        # BufferedPaintDC should reduce flickering
         dc = wx.BufferedPaintDC(self)
         background_brush = wx.Brush(self.GetBackgroundColour(), wx.SOLID)
         dc.SetBackground(background_brush)
         dc.Clear()
-        
         # Draw slider
         track_height = 12
-        track_start = self.border_width + self.thumb_width / 2
-        track_end = w - self.border_width - self.thumb_width / 2
-        track_width = track_end - track_start
-        
+        track_width = w - 2 * self.border_width + self.thumb_width  # Extend track width
         dc.SetPen(wx.Pen(self.slider_outline_color, width=1, style=wx.PENSTYLE_SOLID))
         dc.SetBrush(wx.Brush(self.slider_background_color, style=wx.BRUSHSTYLE_SOLID))
-        dc.DrawRectangle(int(track_start), int(h / 2 - track_height / 2),
-                        int(track_width), int(track_height))
-        
+        dc.DrawRectangle(int(self.border_width), int(h / 2 - track_height / 2),
+                         int(track_width), int(track_height))
         # Draw selected range
         if self.IsEnabled():
             dc.SetPen(wx.Pen(self.selected_range_outline_color, width=1, style=wx.PENSTYLE_SOLID))
@@ -308,12 +306,10 @@ class RangeSlider(wx.Panel):
         else:
             dc.SetPen(wx.Pen(self.slider_outline_color, width=1, style=wx.PENSTYLE_SOLID))
             dc.SetBrush(wx.Brush(self.slider_outline_color, style=wx.BRUSHSTYLE_SOLID))
-        
         low_pos = self.thumbs['low'].GetPosition()[0]
         high_pos = self.thumbs['high'].GetPosition()[0]
         dc.DrawRectangle(int(low_pos), int(h / 2 - track_height / 4),
-                        int(high_pos - low_pos), int(track_height / 2))
-        
+                         int(high_pos - low_pos), int(track_height / 2))
         # Draw thumbs
         for thumb in self.thumbs.values():
             thumb.OnPaint(dc)

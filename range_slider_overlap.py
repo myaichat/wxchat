@@ -7,8 +7,8 @@ def fraction_to_value(fraction, min_value, max_value):
 def value_to_fraction(value, min_value, max_value):
     return float(value - min_value) / (max_value - min_value)
 
-def round_to_step(value, step):
-    return round(value / step) * step
+def round_to_step(value, step, min_value):
+    return round((value - min_value) / step) * step + min_value
 
 class SliderThumb:
     def __init__(self, parent, value):
@@ -51,33 +51,17 @@ class SliderThumb:
         # Limit movement by the position of the other thumb
         who_other, other_thumb = self.GetOtherThumb()
         other_pos = other_thumb.GetPosition()
-        min_distance = self.parent.min_distance
-        min_distance_pixels = (min_distance / (self.parent.max_value - self.parent.min_value)) * (self.GetMax() - self.GetMin())
-        
         if who_other == 'low':
-            pos_x = max(other_pos[0] + min_distance_pixels, pos_x)
+            pos_x = max(other_pos[0] + other_thumb.size[0] / 2 + self.size[0] / 2, pos_x)
         else:
-            pos_x = min(other_pos[0] - min_distance_pixels, pos_x)
-        
+            pos_x = min(other_pos[0] - other_thumb.size[0] / 2 - self.size[0] / 2, pos_x)
         # Limit movement by slider boundaries
         min_x = self.GetMin()
         max_x = self.GetMax()
         pos_x = min(max(pos_x, min_x), max_x)
 
         fraction = value_to_fraction(pos_x, min_x, max_x)
-        new_value = fraction_to_value(fraction, self.parent.GetMin(), self.parent.GetMax())
-        
-        # Only round to step if it's not at the min or max value
-        if new_value != self.parent.GetMin() and new_value != self.parent.GetMax():
-            new_value = round_to_step(new_value, self.parent.step)
-        
-        # Ensure the value doesn't go below the minimum or above the maximum
-        if who_other == 'high':  # This means we're setting the left (low) thumb
-            new_value = max(new_value, self.parent.GetMin())
-        else:  # This means we're setting the right (high) thumb
-            new_value = min(new_value, self.parent.GetMax())
-        
-        self.value = new_value
+        self.value = round_to_step(fraction_to_value(fraction, self.parent.GetMin(), self.parent.GetMax()), self.parent.step, self.parent.min_value)
         # Post event notifying that position changed
         self.PostEvent()
 
@@ -85,19 +69,7 @@ class SliderThumb:
         return self.value
 
     def SetValue(self, value):
-        # Only round to step if it's not at the min or max value
-        if value != self.parent.GetMin() and value != self.parent.GetMax():
-            self.value = round_to_step(value, self.parent.step)
-        else:
-            self.value = value
-        
-        # Ensure the value does not go below the minimum or above the maximum
-        if self == self.parent.thumbs['low']:  # If this is the left (low) thumb
-            self.value = max(self.value, self.parent.GetMin())
-            self.value = min(self.value, self.parent.thumbs['high'].value - self.parent.min_distance)
-        else:  # If this is the right (high) thumb
-            self.value = min(self.value, self.parent.GetMax())
-            self.value = max(self.value, self.parent.thumbs['low'].value + self.parent.min_distance)
+        self.value = round_to_step(value, self.parent.step, self.parent.min_value)
         # Post event notifying that value changed
         self.PostEvent()
 
@@ -107,11 +79,13 @@ class SliderThumb:
         wx.PostEvent(self.parent.GetEventHandler(), event)
 
     def GetMin(self):
-        return self.parent.border_width + self.size[0] / 2
+        min_x = self.parent.border_width + self.size[0] / 2
+        return min_x
 
     def GetMax(self):
         parent_size = self.parent.GetSize()
-        return parent_size[0] - self.parent.border_width - self.size[0] / 2
+        max_x = parent_size[0] - self.parent.border_width - self.size[0] / 2
+        return max_x
 
     def IsMouseOver(self, mouse_pos):
         in_hitbox = True
@@ -155,8 +129,8 @@ class SliderThumb:
 
 
 class RangeSlider(wx.Panel):
-    def __init__(self, parent, id=wx.ID_ANY, lowValue=None, highValue=None, minValue=0.1, maxValue=2.2,
-                 step=0.3, minDistance=0.1, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.SL_HORIZONTAL,
+    def __init__(self, parent, id=wx.ID_ANY, lowValue=None, highValue=None, minValue=0.0, maxValue=1.0,
+                 step=0.1, pos=wx.DefaultPosition, size=wx.DefaultSize, style=wx.SL_HORIZONTAL,
                  validator=wx.DefaultValidator, name='rangeSlider'):
         if style != wx.SL_HORIZONTAL:
             raise NotImplementedError('Styles not implemented')
@@ -169,7 +143,6 @@ class RangeSlider(wx.Panel):
         self.min_value = minValue
         self.max_value = maxValue
         self.step = step
-        self.min_distance = max(minDistance, step)  # Ensure min distance is at least one step
         if lowValue is None:
             lowValue = self.min_value
         if highValue is None:
@@ -179,7 +152,7 @@ class RangeSlider(wx.Panel):
         lowValue = max(lowValue, self.min_value)
         highValue = min(highValue, self.max_value)
 
-        self.border_width = 10  # Increased from 8 to 10
+        self.border_width = 8
 
         self.thumbs = {
             'low': SliderThumb(parent=self, value=lowValue),
@@ -285,22 +258,17 @@ class RangeSlider(wx.Panel):
 
     def OnPaint(self, evt):
         w, h = self.GetSize()
+        # BufferedPaintDC should reduce flickering
         dc = wx.BufferedPaintDC(self)
         background_brush = wx.Brush(self.GetBackgroundColour(), wx.SOLID)
         dc.SetBackground(background_brush)
         dc.Clear()
-        
         # Draw slider
         track_height = 12
-        track_start = self.border_width + self.thumb_width / 2
-        track_end = w - self.border_width - self.thumb_width / 2
-        track_width = track_end - track_start
-        
         dc.SetPen(wx.Pen(self.slider_outline_color, width=1, style=wx.PENSTYLE_SOLID))
         dc.SetBrush(wx.Brush(self.slider_background_color, style=wx.BRUSHSTYLE_SOLID))
-        dc.DrawRectangle(int(track_start), int(h / 2 - track_height / 2),
-                        int(track_width), int(track_height))
-        
+        dc.DrawRectangle(int(self.border_width), int(h / 2 - track_height / 2),
+                         int(w - 2 * self.border_width), int(track_height))
         # Draw selected range
         if self.IsEnabled():
             dc.SetPen(wx.Pen(self.selected_range_outline_color, width=1, style=wx.PENSTYLE_SOLID))
@@ -308,12 +276,10 @@ class RangeSlider(wx.Panel):
         else:
             dc.SetPen(wx.Pen(self.slider_outline_color, width=1, style=wx.PENSTYLE_SOLID))
             dc.SetBrush(wx.Brush(self.slider_outline_color, style=wx.BRUSHSTYLE_SOLID))
-        
         low_pos = self.thumbs['low'].GetPosition()[0]
         high_pos = self.thumbs['high'].GetPosition()[0]
         dc.DrawRectangle(int(low_pos), int(h / 2 - track_height / 4),
-                        int(high_pos - low_pos), int(track_height / 2))
-        
+                         int(high_pos - low_pos), int(track_height / 2))
         # Draw thumbs
         for thumb in self.thumbs.values():
             thumb.OnPaint(dc)
@@ -358,6 +324,7 @@ class RangeSlider(wx.Panel):
             self.thumbs['low'].SetValue(minValue)
         self.min_value = minValue
         self.Refresh()
+
 
 class TestFrame(wx.Frame):
     def __init__(self):
@@ -408,10 +375,12 @@ class TestFrame(wx.Frame):
             self.rangeslider.Enable(True)
             self.button_toggle.SetLabel('Disable')
 
+
 def main():
     app = wx.App()
     TestFrame().Show()
     app.MainLoop()
+
 
 if __name__ == "__main__":
     main()

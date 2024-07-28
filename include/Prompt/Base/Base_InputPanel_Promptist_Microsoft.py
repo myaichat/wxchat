@@ -7,7 +7,7 @@ import include.config.init_config as init_config
 apc = init_config.apc
 import wx.html
 from include.Common import HtmlDialog, Base_InputPanel, ChatHistoryDialog, dict2, evaluate
-
+e=sys.exit
 
 
 class ShowSystemPrompts_Chat(wx.Dialog):
@@ -88,6 +88,7 @@ class ShowSystemPrompts_Chat(wx.Dialog):
         self.Close()         
 
 from range_slider import RangeSlider
+#from new_range_slider import RangeSlider as NewRangeSlider
 
 class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
     def AddButtons_Level_1(self, h_sizer):
@@ -141,10 +142,50 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
         self.top_p_dos.SetLabel('top_p: {:.1f},{:.1f}'.format(lv, hv))
         #format top_p to  {:.1f}
         self.top_p=(lv,hv )
-        print ( 'top_p: {:.1f},{:.1f}'.format(lv/100, hv/100), self.top_p)
+        #print ( 'top_p:',lv, hv, self.top_p)
         chat = apc.chats[self.tab_id]
         chat.top_p = self.top_p
-        
+    def top_k_rangeslider_changed(self, evt):
+        #print(111)
+        obj = evt.GetEventObject()
+        lv, hv = obj.GetValues()
+        self.top_k_dos.SetLabel(f'top_k: {lv},{hv}')
+        #format top_p to  {:.1f}
+        self.top_k=(lv,hv )
+        #print ( 'top_k:',lv, hv,  self.top_k)
+        chat = apc.chats[self.tab_id]
+        chat.top_k = self.top_k 
+    def temp_rangeslider_changed(self, evt):
+        #print(111)
+        obj = evt.GetEventObject()
+        lv, hv = obj.GetValues()
+        self.temperature_dos.SetLabel('temp: {:.1f},{:.1f}'.format(lv, hv))
+        #format top_p to  {:.1f}
+        self.temperature=(lv,hv )
+        #print ( 'temp:',lv, hv,  self.temperature)
+        chat = apc.chats[self.tab_id]
+        chat.temperature = self.temperature                
+
+    def length_penalty_rangeslider_changed(self, evt):
+        #print(111)
+        obj = evt.GetEventObject()
+        lv, hv = obj.GetValues()
+        self.length_penalty_dos.SetLabel('len_pnlt: {:.1f},{:.1f}'.format(lv, hv))
+        #format top_p to  {:.1f}
+        self.length_penalty=(lv,hv )
+        #print ( 'length_penalty:',lv, hv,  self.length_penalty)
+        chat = apc.chats[self.tab_id]
+        chat.length_penalty = self.length_penalty 
+    def repet_penalty_rangeslider_changed(self, evt):
+        #print(111)
+        obj = evt.GetEventObject()
+        lv, hv = obj.GetValues()
+        self.repetition_penalty_dos.SetLabel('repet_pnlt: {:.1f},{:.1f}'.format(lv, hv))
+        #format top_p to  {:.1f}
+        self.repetition_penalty=(lv,hv )
+        #print ( 'repet_penalty:',lv, hv,  self.repetition_penalty)
+        chat = apc.chats[self.tab_id]
+        chat.repetition_penalty = self.repetition_penalty 
 
     def AddButtons_Level_2(self, v_sizer):
         if 1: #second row
@@ -178,30 +219,57 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
                 self.top_p_slider.Bind(wx.EVT_SLIDER, self.OnTopPChange)
                 chat.top_p = float(self.top_p_slider.GetValue()  )/10
 
-            self.top_p_slider = RangeSlider(parent=self, lowValue=0.0, highValue=1.1, minValue=0.0, maxValue=1.1,
-                                       step=0.1, size=(100, 26))
+            self.top_p_slider = RangeSlider(parent=self, lowValue=0.8, highValue=1.1, minValue=0.0, maxValue=1.1,
+                                       step=0.1, size=(100, 26))    
             self.top_p_slider.Bind(wx.EVT_SLIDER, self.rangeslider_changed)            
-            chat.top_p = (0.8, 1.1)
+            chat.top_p = self.top_p_slider.GetValues()
             #top_k
-            self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '50',  '75',  '100',  '150', '200','300',], style=wx.CB_READONLY)
-            self.top_k_dropdown.SetValue('150')  # Default value
-            self.top_k_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopKChange)
-            chat.top_k = int(self.top_k_dropdown.GetValue()  )     
+            if 0:
+                self.top_k_dropdown = wx.ComboBox(self, choices=['1',  '2',  '3',  '4',  '5',  '10',  '20',  '50',  '75',  '100',  '150', '200','300',], style=wx.CB_READONLY)
+                self.top_k_dropdown.SetValue('150')  # Default value
+                self.top_k_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTopKChange)
+                chat.top_k = self.top_p_slider.GetValues()    
 
-            self.temp_dropdown = wx.ComboBox(self, choices=['0.0',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0', '1.2', '1.4', '1.7',  '2.0', '5.0', '10.0', '50.0'], style=wx.CB_READONLY)
-            self.temp_dropdown.SetValue('1.4')  # Default value
-            self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
-            chat.temperature = float(self.temp_dropdown.GetValue()  )  
-            #repetition_penalty
-            self.length_penalty_dropdown = wx.ComboBox(self, choices=['-2.0',  '-1.0',  '0.0','0.1', '0.2', '0.5',  '1.0','1.1', '1.5', '2.0'], style=wx.CB_READONLY)
-            self.length_penalty_dropdown.SetValue('0.1')  # Default value
-            self.length_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
-            chat.length_penalty = float(self.length_penalty_dropdown.GetValue()  )             
 
-            self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['-2.0',  '-1.0',  '0.0', '0.3', '0.8',  '1.0', '1.3', '1.8',  '2.0',  '3.0',  '4.0',  '5.0',  '6.0'], style=wx.CB_READONLY)
-            self.repetition_penalty_dropdown.SetValue('1.0')  # Default value
-            self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnLengthPenaltyChange)
-            chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )    
+            self.top_k_slider =RangeSlider(parent=self, lowValue=40, highValue=100, minValue=10, maxValue=310,
+                                       step=30, size=(100, 26))    
+            self.top_k_slider.Bind(wx.EVT_SLIDER, self.top_k_rangeslider_changed)            
+            chat.top_k = self.top_k_slider.GetValues()
+            if 0:
+                self.temp_dropdown = wx.ComboBox(self, choices=['0.1',  '0.1',  '0.2',  '0.3',  '0.4',  '0.5',  '0.6',  '0.7',  '0.8',  '0.9',  '1.0', '1.2', '1.4', '1.7',  '2.0', '5.0', '10.0', '50.0'], style=wx.CB_READONLY)
+                self.temp_dropdown.SetValue('1.4')  # Default value
+                self.temp_dropdown.Bind(wx.EVT_COMBOBOX, self.OnTempChange)
+                chat.temperature = float(self.temp_dropdown.GetValue()  )  
+
+
+            self.temperature_slider =RangeSlider(parent=self, lowValue=1.0, highValue=1.9, minValue=0.1, maxValue=2.2,
+                                       step=0.3, size=(100, 26))    
+            self.temperature_slider.Bind(wx.EVT_SLIDER, self.temp_rangeslider_changed)            
+            chat.temperature = self.temperature_slider.GetValues()
+
+            if 0:
+                self.length_penalty_dropdown = wx.ComboBox(self, choices=['-2.0',  '-1.0',  '0.0','0.1', '0.2', '0.5',  '1.0','1.1', '1.5', '2.0'], style=wx.CB_READONLY)
+                self.length_penalty_dropdown.SetValue('0.1')  # Default value
+                self.length_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnRepetitionPenaltyChange)
+                chat.length_penalty = float(self.length_penalty_dropdown.GetValue()  )   
+
+            self.length_penalty_slider =RangeSlider(parent=self, lowValue=4, highValue=6, minValue=0, maxValue=6,
+                                       step=1, size=(100, 26))    
+            self.length_penalty_slider.Bind(wx.EVT_SLIDER, self.length_penalty_rangeslider_changed)            
+            chat.length_penalty = self.length_penalty_slider.GetValues()
+
+            if 0:
+                self.repetition_penalty_dropdown = wx.ComboBox(self, choices=['-2.0',  '-1.0',  '0.0', '0.3', '0.8',  '1.0', '1.3', '1.8',  '2.0',  '3.0',  '4.0',  '5.0',  '6.0'], style=wx.CB_READONLY)
+                self.repetition_penalty_dropdown.SetValue('1.0')  # Default value
+                #self.repetition_penalty_dropdown.Bind(wx.EVT_COMBOBOX, self.OnLengthPenaltyChange)
+                chat.repetition_penalty = float(self.repetition_penalty_dropdown.GetValue()  )  
+
+            self.repetition_penalty_slider =RangeSlider(parent=self, lowValue=1.0, highValue=1.9, minValue=0.1, maxValue=2.2,
+                                       step=0.3, size=(100, 26))    
+            self.repetition_penalty_slider.Bind(wx.EVT_SLIDER, self.repet_penalty_rangeslider_changed)            
+            chat.repetition_penalty = self.repetition_penalty_slider.GetValues()
+            #print( self.repetition_penalty_slider.GetValues())
+            #e()
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
             dos = wx.StaticText(self, label="do_sample")
@@ -334,8 +402,8 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
                    
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="top_k")
-            dos.html_content ="""<!DOCTYPE html>
+            self.top_k_dos = wx.StaticText(self, label="top_k:          ")
+            self.top_k_dos.html_content ="""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -426,9 +494,9 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 """   
 
             # Modify the event binding to use a lambda function
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))            
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.top_k_dropdown, 0, wx.ALIGN_CENTER)
+            self.top_k_dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))            
+            sizer_0.Add(self.top_k_dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.top_k_slider, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
 
@@ -533,8 +601,8 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label="temp-re")
-            dos.html_content ="""<!DOCTYPE html>
+            self.temperature_dos = wx.StaticText(self, label="temp-re")
+            self.temperature_dos.html_content ="""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -625,15 +693,15 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 """   
 
             # Modify the event binding to use a lambda function
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
+            self.temperature_dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
             
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.temp_dropdown, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.temperature_dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.temperature_slider, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label=" length_penalty ")
-            dos.html_content ="""<!DOCTYPE html>
+            self.length_penalty_dos = wx.StaticText(self, label="length_penalty:")
+            self.length_penalty_dos.html_content ="""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -726,15 +794,15 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 """   
 
             # Modify the event binding to use a lambda function
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
+            self.length_penalty_dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
                         
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.length_penalty_dropdown, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.length_penalty_dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.length_penalty_slider, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
             sizer_0 = wx.BoxSizer(wx.VERTICAL)
-            dos = wx.StaticText(self, label=" repet_penalty ")
-            dos.html_content ="""
+            self.repetition_penalty_dos = wx.StaticText(self, label=" repet_penalty ")
+            self.repetition_penalty_dos.html_content ="""
 
 <!DOCTYPE html>
 <html lang="en">
@@ -817,9 +885,9 @@ class Base_InputPanel_Promptist_Microsoft(Base_InputPanel):
 >"""   
 
             # Modify the event binding to use a lambda function
-            dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
-            sizer_0.Add(dos, 0, wx.ALIGN_CENTER)
-            sizer_0.Add(self.repetition_penalty_dropdown, 0, wx.ALIGN_CENTER)
+            self.repetition_penalty_dos.Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickDos(event))
+            sizer_0.Add(self.repetition_penalty_dos, 0, wx.ALIGN_CENTER)
+            sizer_0.Add(self.repetition_penalty_slider, 0, wx.ALIGN_CENTER)
             h_sizer_1.Add(sizer_0, 0, wx.ALIGN_CENTER)
 
             
@@ -891,7 +959,7 @@ enhancing the quality and coherence of the generated text.
         pp(chat)
         print(apc.chats)
         event.Skip()        
-    def OnTopKChange(self, event):
+    def _OnTopKChange(self, event):
         # Get the selected do_sample value
         selected_top_k = self.top_k_dropdown.GetValue()
         print('OnTopKChange',selected_top_k, self.tab_id)
@@ -903,9 +971,9 @@ enhancing the quality and coherence of the generated text.
         # Continue processing the event
         event.Skip()
 
-    def OnTempChange(self, event):
+    def _OnTempChange(self, event):
         # Get the selected do_sample value
-        selected_temp = self.temp_dropdown.GetValue()
+        selected_temp = self.temperature_slider.GetValue()
 
         # Print the selected model
         chat = apc.chats[self.tab_id]
@@ -914,7 +982,7 @@ enhancing the quality and coherence of the generated text.
 
         # Continue processing the event
         event.Skip()    
-    def OnRepetitionPenaltyChange(self, event):
+    def _OnRepetitionPenaltyChange(self, event):
         # Get the selected do_sample value
         selected_repetition_penalty = self.length_penalty_dropdown.GetValue()
 
@@ -925,7 +993,7 @@ enhancing the quality and coherence of the generated text.
         # Continue processing the event
         event.Skip()
 
-    def OnLengthPenaltyChange(self, event):
+    def _OnLengthPenaltyChange(self, event):
         # Get the selected do_sample value
         selected_length_penalty = self.repetition_penalty_dropdown.GetValue()
 
@@ -992,28 +1060,31 @@ enhancing the quality and coherence of the generated text.
 
             
             if chat.get('top_k', None):
-                self.top_k_dropdown.SetValue(str(chat.top_k))
+                self.top_k_slider.SetValues(*chat.top_k)
             else:
-                chat.top_k = int(self.top_k_dropdown.GetValue())
+                lv, hv = self.top_k_slider.GetValues()
+                chat.top_k = (lv, hv )
 
 
             if chat.get('temperature', None):
-                self.temp_dropdown.SetValue(str(chat.temperature))
+                self.temperature_slider.SetValues(*chat.temperature)
             else:
-                chat.temperature = float(self.temp_dropdown.GetValue())
+                lv, hv = self.temperature_slider.GetValues()
+                chat.temperature = (lv, hv )
 
 
 
             if chat.get('repetition_penalty', None):
-                self.length_penalty_dropdown.SetValue(str(chat.length_penalty))
+                print('repetition_penalty', chat.repetition_penalty)
+                self.repetition_penalty_slider.SetValues(*chat.repetition_penalty)
             else:
-                chat.length_penalty_dropdown = float(self.length_penalty_dropdown.GetValue())
+                chat.repetition_penalty = self.repetition_penalty_slider.GetValues()
 
 
             if chat.get('length_penalty', None):
-                self.repetition_penalty_dropdown.SetValue(str(chat.length_penalty))
+                self.length_penalty_slider.SetValues(*chat.length_penalty)
             else:
-                chat.presence_penalty = float(self.repetition_penalty_dropdown.GetValue())
+                chat.length_penalty = self.length_penalty_slider.GetValues()
 
 
             if chat.get('do_sample', None) is not None:

@@ -90,38 +90,46 @@ class Chat_ResponseStreamer:
         # Stream generation
         
         assert type(chat.top_p) is tuple, type(chat.top_p)
+        assert type(chat.top_p) is tuple, type(chat.top_p)
         for top_p in range(*[int(x*10) for x in chat.top_p]):
             top_p=top_p/10
-            header = fmt([[f'top_p = {top_p}']],[])
-            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
-            gen_start = time.time()
-            outputs = model.generate(input_ids, 
-                                            attention_mask=attention_mask,
-                                            do_sample=chat.do_sample,
-                                            temperature=chat.temperature, 
-                                            max_new_tokens=chat.max_length, 
-                                            min_new_tokens=chat.min_length, 
-                                            num_beams=8, 
-                                            top_k=chat.top_k,
-                                            top_p=top_p,
-                                            num_return_sequences=1, 
-                                            eos_token_id=eos_id, 
-                                            pad_token_id=eos_id,
-                                            
-                                            length_penalty=chat.length_penalty,
-                                            repetition_penalty=chat.repetition_penalty,
-                                            return_dict_in_generate=True,
-                                            output_scores=True)
+            for top_k in range(*[int(x) for x in chat.top_k], 30):
+                for temp in range(*[int(x*10) for x in chat.temperature], 3):
+                    temp=temp/10
+                    for length_penalty in range(*[int(x) for x in chat.length_penalty]):
+                        #print (f'top_p = {top_p}, top_k = {top_k}, temp = {temp}')
+                        for repetition_penalty in range(*[int(x*10) for x in chat.repetition_penalty], 3):
+                            repetition_penalty=repetition_penalty/10
+                            header = fmt([[f'top_p = {top_p}, top_k = {top_k}, len_pnlt = {length_penalty}, rept_pnlt = {repetition_penalty}, temp = {temp}']],[])
+                            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+                            gen_start = time.time()
+                            outputs = model.generate(input_ids, 
+                                                            attention_mask=attention_mask,
+                                                            do_sample=chat.do_sample,
+                                                            temperature=temp, 
+                                                            max_new_tokens=chat.max_length, 
+                                                            min_new_tokens=chat.min_length, 
+                                                            num_beams=8, 
+                                                            top_k=top_k,
+                                                            top_p=top_p,
+                                                            num_return_sequences=1, 
+                                                            eos_token_id=eos_id, 
+                                                            pad_token_id=eos_id,
+                                                            
+                                                            length_penalty=float(length_penalty),
+                                                            repetition_penalty=float(repetition_penalty),
+                                                            return_dict_in_generate=True,
+                                                            output_scores=True)
 
-            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
+                            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
 
 
-            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
-            
+                            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
+                            
 
-            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
-            pub.sendMessage('chat_output', message='\n', tab_id=receiveing_tab_id)
-            print(f"{top_p}: Generate:", time.time() - gen_start)
+                            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
+                            pub.sendMessage('chat_output', message='\n', tab_id=receiveing_tab_id)
+                            print(f"{top_p}: Generate:", time.time() - gen_start)
 
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, model):
         # Create a chat completion request with streaming enabled
@@ -208,6 +216,52 @@ class Fuser_ResponseStreamer:
         for promptCtrl in apc.prompts:
             prompts.append(promptCtrl.GetText())
         return prompts
+    def generate_response(self, input_ids, chat, receiveing_tab_id,attention_mask, model , tokenizer):
+        
+        eos_id = tokenizer.eos_token_id
+        # Stream generation
+        
+        assert type(chat.top_p) is tuple, type(chat.top_p)
+        assert type(chat.top_p) is tuple, type(chat.top_p)
+        for top_p in range(*[int(x*10) for x in chat.top_p]):
+            top_p=top_p/10
+            for top_k in range(*chat.top_k, 30):
+                for temp in range(*[int(x*10) for x in chat.temperature], 3):
+                    temp=temp/10
+                    for length_penalty in range(*[int(x) for x in chat.length_penalty]):
+                        #print (f'top_p = {top_p}, top_k = {top_k}, temp = {temp}')
+                        for repetition_penalty in range(*[int(x*10) for x in chat.repetition_penalty], 3):
+                            repetition_penalty=repetition_penalty/10
+                            header = fmt([[f'top_p = {top_p}, top_k = {top_k}, len_pnlt = {length_penalty}, rept_pnlt = {repetition_penalty}, temp = {temp}']],[])
+                            pub.sendMessage('chat_output', message=f'{header}\n', tab_id=receiveing_tab_id)
+                            gen_start = time.time()
+                            outputs = model.generate(input_ids, 
+                                                            attention_mask=attention_mask,
+                                                            do_sample=chat.do_sample,
+                                                            temperature=temp, 
+                                                            max_new_tokens=chat.max_length, 
+                                                            min_new_tokens=chat.min_length, 
+                                                            num_beams=8, 
+                                                            top_k=top_k,
+                                                            top_p=top_p,
+                                                            num_return_sequences=1, 
+                                                            eos_token_id=eos_id, 
+                                                            pad_token_id=eos_id,
+                                                            
+                                                            length_penalty=float(length_penalty),
+                                                            repetition_penalty=float(repetition_penalty),
+                                                            return_dict_in_generate=True,
+                                                            output_scores=True)
+
+                            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
+
+
+                            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
+                            
+
+                            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
+                            pub.sendMessage('chat_output', message='\n', tab_id=receiveing_tab_id)
+                            print(f"{top_p}: Generate:", time.time() - gen_start)    
     def stream_response(self, text_prompt, chatHistory, receiveing_tab_id, prompt_path):
         # Create a chat completion request with streaming enabled
         if receiveing_tab_id not in self.chat_history:
@@ -241,31 +295,7 @@ class Fuser_ResponseStreamer:
             
             # Stream generation
             gen_start = time.time()
-            outputs = model.generate(input_ids, 
-                                            attention_mask=attention_mask,
-                                            do_sample=chat.do_sample,
-                                            temperature=chat.temperature, 
-                                            max_new_tokens=chat.max_length, 
-                                            min_new_tokens=chat.min_length, 
-                                            num_beams=8, 
-                                            top_k=chat.top_k,
-                                            top_p=chat.top_p,
-                                            num_return_sequences=1, 
-                                            eos_token_id=eos_id, 
-                                            pad_token_id=eos_id,
-                                           
-                                            length_penalty=chat.length_penalty,
-                                            repetition_penalty=chat.repetition_penalty,
-                                            return_dict_in_generate=True,
-                                            output_scores=True)
-
-            generated_tokens = outputs.sequences[:, input_ids.shape[-1]:]
-
-
-            text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True).strip()
-         
-
-            pub.sendMessage('chat_output', message=text, tab_id=receiveing_tab_id)
+            self.generate_response( input_ids, chat, receiveing_tab_id,attention_mask, model , tokenizer)
 
             print("\Generate:", time.time() - gen_start)
             print("\nTotal:", time.time() - start)

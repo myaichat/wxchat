@@ -1,0 +1,6 @@
+cache
+in
+out
+image_log
+*.pyc
+__*.yaml

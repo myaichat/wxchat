@@ -1,0 +1,6 @@
+all_models:
+  together:
+    - name: "Qwen/Qwen2-72B-Instruct"
+    - name: "Qwen/Qwen1.5-72B-Chat"
+    - name: "mistralai/Mixtral-8x22B-Instruct-v0.1"
+    - name: "databricks/dbrx-instruct"

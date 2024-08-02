@@ -1,0 +1,6 @@
+reference_models:
+  - name: "Qwen/Qwen2-7B-Instruct"
+    api: "deepinfra"
+  - name: "Qwen/Qwen2-7B-Instruct"
+    api: "deepinfra"
+

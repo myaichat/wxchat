@@ -17,9 +17,9 @@ ukrainian flag, SurrealArt, DoubleExposure, VisualSplitting, DynamicArt, Etherea
 aggregator_system_prompt = """You have been provided with a set of responses from various open-source models to the latest user query. Your task is to synthesize these responses into a single, high-quality response. It is crucial to critically evaluate the information provided in these responses, recognizing that some of it may be biased or incorrect. Your response should not simply replicate the given answers but should offer a refined, accurate, and comprehensive reply to the instruction. Ensure your response is well-structured, coherent, and adheres to the highest standards of accuracy and reliability.
 
 Responses from models:"""
-client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
 
-async def get_final_stream(results):
+
+async def get_final_stream(client,aggregator_model,  results):
     sys_prompt = get_final_system_prompt(aggregator_system_prompt, results)
     
     final_stream = await client.chat.completions.create(
@@ -33,16 +33,17 @@ async def get_final_stream(results):
         ],
         stream=True,
     )
+    async for chunk in final_stream:
+        yield chunk.choices[0].delta.content or ""
+    
 
-    return final_stream
-
-async def run_llm(layer, model, prev_response=None):
+async def run_llm(client, layer, model, prev_response=None):
     """Run a single LLM call with a model while accounting for previous responses + rate limits."""
     print(f'\t{layer}: run_llm:', model)
     sys_prompt = None
     if prev_response:
-        sys_prompt = get_final_system_prompt(aggregator_system_prompt, prev_response)
-        pp(sys_prompt)
+        sys_prompt = get_final_system_prompt( aggregator_system_prompt, prev_response)
+        #pp(sys_prompt)
 
     for sleep_time in [1, 2, 4]:
         try:

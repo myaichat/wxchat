@@ -3,12 +3,13 @@ import asyncio
 import yaml 
 
 from os.path import join
-from  include.api.deepinfra import AsyncDeepinfra, get_final_stream
-import include.api.deepinfra as deepinfra
+from  include.api.together import AsyncTogether, get_final_stream
+#from together import AsyncTogether
+import include.api.together as together
 
-api_key = os.getenv("DEEPINFRA_API_KEY")
+api_key = os.getenv("TOGETHER_API_KEY")
 
-yaml_file_path = join('config','deepinfra_reference_models.yaml')
+yaml_file_path = join('config','together_reference_models.yaml')
 
 # Read the YAML file
 with open(yaml_file_path, 'r') as file:
@@ -24,7 +25,7 @@ print(f"Aggregator model: {aggregator_model}")
 async def main():
     """Run the main loop of the MOA process."""
     print("Running main loop...")
-    async with AsyncDeepinfra(api_key) as client:
+    async with AsyncTogether(api_key=api_key) as client:
     
         apis = [dict(run=getattr(globals()[model['api']], 'run_llm'), model=model['name']) for model in reference_models]
 

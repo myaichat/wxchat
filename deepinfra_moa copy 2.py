@@ -1,5 +1,4 @@
-import os, sys
-from os.path import join    
+import os
 import json
 import yaml
 import asyncio
@@ -7,10 +6,10 @@ import aiohttp
 from aiohttp import ClientResponseError, TCPConnector
 from include.common import get_final_system_prompt
 from pprint import pprint as pp
-e=sys.exit
+
 api_key = os.getenv("DEEPINFRA_API_KEY")
 base_url = "https://api.deepinfra.com/v1/openai"
-#aggregator_model = "Qwen/Qwen2-7B-Instruct"
+aggregator_model = "Qwen/Qwen2-7B-Instruct"
 
 user_prompt = """
 Fuse this image prompt with new ideas. Be as creative and weird as possible. Return a 100-word paragraph:
@@ -108,18 +107,23 @@ async def get_final_stream(client, results):
         )
 
         if isinstance(response, aiohttp.ClientResponse):
-            async for chunk in response.content:
+            async for chunk in response.content.iter_any():
                 if chunk:
                     chunk = chunk.decode('utf-8').strip()
-                    if chunk.startswith("data: "):
+                    if chunk.startswith("data:"):
                         data = chunk[6:]  # Remove "data: " prefix
                         if data != "[DONE]":
                             try:
                                 event = json.loads(data)
-                                if 'choices' in event and len(event['choices']) > 0:
-                                    delta = event['choices'][0].get('delta', {})
-                                    if 'content' in delta:
-                                        yield delta['content']
+                                if 'choices' in event:
+                                    if event['choices'][0].get('finish_reason'):
+                                        if 0:
+                                            print("\n\nMetadata:")
+                                            print(f"Finish reason: {event['choices'][0]['finish_reason']}")
+                                            print(f"Prompt tokens: {event.get('usage', {}).get('prompt_tokens')}")
+                                            print(f"Completion tokens: {event.get('usage', {}).get('completion_tokens')}")
+                                    elif 'content' in event['choices'][0].get('delta', {}):
+                                        yield event['choices'][0]['delta']['content']
                             except json.JSONDecodeError:
                                 print(f"Failed to parse JSON: {data}")
     finally:
@@ -155,7 +159,7 @@ async def run_llm(client, layer, model, prev_response=None):
             error_type='unexpected_response'
         )
 
-yaml_file_path = join('config','deepinfra_reference_models.yaml')
+yaml_file_path = 'deepinfra_reference_models.yaml'
 
 # Read the YAML file
 with open(yaml_file_path, 'r') as file:
@@ -163,10 +167,6 @@ with open(yaml_file_path, 'r') as file:
 
 reference_models = data['reference_models']
 layers = 3
-
-aggregator_model = next((model['name'] for model in data['reference_models'] if model.get('aggregator')), None)
-
-print(f"Aggregator model: {aggregator_model}")
 
 async def main():
     """Run the main loop of the MOA process."""

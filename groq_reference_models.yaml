@@ -1,0 +1,9 @@
+reference_models:
+  - name: "llama3-70b-8192"
+    api: "groq"
+  - name: "llama3-8b-8192"
+    api: "groq"
+  - name: "mixtral-8x7b-32768"
+    api: "groq"
+  - name: "gemma-7b-it"
+    api: "groq"

@@ -1,8 +1,15 @@
+import os
+import asyncio
+from groq import AsyncGroq
+
+
+
+
 
 import sys, yaml
 import asyncio
 
-import include.api.together as together 
+import include.api.groq as groq
 #import run_llm, get_final_stream
 
 from pprint import pprint as pp
@@ -10,8 +17,8 @@ e=sys.exit
 
 '''
 all_models = {
-    'together': [
-        {'name': "Qwen/Qwen2-72B-Instruct",}, 
+    'groq': [
+        {'name': "llama3-70b-8192",}, 
         {'name': "Qwen/Qwen1.5-72B-Chat"},
         {'name': "mistralai/Mixtral-8x22B-Instruct-v0.1"},
         {'name': "databricks/dbrx-instruct"},
@@ -20,22 +27,19 @@ all_models = {
 
 
 reference_models =  [
-        {'name': "Qwen/Qwen2-72B-Instruct", 'api': 'together'}, 
-        {'name': "Qwen/Qwen1.5-72B-Chat", 'api': 'together'},
-        {'name': "mistralai/Mixtral-8x22B-Instruct-v0.1", 'api': 'together'},
-        {'name': "databricks/dbrx-instruct", 'api': 'together'},
+        {'name': "llama3-70b-8192", 'api': 'groq'}, 
+        {'name': "llama3-8b-8192", 'api': 'groq'},
+        {'name': "mixtral-8x7b-32768", 'api': 'groq'},
+        {'name': "gemma-7b-it", 'api': 'groq'},
     ]
 '''
 
-yaml_file_path = 'reference_models.yaml'
+yaml_file_path = 'groq_reference_models.yaml'
 
 # Read the YAML file
 with open(yaml_file_path, 'r') as file:
     data = yaml.safe_load(file)
 
-# Print the data to verify
-#pp(data)
-#e()
 reference_models = data['reference_models']
 layers = 3
 
@@ -58,7 +62,7 @@ async def main():
 
     print("Final layer")
 
-    final_stream = await together.get_final_stream(results)
+    final_stream = await groq.get_final_stream(results)
     async for chunk in final_stream:
         print(chunk.choices[0].delta.content or "", end="", flush=True)
 

@@ -1,6 +1,6 @@
 reference_models:
   - name: "Qwen/Qwen2-7B-Instruct"
     api: "deepinfra"
-  - name: "Qwen/Qwen2-7B-Instruct"
+  - name: "meta-llama/Meta-Llama-3.1-8B-Instruct"
     api: "deepinfra"
 

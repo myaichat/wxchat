@@ -1,5 +1,5 @@
 # *New!* 
-[Yet another MoA fork](https://medium.com/p/23f4fd43e72d/edit)<br>
+[Yet another MoA fork](https://medium.com/p/23f4fd43e72d)<br>
 [Portrait Fuser](https://medium.com/p/b7735d3460fa)<br>
 
 [Microsoft Promptist](https://medium.com/p/e0ef47ea192b)<br>

@@ -105,6 +105,8 @@ wxPython: [Rudimentary terminal](https://www.youtube.com/watch?v=odpbWfRmvDU), [
 [Sample browser](https://cloud.google.com/docs/samples)  [Gemma2 Config](https://medium.com/p/0d7dc430b72c)    [GPrompt Gallery](https://console.cloud.google.com/vertex-ai/generative/prompt-gallery?_ga=2.197961389.362164277.1719958699-521879258.1717807561&project=spatial-flag-427113-n0) 
 
 
+### Cerebras 
+Insanely fast inference: https://inference.cerebras.ai/?_gl=1*1mqcw2b*_ga*Mzg4OTg2NTgxLjE3MjUwNTE3NTU.*_ga_M90K89G16V*MTcyNTA1MTc1NS4xLjEuMTcyNTA1MTg5Mi4wLjAuMA..
 
 #### Dedicated infer
 https://docs.api.nvidia.com/nim/reference/google-gemma7b-infer

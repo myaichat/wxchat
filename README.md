@@ -152,9 +152,8 @@ https://github.com/SalesforceAIResearch/xLAM
 
 
 <br>
-[Freepic Upscaler](https://www.freepik.com/pikaso/upscaler#from_element=landing_upscaler)
-<br>
-<br>
+[Freepic Upscaler](https://www.freepik.com/pikaso/upscaler#from_element=landing_upscaler)<br>
+[Claude Dev]([Claude Dev](https://github.com/saoudrizwan/claude-dev))<br>
 
 ### Each demo starts as an orphan branch
 

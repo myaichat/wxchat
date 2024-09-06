@@ -147,12 +147,12 @@ https://github.com/SalesforceAIResearch/xLAM
 [Full Stack LLM Bootcamp ](https://fullstackdeeplearning.com/llm-bootcamp/)<br>
 [Datacamp](https://www.datacamp.com/tutorial/category/ai)<br>
 [Awesome LLM](https://github.com/Hannibal046/Awesome-LLM)<br>
-[LLM Full Stack course]{https://fullstackdeeplearning.com/course/2022/}<br>
+[LLM Full Stack course](https://fullstackdeeplearning.com/course/2022/)<br>
 [Generative AI for Beginners](https://microsoft.github.io/generative-ai-for-beginners/#/)
 
 
 <br>
-
+[Freepic Upscaler](https://www.freepik.com/pikaso/upscaler#from_element=landing_upscaler)
 <br>
 <br>
 

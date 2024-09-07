@@ -140,6 +140,8 @@ https://github.com/SalesforceAIResearch/xLAM
 [stablediffusionap img2img](https://stablediffusionapi.com/docs/community-models-api-v4/dreamboothimg2img/)
 
 
+### Search APIs
+TAVILY, "duckduckgo", "googleAPI", "bing", "googleSerp", or "searx"
 
 
 ## Learning 

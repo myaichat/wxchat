@@ -1412,7 +1412,7 @@ class MyDialog(wx.Dialog):
 
     def OnRecord(self, event):
         #wx.MessageBox("Record button clicked!", "Info", wx.OK | wx.ICON_INFORMATION)
-        log('Recording...')
+        #log('Recording...')
         
         self.chat.record = True
         self.EndModal(wx.ID_OK)
@@ -1590,15 +1590,17 @@ class Chat_InputPanel(wx.Panel, NewChat,GetClassName, Base_InputPanel_Interview_
         
         #pub.sendMessage('show_tab_id')
         #pp(chatHistory)
+        chat=apc.chats[self.tab_id]
         self.Base_OnAskQuestion()           
         question = self.inputCtrl.GetValue()
         if not question:
             self.log('There is no question!', color=wx.RED)
         else:
             question = self.inputCtrl.GetValue()
-            self.log(f'Asking question: {question}')
+            if not chat.record:
+                self.log(f'Asking question: {question}')
             pub.sendMessage('start_progress')
-            chat=apc.chats[self.tab_id]
+            
             prompt=evaluate(all_system_templates[chat.workspace].Chat.PROMPT, AttrDict(dict(question=question)))
             #chatHistory[self.tab_id] += [{"role": "user", "content": prompt}]
 

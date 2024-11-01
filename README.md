@@ -1,5 +1,5 @@
-Next artwork: [Yet another MoA fork](https://medium.com/p/23f4fd43e72d). More:  [Any_COT](https://github.com/myaichat/any_cot)<br>
-[Portrait Fuser](https://medium.com/p/b7735d3460fa)<br>
+Next artwork: [Yet another MoA fork](https://medium.com/p/23f4fd43e72d)->[Any_COT](https://github.com/myaichat/any_cot)->[RMS_Transcriber](https://github.com/myaichat/rms_transcriber)
+<br>[Portrait Fuser](https://medium.com/p/b7735d3460fa)<br>
 
 [Microsoft Promptist](https://medium.com/p/e0ef47ea192b)<br>
 [ GrypheMythoMax Prompt fuser](https://medium.com/p/fc3918f756de)<br>

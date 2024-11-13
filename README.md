@@ -1,4 +1,4 @@
-Next artwork: [Yet another MoA fork](https://medium.com/p/23f4fd43e72d)->[Any_COT](https://github.com/myaichat/any_cot)->[Any_RAG](https://github.com/myaichat/any_rag)->[ai_voice_bot](https://github.com/myaichat/ai_voice_bot)->[RMS_Transcriber](https://github.com/myaichat/rms_transcriber)
+Next demo/study: [Yet another MoA fork](https://medium.com/p/23f4fd43e72d)->[Any_COT](https://github.com/myaichat/any_cot)->[Any_RAG](https://github.com/myaichat/any_rag)->[ai_voice_bot](https://github.com/myaichat/ai_voice_bot)->[RMS_Transcriber](https://github.com/myaichat/rms_transcriber)
 <br>[Portrait Fuser](https://medium.com/p/b7735d3460fa)<br>
 
 [Microsoft Promptist](https://medium.com/p/e0ef47ea192b)<br>

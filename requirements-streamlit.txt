@@ -1,0 +1,9 @@
+streamlit
+openai
+python-dotenv
+SpeechRecognition
+PyAudio
+pygame
+numpy
+requests
+sounddevice

@@ -53,7 +53,7 @@ def stream_response(prompt):
     # Create a chat completion request with streaming enabled
     #pp(conversation_history)
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4.1",
         messages=conversation_history, 
 
         stream=True
@@ -139,6 +139,8 @@ def conversation():
     
     while True:
         print('listening...')
+        print()
+        inp = input('Start?')
         user_input = listen()
         #print('User input:', user_input)
         if user_input is None:
@@ -159,7 +161,7 @@ def conversation():
             model_response, tell_me_more =stream_response(user_input)
             if not tell_me_more:
                 print()
-                inp = input('Continue?')
+                #inp = input('Continue?')
             else:
                 exit_loop=False
                 pause_stream=False

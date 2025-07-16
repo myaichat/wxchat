@@ -3,9 +3,11 @@ import streamlit as st
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
+import asyncio
 from include.transcribe import Transcribe
 from pathlib import Path
 from dotenv import load_dotenv
+from streaming_chat import send_message_with_streaming
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=Path(".") / ".env", override=True)
@@ -90,49 +92,58 @@ def current_transcription() -> str | None:
                                 st.session_state.transcription)
 
 def get_chatgpt_response(prompt):
-    """Get streaming response from ChatGPT"""
+    """Get streaming response using send_message_with_streaming"""
     try:
-        from openai import OpenAI
-        import os
-        
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
+        # Add user message to conversation history
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
         
         # Create a placeholder for streaming response
         response_placeholder = st.empty()
-        full_response = ""
         
-        # Reset stop streaming flag
-        st.session_state.stop_streaming = False
+        # Stream the response using the working code from test_streaming_app.py
+        async def stream_response():
+            full_response = ""
+            try:
+                async for response in send_message_with_streaming(prompt, timeout=60):
+                    # Check if user requested to stop streaming
+                    if st.session_state.stop_streaming:
+                        response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
+                        return full_response
+                    
+                    status = response.get("status", "")
+                    content = response.get("content", "")
+                    
+                    if status == "started":
+                        response_placeholder.markdown("🔄 Starting response...")
+                    elif status == "streaming":
+                        full_response = content
+                        response_placeholder.markdown(full_response + "▌")
+                    elif status == "complete":
+                        full_response = content
+                        response_placeholder.markdown(full_response)
+                        break
+                    elif status in ["timeout", "error"]:
+                        error_msg = f"❌ Error: {content}" if content else "❌ Request timed out or failed"
+                        response_placeholder.markdown(error_msg)
+                        full_response = error_msg
+                        break
+                        
+                return full_response
+            except Exception as e:
+                error_msg = f"❌ Exception: {str(e)}"
+                response_placeholder.markdown(error_msg)
+                return error_msg
         
-        # Stream the response
-        stream = client.chat.completions.create(
-            model=st.session_state.selected_model,
-            messages=st.session_state.conversation_history,
-            stream=True
-        )
-        
-        for chunk in stream:
-            # Check if user requested to stop streaming
-            if st.session_state.stop_streaming:
-                response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
-                break
-                
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
-                response_placeholder.markdown(full_response + "▌")
-        
-        # Remove the cursor and show final response (if not stopped)
-        if not st.session_state.stop_streaming:
-            response_placeholder.markdown(full_response)
+        # Run the async streaming function
+        final_response = asyncio.run(stream_response())
         
         # Add the complete response to conversation history
-        st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
+        if final_response and not final_response.startswith("❌"):
+            st.session_state.conversation_history.append({"role": "assistant", "content": final_response})
         
-        return full_response
+        return final_response
     except Exception as e:
-        st.error(f"ChatGPT API error: {str(e)}")
+        st.error(f"Streaming error: {str(e)}")
         return None
 
 # ───────────────────────── UI ───────────────────────────────

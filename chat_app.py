@@ -3,6 +3,8 @@ import streamlit as st
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
+import requests
+import json
 from include.transcribe import Transcribe
 from pathlib import Path
 from dotenv import load_dotenv
@@ -90,13 +92,12 @@ def current_transcription() -> str | None:
                                 st.session_state.transcription)
 
 def get_chatgpt_response(prompt):
-    """Get streaming response from ChatGPT"""
+    """Get streaming response from ChatGPT via backend API"""
     try:
-        from openai import OpenAI
-        import os
+        import requests
+        import json
         
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
+        # Add user message to conversation history
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
         
         # Create a placeholder for streaming response
@@ -106,33 +107,112 @@ def get_chatgpt_response(prompt):
         # Reset stop streaming flag
         st.session_state.stop_streaming = False
         
-        # Stream the response
-        stream = client.chat.completions.create(
-            model=st.session_state.selected_model,
-            messages=st.session_state.conversation_history,
-            stream=True
+        # Prepare API request - ensure proper JSON encoding
+        url = "http://127.0.0.1:8001/chatgpt"
+        
+        # Clean and validate the prompt
+        if not prompt or not isinstance(prompt, str):
+            st.error("Invalid prompt provided")
+            return None
+            
+        # Ensure prompt is properly encoded
+        clean_prompt = str(prompt).strip()
+        
+        payload = {
+            "message": clean_prompt,
+            "timeout": 30
+        }
+        
+        # Debug: Show what we're sending
+        st.write(f"Debug - Sending to API: {json.dumps(payload, indent=2)}")
+        
+        # Send POST request with streaming
+        response = requests.post(
+            url, 
+            json=payload, 
+            stream=True,
+            headers={"Content-Type": "application/json"},
+            timeout=35  # Slightly longer than API timeout
         )
         
-        for chunk in stream:
-            # Check if user requested to stop streaming
-            if st.session_state.stop_streaming:
-                response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
-                break
-                
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
-                response_placeholder.markdown(full_response + "▌")
-        
-        # Remove the cursor and show final response (if not stopped)
-        if not st.session_state.stop_streaming:
-            response_placeholder.markdown(full_response)
-        
-        # Add the complete response to conversation history
-        st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-        
-        return full_response
+        if response.status_code == 200:
+            # Track previous content to show only incremental changes
+            previous_content = ""
+            
+            # Process streaming response
+            for line in response.iter_lines(decode_unicode=True):
+                # Check if user requested to stop streaming
+                if st.session_state.stop_streaming:
+                    response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
+                    break
+                    
+                if line and line.strip():
+                    # Debug: Show raw line
+                    st.write(f"Debug - Raw line: {repr(line)}")
+                    
+                    if line.startswith('data: '):
+                        data_str = line[6:]  # Remove 'data: ' prefix
+                        
+                        # Skip empty data lines
+                        if not data_str.strip():
+                            continue
+                            
+                        try:
+                            data = json.loads(data_str)
+                            status = data.get('status', '')
+                            content = data.get('content', '')
+                            
+                            # Debug: Show parsed data
+                            st.write(f"Debug - Parsed data: status={status}, content_length={len(content) if content else 0}")
+                            
+                            if status == 'started':
+                                st.info("🚀 Response started streaming...")
+                            elif status == 'streaming':
+                                # Use the complete content from the API
+                                full_response = content
+                                response_placeholder.markdown(full_response + "▌")
+                            elif status == 'complete':
+                                # Use the complete content from the API
+                                full_response = content
+                                response_placeholder.markdown(full_response)
+                                break
+                            elif status in ['timeout', 'error']:
+                                st.error(f"API {status.upper()}: {content}")
+                                return None
+                                
+                        except json.JSONDecodeError as e:
+                            st.warning(f"Could not parse JSON: {data_str}")
+                            st.write(f"JSON Error: {e}")
+                            continue
+            
+            # Remove the cursor and show final response (if not stopped)
+            if not st.session_state.stop_streaming and full_response:
+                response_placeholder.markdown(full_response)
+            
+            # Add the complete response to conversation history
+            if full_response:
+                st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
+            
+            return full_response
+        else:
+            st.error(f"API Error: HTTP {response.status_code}")
+            try:
+                error_text = response.text
+                st.error(f"Response: {error_text}")
+            except:
+                st.error("Could not read error response")
+            return None
+            
+    except requests.exceptions.Timeout:
+        st.error("Request timed out. The backend server may be overloaded.")
+        return None
+    except requests.exceptions.ConnectionError:
+        st.error("Connection failed. Make sure the backend server is running on http://127.0.0.1:8001")
+        return None
     except Exception as e:
         st.error(f"ChatGPT API error: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 # ───────────────────────── UI ───────────────────────────────

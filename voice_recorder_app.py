@@ -1,8 +1,9 @@
-# voice_recorder_app.py  –  thread‑safe Streamlit mic recorder
+# voice_recorder_app.py  –  thread‑safe Streamlit mic recorder with improved auto-scroll
 import streamlit as st
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
+import uuid
 from include.transcribe import Transcribe
 
 RATE, CH = 16_000, 1
@@ -84,50 +85,169 @@ def current_transcription() -> str | None:
     return st.session_state.get("transcription_display",
                                 st.session_state.transcription)
 
+# Helper that always re-executes for auto-scroll
+def inject_autoscroll(key_suffix: str = ""):
+    st.components.v1.html(
+        f"""
+        <script>
+        const scroll = () => {{
+            const bottom = window.parent.document.getElementById('gpt_bottom');
+            if (bottom) bottom.scrollIntoView({{behavior: 'smooth', block: 'end'}});
+        }};
+        // kick once
+        scroll();
+        // watch the whole Streamlit DOM
+        const root = window.parent.document.querySelector('section.main');
+        if (root) new MutationObserver(scroll).observe(root, {{subtree:true, childList:true}});
+        </script>
+        """,
+        height=0,
+        key=f"autoscr_{key_suffix}"   # forces fresh iframe each run
+    )
+
+def scroll_to_bottom():
+    """Simple and reliable auto-scroll to bottom"""
+    st.components.v1.html("""
+        <script>
+        function scrollToBottom() {
+            // Try multiple approaches to ensure scrolling works
+            
+            // Method 1: Scroll the parent window
+            if (window.parent) {
+                window.parent.scrollTo({
+                    top: window.parent.document.body.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
+            
+            // Method 2: Find and scroll the main container
+            const containers = [
+                window.parent.document.querySelector('.main'),
+                window.parent.document.querySelector('.stApp'),
+                window.parent.document.querySelector('[data-testid="stAppViewContainer"]'),
+                window.parent.document.body,
+                window.parent.document.documentElement
+            ];
+            
+            containers.forEach(container => {
+                if (container) {
+                    container.scrollTo({
+                        top: container.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        }
+        
+        // Execute immediately
+        scrollToBottom();
+        
+        // Also try after a short delay to handle any rendering delays
+        setTimeout(scrollToBottom, 100);
+        </script>
+    """, height=0)
+
 def get_chatgpt_response(prompt):
-    """Get streaming response from ChatGPT"""
+    """Get streaming response from ChatGPT with auto-scroll"""
+    if not prompt or not prompt.strip():
+        st.error("⚠️ Prompt is empty — nothing to send.")
+        return None
+
     try:
+        # Debug info
+        st.info(f"🔄 Sending prompt to {st.session_state.selected_model}...")
+        
         from openai import OpenAI
         import os
         
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Check for API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error("❌ OPENAI_API_KEY environment variable not found!")
+            return None
+            
+        client = OpenAI(api_key=api_key)
         
         st.session_state.conversation_history.append({"role": "user", "content": prompt})
         
-        # Create a placeholder for streaming response
         response_placeholder = st.empty()
         full_response = ""
         
         # Reset stop streaming flag
         st.session_state.stop_streaming = False
         
-        # Stream the response
-        stream = client.chat.completions.create(
-            model=st.session_state.selected_model,
-            messages=st.session_state.conversation_history,
-            stream=True
-        )
+        # Create the stream
+        try:
+            stream = client.chat.completions.create(
+                model=st.session_state.selected_model,
+                messages=st.session_state.conversation_history,
+                stream=True
+            )
+            st.success("✅ Connected to ChatGPT, streaming response...")
+        except Exception as stream_error:
+            st.error(f"❌ Failed to create ChatGPT stream: {str(stream_error)}")
+            return None
+
+        # Add initial scroll to bring user to ChatGPT area
+        st.markdown("<span id='answer_anchor'></span>", unsafe_allow_html=True)
+        inject_autoscroll("init")
         
-        for chunk in stream:
-            # Check if user requested to stop streaming
-            if st.session_state.stop_streaming:
-                response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
-                break
-                
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
-                response_placeholder.markdown(full_response + "▌")
+        # Stream chunks
+        try:
+            for chunk in stream:
+                # Check if user requested to stop streaming
+                if st.session_state.stop_streaming:
+                    response_placeholder.markdown(
+                        full_response + "\n\n*[Streaming stopped by user]*<span id='gpt_bottom'></span>",
+                        unsafe_allow_html=True
+                    )
+                    inject_autoscroll("stopped")
+                    break
+                    
+                if chunk.choices[0].delta.content is not None:
+                    full_response += chunk.choices[0].delta.content
+                    # Update the response with cursor and bottom anchor
+                    response_placeholder.markdown(
+                        full_response + "▌<span id='gpt_bottom'></span>",
+                        unsafe_allow_html=True
+                    )
+                    inject_autoscroll(str(len(full_response)))  # key changes as text grows
+        except Exception as chunk_error:
+            st.error(f"❌ Error during streaming: {str(chunk_error)}")
+            if full_response:
+                response_placeholder.markdown(
+                    full_response + "\n\n*[Streaming interrupted]*<span id='gpt_bottom'></span>",
+                    unsafe_allow_html=True
+                )
+                inject_autoscroll("error")
         
         # Remove the cursor and show final response (if not stopped)
         if not st.session_state.stop_streaming:
-            response_placeholder.markdown(full_response)
+            response_placeholder.markdown(
+                full_response + "<span id='gpt_bottom'></span>",
+                unsafe_allow_html=True
+            )
+            inject_autoscroll("final")
+        
+        if full_response == "":
+            st.warning("⚠️ ChatGPT returned no text.")
+            return None
         
         # Add the complete response to conversation history
         st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
         
+        st.success(f"✅ Response complete! ({len(full_response)} characters)")
         return full_response
+        
+    except ImportError as import_error:
+        st.error(f"❌ Failed to import OpenAI library: {str(import_error)}")
+        st.info("💡 Try: pip install openai")
+        return None
     except Exception as e:
-        st.error(f"ChatGPT API error: {str(e)}")
+        import traceback
+        st.error(f"❌ ChatGPT API error: {str(e)}")
+        with st.expander("🔍 Full error details"):
+            st.code(traceback.format_exc())
         return None
 
 # ───────────────────────── UI ───────────────────────────────
@@ -136,6 +256,11 @@ title_col, model_col = st.columns([4, 1])
 
 with title_col:
     st.title("🎙️ Simple Voice Recorder")
+
+# Quick sanity check: call the model once at startup
+if False:   # flip to True temporarily
+    st.write("Testing model…")
+    st.write(get_chatgpt_response("Say: Streamlit is working"))
 
 with model_col:
     # Model selection dropdown next to title
@@ -165,42 +290,38 @@ with settings_col2:
     st.session_state.auto_chatgpt = st.checkbox("🤖 Auto ChatGPT", 
                                                value=st.session_state.auto_chatgpt)
 
-col_start, col_stop = st.columns(2)
+# ────────── Start / Stop toggle (replaces the old two‑button section) ──────────
+label = "▶️ Start" if not st.session_state.recording else "⏹️ Stop"
 
-# ---------- Start ----------
-with col_start:
-    if st.button("▶️ Start", disabled=st.session_state.recording):
-        st.session_state.recording = True
-        # Clear previous transcription and ChatGPT response when starting new recording
-        st.session_state.transcription = None
-        st.session_state.transcribing = False
-        st.session_state.chatgpt_response = None
+if st.button(label, key="rec_toggle"):
+    if not st.session_state.recording:          # ───── START branch ─────
+        st.session_state.recording   = True
+        st.session_state.transcription       = None
+        st.session_state.transcribing        = False
+        st.session_state.chatgpt_response    = None
         st.session_state.generating_response = False
 
-        # independent objects for this recording session
-        audio_q   = queue.Queue()
-        frames    = []
-        stop_evt  = threading.Event()
+        audio_q  = queue.Queue()
+        frames   = []
+        stop_evt = threading.Event()
 
-        # keep refs so we can access them when stopping
         st.session_state.curr_audio_q  = audio_q
         st.session_state.curr_frames   = frames
         st.session_state.curr_stop_evt = stop_evt
 
-        threading.Thread(target=record_worker,
-                         args=(stop_evt, audio_q, frames),
-                         daemon=True).start()
-        st.success("Recording…")
-        st.rerun()  # Force UI update to disable Start and enable Stop
+        threading.Thread(
+            target=record_worker,
+            args=(stop_evt, audio_q, frames),
+            daemon=True
+        ).start()
 
-# ---------- Stop ----------
-with col_stop:
-    if st.button("⏹️ Stop", disabled=not st.session_state.recording):
+        st.success("Recording…")
+        st.rerun()                # refresh so the label flips to "⏹️ Stop"
+
+    else:                                     # ───── STOP branch ─────
         st.session_state.recording = False
         st.session_state.curr_stop_evt.set()
-
-        # give worker a moment to flush
-        threading.Event().wait(0.3)
+        threading.Event().wait(0.3)           # let buffer flush
 
         wav_path = save_wav(st.session_state.curr_frames)
         st.session_state.last_wav = wav_path
@@ -208,16 +329,14 @@ with col_stop:
 
         if wav_path:
             st.success(f"Saved: **{wav_path}**")
-            
-            # Auto-transcribe if enabled
             if st.session_state.auto_transcribe:
                 st.session_state.transcribing = True
                 st.session_state.transcription = None
-                st.rerun()  # Force UI refresh to show transcribing state
+                st.rerun()        # show "transcribing…" state
         else:
             st.error("No audio captured")
-        
-        st.rerun()  # Force UI update to enable Start and disable Stop
+
+        st.rerun()                # refresh so the label flips to "▶️ Start"
 
 
 # ---------- Playback ----------
@@ -327,13 +446,20 @@ if (st.session_state.generating_response and
     st.session_state.auto_chatgpt and
     not st.session_state.stop_streaming):
     
-    with st.spinner("Auto-generating ChatGPT response..."):
+    # Generate response with proper error handling
+    try:
         response = get_chatgpt_response(current_transcription())
         st.session_state.chatgpt_response = response
         st.session_state.generating_response = False
-    
-    if response:
-        st.success("✅ Auto-ChatGPT response complete")
+        
+        if response:
+            st.success("✅ Auto-ChatGPT response complete")
+        else:
+            st.error("❌ Failed to get ChatGPT response")
+            
+    except Exception as e:
+        st.error(f"❌ Error generating response: {str(e)}")
+        st.session_state.generating_response = False
     
     st.rerun()  # Refresh to show final results
 
@@ -344,14 +470,22 @@ if (st.session_state.generating_response and
     st.session_state.chatgpt_response is None and
     not st.session_state.stop_streaming):
     
-    with st.spinner("Generating ChatGPT response..."):
+    # Generate response with proper error handling
+    try:
         response = get_chatgpt_response(current_transcription())
         st.session_state.chatgpt_response = response
         st.session_state.generating_response = False
         st.session_state.manual_transcription = None  # Clear after processing
-    
-    if response:
-        st.success("✅ ChatGPT response complete")
+        
+        if response:
+            st.success("✅ ChatGPT response complete")
+        else:
+            st.error("❌ Failed to get ChatGPT response")
+            
+    except Exception as e:
+        st.error(f"❌ Error generating response: {str(e)}")
+        st.session_state.generating_response = False
+        st.session_state.manual_transcription = None
     
     st.rerun()  # Refresh to show final results
 

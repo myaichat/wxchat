@@ -1,4 +1,4 @@
-# chat_app.py  –  thread‑safe Streamlit mic recorder with backend server API
+# voice_recorder_app.py  –  thread‑safe Streamlit mic recorder
 import streamlit as st
 import sounddevice as sd
 import numpy as np
@@ -15,10 +15,6 @@ load_dotenv(dotenv_path=Path(".") / ".env", override=True)
 RATE, CH = 16_000, 1
 OUT_DIR  = "recordings"
 os.makedirs(OUT_DIR, exist_ok=True)
-
-# Backend server configuration
-BACKEND_URL = "http://localhost:8002/ask-chatgpt"
-TIMEOUT_SEC = 60
 
 # ───────────────────── session defaults ─────────────────────
 if "recording" not in st.session_state:
@@ -96,15 +92,13 @@ def current_transcription() -> str | None:
                                 st.session_state.transcription)
 
 def get_chatgpt_response(prompt):
-    """Get streaming response from backend server API"""
+    """Get streaming response from ChatGPT via backend API"""
     try:
-        # Clean the prompt to avoid JavaScript injection issues
-        cleaned_prompt = prompt.strip()
+        import requests
+        import json
         
-        # Debug: show what we're sending
-        st.write(f"Debug: Sending message: `{repr(cleaned_prompt)}`")
-        
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
+        # Add user message to conversation history
+        st.session_state.conversation_history.append({"role": "user", "content": prompt})
         
         # Create a placeholder for streaming response
         response_placeholder = st.empty()
@@ -113,76 +107,112 @@ def get_chatgpt_response(prompt):
         # Reset stop streaming flag
         st.session_state.stop_streaming = False
         
-        # Prepare payload for backend server (exactly like ask_chatgpt.py)
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
+        # Prepare API request - ensure proper JSON encoding
+        url = "http://127.0.0.1:8002/ask-chatgpt"
         
-        # Stream the response from backend server (exactly like ask_chatgpt.py)
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
+        # Clean and validate the prompt
+        if not prompt or not isinstance(prompt, str):
+            st.error("Invalid prompt provided")
+            return None
             
-            previous = ""
-            response_started = False
+        # Ensure prompt is properly encoded
+        clean_prompt = str(prompt).strip()
+        
+        payload = {
+            "message": clean_prompt,
+            "timeout": 30
+        }
+        
+        # Debug: Show what we're sending
+        st.write(f"Debug - Sending to API: {json.dumps(payload, indent=2)}")
+        
+        # Send POST request with streaming
+        response = requests.post(
+            url, 
+            json=payload, 
+            stream=True,
+            headers={"Content-Type": "application/json"},
+            timeout=35  # Slightly longer than API timeout
+        )
+        
+        if response.status_code == 200:
+            # Track previous content to show only incremental changes
+            previous_content = ""
             
-            for raw in resp.iter_lines(decode_unicode=True):
+            # Process streaming response
+            for line in response.iter_lines(decode_unicode=True):
                 # Check if user requested to stop streaming
                 if st.session_state.stop_streaming:
                     response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
                     break
-                
-                if not raw:  # skip keep-alives / blank lines (exactly like ask_chatgpt.py)
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
                     
-                    if status == "started":
-                        response_started = True
-                        response_placeholder.markdown("🚀 Assistant started typing...")
-                    elif status == "streaming":
-                        # Only show the newly arrived chunk (like ask_chatgpt.py)
-                        if len(content) > len(previous):
-                            new_chunk = content[len(previous):]
-                            full_response += new_chunk
-                            # Clean Unicode surrogates before displaying
-                            clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-                            response_placeholder.markdown(clean_response + "▌")
-                            previous = content
-                    elif status == "complete":
-                        # Always show server-supplied final text (like ask_chatgpt.py)
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            # If we never got streaming updates, show the complete content
-                            full_response = content
+                if line and line.strip():
+                    # Debug: Show raw line
+                    st.write(f"Debug - Raw line: {repr(line)}")
+                    
+                    if line.startswith('data: '):
+                        data_str = line[6:]  # Remove 'data: ' prefix
                         
-                        # Clean Unicode surrogates before displaying
-                        clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-                        response_placeholder.markdown(clean_response)
-                        break
-                    elif status in ["timeout", "error"]:
-                        st.error(f"Backend server {status}: {content}")
-                        return None
-                        
-                except json.JSONDecodeError as e:
-                    st.error(f"JSON decode error: {e}")
-                    continue
-                except Exception as e:
-                    st.error(f"Unexpected error: {e}")
-                    continue
-        
-        # Add the complete response to conversation history
-        if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-        
-        return full_response
-        
-    except requests.exceptions.RequestException as e:
-        st.error(f"Backend server connection error: {str(e)}")
+                        # Skip empty data lines
+                        if not data_str.strip():
+                            continue
+                            
+                        try:
+                            data = json.loads(data_str)
+                            status = data.get('status', '')
+                            content = data.get('content', '')
+                            
+                            # Debug: Show parsed data
+                            st.write(f"Debug - Parsed data: status={status}, content_length={len(content) if content else 0}")
+                            
+                            if status == 'started':
+                                st.info("🚀 Response started streaming...")
+                            elif status == 'streaming':
+                                # Use the complete content from the API
+                                full_response = content
+                                response_placeholder.markdown(full_response + "▌")
+                            elif status == 'complete':
+                                # Use the complete content from the API
+                                full_response = content
+                                response_placeholder.markdown(full_response)
+                                break
+                            elif status in ['timeout', 'error']:
+                                st.error(f"API {status.upper()}: {content}")
+                                return None
+                                
+                        except json.JSONDecodeError as e:
+                            st.warning(f"Could not parse JSON: {data_str}")
+                            st.write(f"JSON Error: {e}")
+                            continue
+            
+            # Remove the cursor and show final response (if not stopped)
+            if not st.session_state.stop_streaming and full_response:
+                response_placeholder.markdown(full_response)
+            
+            # Add the complete response to conversation history
+            if full_response:
+                st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
+            
+            return full_response
+        else:
+            st.error(f"API Error: HTTP {response.status_code}")
+            try:
+                error_text = response.text
+                st.error(f"Response: {error_text}")
+            except:
+                st.error("Could not read error response")
+            return None
+            
+    except requests.exceptions.Timeout:
+        st.error("Request timed out. The backend server may be overloaded.")
+        return None
+    except requests.exceptions.ConnectionError:
+        st.error("Connection failed. Make sure the backend server is running on http://127.0.0.1:8002")
         return None
     except Exception as e:
         st.error(f"ChatGPT API error: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 # ───────────────────────── UI ───────────────────────────────
@@ -343,9 +373,7 @@ if st.session_state.transcription and not st.session_state.recording:
     # Display ChatGPT response
     if st.session_state.chatgpt_response:
         st.markdown("**ChatGPT Response:**")
-        # Clean Unicode surrogates before displaying
-        clean_response = st.session_state.chatgpt_response.encode('utf-8', errors='replace').decode('utf-8')
-        st.markdown(clean_response)
+        st.markdown(st.session_state.chatgpt_response)
 
 # ---------- Auto-transcription handler ----------
 if (st.session_state.transcribing and 

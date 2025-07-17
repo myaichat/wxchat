@@ -20,6 +20,10 @@ os.makedirs(OUT_DIR, exist_ok=True)
 BACKEND_URL = "http://localhost:8002/ask-chatgpt"
 TIMEOUT_SEC = 60
 
+# Logging configuration
+LOGS_DIR = "logs"
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # ───────────────────── session defaults ─────────────────────
 if "recording" not in st.session_state:
     st.session_state.recording = False
@@ -47,6 +51,12 @@ if "stop_streaming" not in st.session_state:
     st.session_state.stop_streaming = False  # flag to stop streaming
 if "manual_transcription" not in st.session_state:
     st.session_state.manual_transcription = None  # store manual transcription for processing
+if "session_log_file" not in st.session_state:
+    # Create a unique log file for this session
+    session_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    st.session_state.session_log_file = os.path.join(LOGS_DIR, f"chat_session_{session_timestamp}.json")
+if "api_response" not in st.session_state:
+    st.session_state.api_response = None  # store API response separately
 
 # ───────────────────── helper functions ─────────────────────
 def record_worker(stop_evt: threading.Event,
@@ -95,11 +105,84 @@ def current_transcription() -> str | None:
     return st.session_state.get("transcription_display",
                                 st.session_state.transcription)
 
+def log_qa_pair(question: str, answer: str):
+    """Log question/answer pair to session log file"""
+    try:
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "question": question,
+            "answer": answer,
+            "model": st.session_state.selected_model
+        }
+        
+        # Append to log file
+        with open(st.session_state.session_log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            
+    except Exception as e:
+        st.error(f"Failed to log Q&A pair: {str(e)}")
+
 def get_chatgpt_response(prompt):
+    """Get streaming response from ChatGPT"""
+    try:
+        from openai import OpenAI
+        import os
+        
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        
+        st.session_state.conversation_history.append({"role": "user", "content": prompt})
+        
+        # Create a placeholder for streaming response
+        response_placeholder = st.empty()
+        full_response = ""
+        
+        # Reset stop streaming flag
+        st.session_state.stop_streaming = False
+        
+        # Stream the response
+        stream = client.chat.completions.create(
+            model=st.session_state.selected_model,
+            messages=st.session_state.conversation_history,
+            stream=True
+        )
+        
+        for chunk in stream:
+            # Check if user requested to stop streaming
+            if st.session_state.stop_streaming:
+                # Clean Unicode surrogates before displaying
+                clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
+                response_placeholder.markdown(clean_response + "\n\n*[Streaming stopped by user]*")
+                break
+                
+            if chunk.choices[0].delta.content is not None:
+                full_response += chunk.choices[0].delta.content
+                # Clean Unicode surrogates before displaying
+                clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
+                response_placeholder.markdown(clean_response + "▌")
+        
+        # Remove the cursor and show final response (if not stopped)
+        if not st.session_state.stop_streaming:
+            # Clean Unicode surrogates before displaying
+            clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
+            response_placeholder.markdown(clean_response)
+        
+        # Add the complete response to conversation history
+        if full_response:
+            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
+        
+        return full_response
+    except Exception as e:
+        st.error(f"ChatGPT API error: {str(e)}")
+        return None
+
+def get_chatgpt_response_backend(prompt):
     """Get streaming response from backend server API"""
     try:
+        # Store original prompt for logging
+        original_prompt = prompt.strip()
+        
         # Clean the prompt to avoid JavaScript injection issues
-        cleaned_prompt = prompt.strip()
+        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
         
         # Debug: show what we're sending
         st.write(f"Debug: Sending message: `{repr(cleaned_prompt)}`")
@@ -176,7 +259,7 @@ def get_chatgpt_response(prompt):
         if full_response:
             st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
         
-        return full_response
+        return full_response, original_prompt
         
     except requests.exceptions.RequestException as e:
         st.error(f"Backend server connection error: {str(e)}")
@@ -230,6 +313,7 @@ if st.button(label, key="rec_toggle"):
         st.session_state.transcribing        = False
         st.session_state.chatgpt_response    = None
         st.session_state.generating_response = False
+        st.session_state.api_response        = None  # Clear API response for new recording
 
         audio_q  = queue.Queue()
         frames   = []
@@ -340,12 +424,35 @@ if st.session_state.transcription and not st.session_state.recording:
     if st.session_state.generating_response:
         st.info("🔄 Generating response...")
     
-    # Display ChatGPT response
-    if st.session_state.chatgpt_response:
+    # Create tabs for response display - always show tabs when transcription is available
+    tab1, tab2 = st.tabs(["Web UI", "API"])
+    
+    with tab1:
         st.markdown("**ChatGPT Response:**")
-        # Clean Unicode surrogates before displaying
-        clean_response = st.session_state.chatgpt_response.encode('utf-8', errors='replace').decode('utf-8')
-        st.markdown(clean_response)
+        if st.session_state.chatgpt_response:
+            # Clean Unicode surrogates before displaying as markdown
+            clean_response = st.session_state.chatgpt_response.encode('utf-8', errors='replace').decode('utf-8')
+            st.markdown(clean_response)
+        elif st.session_state.generating_response:
+            st.info("Response will appear here...")
+        else:
+            st.info("Click 'Get ChatGPT Response' to generate a response")
+    
+    with tab2:
+        st.markdown("**API Response:**")
+        if st.button("🔄 Get API Response", key="api_response_btn"):
+            with st.spinner("Getting API response..."):
+                api_response = get_chatgpt_response(current_transcription())
+                if api_response:
+                    st.session_state.api_response = api_response  # Store in session state
+                    st.markdown(api_response)
+                else:
+                    st.error("Failed to get API response")
+        elif st.session_state.api_response:
+            # Display stored API response
+            st.markdown(st.session_state.api_response)
+        else:
+            st.info("Click 'Get API Response' to generate a direct API response")
 
 # ---------- Auto-transcription handler ----------
 if (st.session_state.transcribing and 
@@ -379,9 +486,19 @@ if (st.session_state.generating_response and
     not st.session_state.stop_streaming):
     
     with st.spinner("Auto-generating ChatGPT response..."):
-        response = get_chatgpt_response(current_transcription())
-        st.session_state.chatgpt_response = response
-        st.session_state.generating_response = False
+        question = current_transcription()
+        result = get_chatgpt_response_backend(question)
+        if result:
+            response, original_question = result
+            st.session_state.chatgpt_response = response
+            st.session_state.generating_response = False
+            
+            # Log the Q&A pair using original question
+            if response and original_question:
+                log_qa_pair(original_question, response)
+        else:
+            st.session_state.generating_response = False
+            response = None
     
     if response:
         st.success("✅ Auto-ChatGPT response complete")
@@ -396,10 +513,21 @@ if (st.session_state.generating_response and
     not st.session_state.stop_streaming):
     
     with st.spinner("Generating ChatGPT response..."):
-        response = get_chatgpt_response(current_transcription())
-        st.session_state.chatgpt_response = response
-        st.session_state.generating_response = False
-        st.session_state.manual_transcription = None  # Clear after processing
+        question = current_transcription()
+        result = get_chatgpt_response_backend(question)
+        if result:
+            response, original_question = result
+            st.session_state.chatgpt_response = response
+            st.session_state.generating_response = False
+            st.session_state.manual_transcription = None  # Clear after processing
+            
+            # Log the Q&A pair using original question
+            if response and original_question:
+                log_qa_pair(original_question, response)
+        else:
+            st.session_state.generating_response = False
+            st.session_state.manual_transcription = None  # Clear after processing
+            response = None
     
     if response:
         st.success("✅ ChatGPT response complete")

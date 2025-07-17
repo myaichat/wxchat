@@ -1,5 +1,13 @@
 # chat_app.py  –  thread‑safe Streamlit mic recorder with backend server API
 import streamlit as st
+
+# Configure page layout to be wide
+st.set_page_config(
+    page_title="SpeakStream AI",
+    page_icon="🎙️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime

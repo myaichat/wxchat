@@ -1,4 +1,4 @@
-# chat_app.py  –  thread‑safe Streamlit mic recorder with backend server API
+# simple_chat_app.py  –  thread‑safe Streamlit mic recorder with direct streaming_chat calls
 import streamlit as st
 
 # Configure page layout to be wide
@@ -8,15 +8,34 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Custom CSS for tab-like headers with much smaller styling
+st.markdown("""
+<style>
+.box-header {
+    font-size: 26px;
+    font-weight: 550;
+    color: #4f46e5; /* Indigo-600 */
+    margin-bottom: 6px;
+    margin-left: 0px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
-import requests
 import json
+import asyncio
 from include.transcribe import Transcribe
 from pathlib import Path
 from dotenv import load_dotenv
 from streamlit.runtime.scriptrunner import add_script_run_ctx
+
+# Import the streaming function directly
+from simple_streaming_chat import send_message_with_streaming
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=Path(".") / ".env", override=True)
@@ -25,8 +44,6 @@ RATE, CH = 16_000, 1
 OUT_DIR  = "recordings"
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# Backend server configuration
-BACKEND_URL = "http://localhost:8002/ask-chatgpt"
 TIMEOUT_SEC = 60
 
 # Logging configuration
@@ -48,6 +65,8 @@ if "auto_transcribe" not in st.session_state:
     st.session_state.auto_transcribe = True # auto transcribe enabled by default
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
+if "api_conversation_history" not in st.session_state:
+    st.session_state.api_conversation_history = []
 if "chatgpt_response" not in st.session_state:
     st.session_state.chatgpt_response = None
 if "generating_response" not in st.session_state:
@@ -78,6 +97,12 @@ if "api_stream_complete" not in st.session_state:
     st.session_state.api_stream_complete = False
 if "concurrent_streaming_active" not in st.session_state:
     st.session_state.concurrent_streaming_active = False
+if "pending_log_question" not in st.session_state:
+    st.session_state.pending_log_question = None  # store question for logging when both responses complete
+if "pending_log_webui_question" not in st.session_state:
+    st.session_state.pending_log_webui_question = None  # store Web UI question for logging
+if "pending_log_api_question" not in st.session_state:
+    st.session_state.pending_log_api_question = None  # store API question for logging
 
 # ───────────────────── helper functions ─────────────────────
 def start_thread(fn, *args, **kwargs):
@@ -133,19 +158,30 @@ def current_transcription() -> str | None:
     return st.session_state.get("transcription_display",
                                 st.session_state.transcription)
 
-def log_qa_pair(question: str, answer: str):
-    """Log question/answer pair to session log file"""
+def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None, webui_question: str = None, api_question: str = None):
+    """Log question/answer pair to session log file with both Web UI and API responses and raw questions"""
     try:
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "question": question,
-            "answer": answer,
             "model": st.session_state.selected_model
         }
         
-        # Append to log file
+        # Add raw questions sent to each service if available
+        if webui_question:
+            log_entry["webui_question"] = webui_question
+        if api_question:
+            log_entry["api_question"] = api_question
+        
+        # Add responses if available
+        if webui_answer:
+            log_entry["webui_answer"] = webui_answer
+        if api_answer:
+            log_entry["api_answer"] = api_answer
+        
+        # Append to log file with pretty formatting (each field on new line)
         with open(st.session_state.session_log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(log_entry, ensure_ascii=False, indent=2) + "\n")
             
     except Exception as e:
         st.error(f"Failed to log Q&A pair: {str(e)}")
@@ -162,41 +198,47 @@ def start_concurrent_streaming(question):
     st.session_state.generating_api_response = True
     st.session_state.stop_streaming = False
     
-    # Start Web UI streaming thread
+    # Store question for logging when both responses complete
+    st.session_state.pending_log_question = question.strip()
+    
+    # Start Web UI streaming thread (now using direct streaming_chat)
     start_thread(webui_streaming_worker, question)
     
     # Start API streaming thread  
     start_thread(api_streaming_worker, question)
 
 def webui_streaming_worker(question):
-    """Worker thread for Web UI streaming - updates session state incrementally"""
+    """Worker thread for Web UI streaming using direct streaming_chat - updates session state incrementally"""
     try:
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
+        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
+        
+        # Store the Web UI question for logging
+        st.session_state.pending_log_webui_question = cleaned_prompt
         
         # Add to conversation history
         st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
         
         full_response = ""
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
+        previous = ""
+        response_started = False
         
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
-            
-            previous = ""
-            response_started = False
-            
-            for raw in resp.iter_lines(decode_unicode=True):
-                if st.session_state.stop_streaming:
-                    break
+        # Create event loop for async function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Use the direct streaming function
+            async def stream_response():
+                nonlocal full_response, previous, response_started
                 
-                if not raw:
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
+                async for chunk in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
+                    if st.session_state.stop_streaming:
+                        break
+                    
+                    status = chunk.get("status")
+                    content = chunk.get("content", "")
                     
                     if status == "started":
                         response_started = True
@@ -204,7 +246,7 @@ def webui_streaming_worker(question):
                     elif status == "streaming":
                         # Update session state with streaming content
                         if len(content) > len(previous):
-                            # Smart streaming logic
+                            # Smart streaming logic (same as simple_ask_chatgpt.py)
                             safe_patterns = [
                                 '\n\n', '\n- ', '\n## ', '\n### ', '. ', '! ', '? ', 
                                 ', ', '; ', ': ', '**.', '**,', '**:', '`.', '`,', '```\n'
@@ -250,20 +292,21 @@ def webui_streaming_worker(question):
                         st.session_state.webui_streaming_text = full_response
                         break
                     elif status in ["timeout", "error"]:
-                        st.session_state.webui_streaming_text = f"Backend server {status}: {content}"
+                        st.session_state.webui_streaming_text = f"Streaming error: {content}"
                         st.session_state.webui_stream_complete = True
                         st.session_state.generating_response = False
                         return
-                        
-                except (json.JSONDecodeError, Exception):
-                    continue
+            
+            # Run the async streaming
+            loop.run_until_complete(stream_response())
+            
+        finally:
+            loop.close()
         
         # Store final response
         if full_response:
             st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
             st.session_state.chatgpt_response = full_response
-            # Log the Q&A pair
-            log_qa_pair(original_prompt, full_response)
         
         st.session_state.webui_stream_complete = True
         st.session_state.generating_response = False
@@ -281,12 +324,14 @@ def api_streaming_worker(question):
         
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Store original prompt for logging and consistency
-        original_prompt = question.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
+        # Store the API question for logging
+        st.session_state.pending_log_api_question = question
         
-        # Add to conversation history (separate copy for API) - use cleaned prompt for consistency
-        messages = st.session_state.conversation_history + [{"role": "user", "content": cleaned_prompt}]
+        # Add to separate API conversation history
+        st.session_state.api_conversation_history.append({"role": "user", "content": question})
+        
+        # Use separate API conversation history
+        messages = st.session_state.api_conversation_history
         
         full_response = ""
         
@@ -305,15 +350,16 @@ def api_streaming_worker(question):
                 
             if chunk.choices[0].delta.content is not None:
                 full_response += chunk.choices[0].delta.content
-                # Clean Unicode surrogates before displaying (consistency with Web UI)
-                clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
                 # Update session state with cursor
-                st.session_state.api_streaming_text = clean_response + "▌"
+                st.session_state.api_streaming_text = full_response + "▌"
         
-        # Final update without cursor - apply Unicode cleaning
-        clean_final_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-        st.session_state.api_streaming_text = clean_final_response
-        st.session_state.api_response = clean_final_response
+        # Final update without cursor
+        st.session_state.api_streaming_text = full_response
+        st.session_state.api_response = full_response
+        
+        # Add response to separate API conversation history
+        if full_response:
+            st.session_state.api_conversation_history.append({"role": "assistant", "content": full_response})
         
         st.session_state.api_stream_complete = True
         st.session_state.generating_api_response = False
@@ -322,102 +368,6 @@ def api_streaming_worker(question):
         st.session_state.api_streaming_text = f"Error: {str(e)}"
         st.session_state.api_stream_complete = True
         st.session_state.generating_api_response = False
-
-# Modified get_chatgpt_response_backend for thread-safe operation
-def get_chatgpt_response_backend_threaded(prompt):
-    """Thread-safe version that updates session state incrementally"""
-    try:
-        original_prompt = prompt.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
-        
-        full_response = ""
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
-        
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
-            
-            previous = ""
-            response_started = False
-            
-            for raw in resp.iter_lines(decode_unicode=True):
-                if st.session_state.stop_streaming:
-                    break
-                
-                if not raw:
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
-                    
-                    if status == "started":
-                        response_started = True
-                        st.session_state.webui_streaming_text = "🚀 Assistant started typing..."
-                    elif status == "streaming":
-                        # Update session state with streaming content
-                        if len(content) > len(previous):
-                            # Use same smart streaming logic but update session state
-                            safe_patterns = [
-                                '\n\n', '\n- ', '\n## ', '\n### ', '. ', '! ', '? ', 
-                                ', ', '; ', ': ', '**.', '**,', '**:', '`.', '`,', '```\n'
-                            ]
-                            
-                            last_safe_pos = len(previous)
-                            for pattern in safe_patterns:
-                                pos = content.rfind(pattern, len(previous))
-                                if pos != -1 and pos + len(pattern) > last_safe_pos:
-                                    last_safe_pos = pos + len(pattern)
-                            
-                            space_pos = content.rfind(' ', len(previous))
-                            if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                                check_pos = space_pos + 1
-                                if check_pos < len(content):
-                                    before_space = content[max(0, space_pos-5):space_pos]
-                                    after_space = content[space_pos:min(len(content), space_pos+5)]
-                                    if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                        last_safe_pos = check_pos
-                            
-                            if last_safe_pos > len(previous) + 15:
-                                new_chunk = content[len(previous):last_safe_pos]
-                                full_response += new_chunk
-                                # Update session state for UI display
-                                st.session_state.webui_streaming_text = full_response + "▌"
-                                previous = content[:last_safe_pos]
-                            elif len(content) > len(previous) + 150:
-                                force_pos = len(previous) + 100
-                                last_space = content.rfind(' ', len(previous), force_pos)
-                                if last_space > len(previous):
-                                    new_chunk = content[len(previous):last_space + 1]
-                                    full_response += new_chunk
-                                    st.session_state.webui_streaming_text = full_response + "▌"
-                                    previous = content[:last_space + 1]
-                    elif status == "complete":
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            full_response = content
-                        
-                        # Final update to session state
-                        st.session_state.webui_streaming_text = full_response
-                        break
-                    elif status in ["timeout", "error"]:
-                        st.session_state.webui_streaming_text = f"Backend server {status}: {content}"
-                        return None
-                        
-                except (json.JSONDecodeError, Exception):
-                    continue
-        
-        if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-        
-        return full_response, original_prompt
-        
-    except Exception as e:
-        st.session_state.webui_streaming_text = f"Error: {str(e)}"
-        return None
 
 def get_chatgpt_response(prompt, show_streaming=True, container=None):
     """Get streaming response from ChatGPT"""
@@ -479,195 +429,6 @@ def get_chatgpt_response(prompt, show_streaming=True, container=None):
         return full_response
     except Exception as e:
         st.error(f"ChatGPT API error: {str(e)}")
-        return None
-
-def get_chatgpt_response_backend(prompt, show_streaming=True, container=None):
-    """Get streaming response from backend server API"""
-    try:
-        # Store original prompt for logging
-        original_prompt = prompt.strip()
-        
-        # Clean the prompt to avoid JavaScript injection issues
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        # Debug: show what we're sending only if streaming should be shown
-        if show_streaming:
-            if container:
-                with container:
-                    st.write(f"Debug: Sending message: `{repr(cleaned_prompt)}`")
-            else:
-                st.write(f"Debug: Sending message: `{repr(cleaned_prompt)}`")
-        
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
-        
-        # Create a placeholder for streaming response only if streaming should be shown
-        if show_streaming:
-            if container:
-                with container:
-                    response_placeholder = st.empty()
-            else:
-                response_placeholder = st.empty()
-        else:
-            response_placeholder = None
-            
-        full_response = ""
-        
-        # Reset stop streaming flag
-        st.session_state.stop_streaming = False
-        
-        # Prepare payload for backend server (exactly like ask_chatgpt.py)
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
-        
-        # Stream the response from backend server (exactly like ask_chatgpt.py)
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
-            
-            previous = ""
-            response_started = False
-            
-            for raw in resp.iter_lines(decode_unicode=True):
-                # Check if user requested to stop streaming
-                if st.session_state.stop_streaming:
-                    if show_streaming and response_placeholder:
-                        response_placeholder.markdown(full_response + "\n\n*[Streaming stopped by user]*")
-                    break
-                
-                if not raw:  # skip keep-alives / blank lines (exactly like ask_chatgpt.py)
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
-                    
-                    if status == "started":
-                        response_started = True
-                        if show_streaming and response_placeholder:
-                            response_placeholder.markdown("🚀 Assistant started typing...")
-                    elif status == "streaming":
-                        # Enhanced smart streaming with better breakpoint detection (same as ask_chatgpt.py)
-                        if len(content) > len(previous):
-                            # More comprehensive safe breakpoints
-                            safe_patterns = [
-                                '\n\n',  # Paragraph breaks
-                                '\n- ',  # List items
-                                '\n## ', # Headers
-                                '\n### ', # Subheaders
-                                '. ',    # Sentence endings
-                                '! ',    # Exclamations
-                                '? ',    # Questions
-                                ', ',    # Commas
-                                '; ',    # Semicolons
-                                ': ',    # Colons
-                                '**.',   # Bold endings with period
-                                '**,',   # Bold endings with comma
-                                '**:',   # Bold endings with colon
-                                '`.',    # Code endings with period
-                                '`,',    # Code endings with comma
-                                '```\n', # Code block endings
-                            ]
-                            
-                            last_safe_pos = len(previous)
-                            
-                            # Find the latest safe position
-                            for pattern in safe_patterns:
-                                pos = content.rfind(pattern, len(previous))
-                                if pos != -1 and pos + len(pattern) > last_safe_pos:
-                                    last_safe_pos = pos + len(pattern)
-                            
-                            # Also check for complete words (space-bounded)
-                            space_pos = content.rfind(' ', len(previous))
-                            if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                                # Make sure we're not in the middle of markdown formatting
-                                check_pos = space_pos + 1
-                                if check_pos < len(content):
-                                    # Don't break if we're in the middle of ** or ` formatting
-                                    before_space = content[max(0, space_pos-5):space_pos]
-                                    after_space = content[space_pos:min(len(content), space_pos+5)]
-                                    if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                        last_safe_pos = check_pos
-                            
-                            # Display if we have a reasonable chunk and it's safe
-                            if last_safe_pos > len(previous) + 15:  # At least 15 chars ahead
-                                new_chunk = content[len(previous):last_safe_pos]
-                                full_response += new_chunk
-                                if show_streaming and response_placeholder:
-                                    # Clean Unicode surrogates before displaying
-                                    clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-                                    response_placeholder.markdown(clean_response + "▌")
-                                previous = content[:last_safe_pos]
-                            elif len(content) > len(previous) + 150:  # Force display if buffer gets too large
-                                # Find the last space to avoid cutting words
-                                force_pos = len(previous) + 100
-                                last_space = content.rfind(' ', len(previous), force_pos)
-                                if last_space > len(previous):
-                                    new_chunk = content[len(previous):last_space + 1]
-                                    full_response += new_chunk
-                                    if show_streaming and response_placeholder:
-                                        # Clean Unicode surrogates before displaying
-                                        clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-                                        response_placeholder.markdown(clean_response + "▌")
-                                    previous = content[:last_space + 1]
-                    elif status == "complete":
-                        # Always show server-supplied final text (like ask_chatgpt.py)
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            # If we never got streaming updates, show the complete content
-                            full_response = content
-                        
-                        if show_streaming and response_placeholder:
-                            # Clean Unicode surrogates before displaying
-                            clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-                            response_placeholder.markdown(clean_response)
-                        break
-                    elif status in ["timeout", "error"]:
-                        if show_streaming:
-                            if container:
-                                with container:
-                                    st.error(f"Backend server {status}: {content}")
-                            else:
-                                st.error(f"Backend server {status}: {content}")
-                        return None
-                        
-                except json.JSONDecodeError as e:
-                    if show_streaming:
-                        if container:
-                            with container:
-                                st.error(f"JSON decode error: {e}")
-                        else:
-                            st.error(f"JSON decode error: {e}")
-                    continue
-                except Exception as e:
-                    if show_streaming:
-                        if container:
-                            with container:
-                                st.error(f"Unexpected error: {e}")
-                        else:
-                            st.error(f"Unexpected error: {e}")
-                    continue
-        
-        # Add the complete response to conversation history
-        if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-        
-        return full_response, original_prompt
-        
-    except requests.exceptions.RequestException as e:
-        if show_streaming:
-            if container:
-                with container:
-                    st.error(f"Backend server connection error: {str(e)}")
-            else:
-                st.error(f"Backend server connection error: {str(e)}")
-        return None
-    except Exception as e:
-        if show_streaming:
-            if container:
-                with container:
-                    st.error(f"ChatGPT API error: {str(e)}")
-            else:
-                st.error(f"ChatGPT API error: {str(e)}")
         return None
 
 # ───────────────────────── UI ───────────────────────────────
@@ -844,7 +605,8 @@ if st.session_state.transcription and not st.session_state.recording:
 
     # Web UI pane
     with col_web:
-        st.markdown("### Web UI")
+        st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
+        
         remove='markdown\nCopy\nEdit\n'
         if st.session_state.webui_streaming_text:
             # Show live streaming updates
@@ -860,7 +622,7 @@ if st.session_state.transcription and not st.session_state.recording:
 
     # API pane
     with col_api:
-        st.markdown("### API")
+        st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
         
         if st.session_state.api_streaming_text:
             # Show live streaming updates
@@ -873,13 +635,26 @@ if st.session_state.transcription and not st.session_state.recording:
         else:
             st.info("Responses will appear here")
 
-
-
 # Auto-refresh during concurrent streaming with better timing
 if st.session_state.concurrent_streaming_active:
     # Check if both streams are complete
     if st.session_state.webui_stream_complete and st.session_state.api_stream_complete:
         st.session_state.concurrent_streaming_active = False
+        
+        # Log both responses when both streams are complete
+        if st.session_state.pending_log_question:
+            log_qa_pair(
+                st.session_state.pending_log_question,
+                webui_answer=st.session_state.chatgpt_response,
+                api_answer=st.session_state.api_response,
+                webui_question=st.session_state.pending_log_webui_question,
+                api_question=st.session_state.pending_log_api_question
+            )
+            # Clear after logging
+            st.session_state.pending_log_question = None
+            st.session_state.pending_log_webui_question = None
+            st.session_state.pending_log_api_question = None
+        
         st.success("✅ Both responses completed!")
         st.rerun()
     else:

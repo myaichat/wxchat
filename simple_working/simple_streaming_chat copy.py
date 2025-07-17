@@ -35,8 +35,6 @@ async def send_message_with_streaming(message, timeout=120):
             }))
             await wait_for_response(websocket, 1)
             
-            # Properly escape the message for JavaScript
-            escaped_message = json.dumps(message)
             
             # Set up new observer with proper cleanup
             observer_js = f'''
@@ -109,7 +107,7 @@ async def send_message_with_streaming(message, timeout=120):
                         
                         // Check if this appears after our sent message and doesn't contain our sent text
                         const elementText = getResponseContent(element);
-                        if (elementText && elementText.length > 10 && !elementText.includes({escaped_message}) && messageSent) {{
+                        if (elementText && elementText.length > 10 && !elementText.includes("{message}") && messageSent) {{
                             const timeSinceMessage = Date.now() - sentMessageTimestamp;
                             if (timeSinceMessage > 0 && timeSinceMessage < 120000) {{
                                 return true;
@@ -279,11 +277,11 @@ async def send_message_with_streaming(message, timeout=120):
                         range.selectNodeContents(textarea);
                         selection.removeAllRanges();
                         selection.addRange(range);
-                        document.execCommand('insertText', false, {escaped_message});
+                        document.execCommand('insertText', false, "{message}");
                     }} else {{
                         textarea.value = "";
                         textarea.focus();
-                        textarea.value = {escaped_message};
+                        textarea.value = "{message}";
                     }}
                     
                     // Trigger events

@@ -65,6 +65,8 @@ if "auto_transcribe" not in st.session_state:
     st.session_state.auto_transcribe = True # auto transcribe enabled by default
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = []
+if "api_conversation_history" not in st.session_state:
+    st.session_state.api_conversation_history = []
 if "chatgpt_response" not in st.session_state:
     st.session_state.chatgpt_response = None
 if "generating_response" not in st.session_state:
@@ -325,8 +327,11 @@ def api_streaming_worker(question):
         # Store the API question for logging
         st.session_state.pending_log_api_question = question
         
-        # Add to conversation history (separate copy for API)
-        messages = st.session_state.conversation_history + [{"role": "user", "content": question}]
+        # Add to separate API conversation history
+        st.session_state.api_conversation_history.append({"role": "user", "content": question})
+        
+        # Use separate API conversation history
+        messages = st.session_state.api_conversation_history
         
         full_response = ""
         
@@ -351,6 +356,10 @@ def api_streaming_worker(question):
         # Final update without cursor
         st.session_state.api_streaming_text = full_response
         st.session_state.api_response = full_response
+        
+        # Add response to separate API conversation history
+        if full_response:
+            st.session_state.api_conversation_history.append({"role": "assistant", "content": full_response})
         
         st.session_state.api_stream_complete = True
         st.session_state.generating_api_response = False

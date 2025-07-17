@@ -8,6 +8,21 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Custom CSS for tab-like headers with much smaller styling
+st.markdown("""
+<style>
+.box-header {
+    font-size: 26px;
+    font-weight: 550;
+    color: #4f46e5; /* Indigo-600 */
+    margin-bottom: 6px;
+    margin-left: 0px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+</style>
+""", unsafe_allow_html=True)
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
@@ -281,12 +296,8 @@ def api_streaming_worker(question):
         
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Store original prompt for logging and consistency
-        original_prompt = question.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        # Add to conversation history (separate copy for API) - use cleaned prompt for consistency
-        messages = st.session_state.conversation_history + [{"role": "user", "content": cleaned_prompt}]
+        # Add to conversation history (separate copy for API)
+        messages = st.session_state.conversation_history + [{"role": "user", "content": question}]
         
         full_response = ""
         
@@ -305,15 +316,12 @@ def api_streaming_worker(question):
                 
             if chunk.choices[0].delta.content is not None:
                 full_response += chunk.choices[0].delta.content
-                # Clean Unicode surrogates before displaying (consistency with Web UI)
-                clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
                 # Update session state with cursor
-                st.session_state.api_streaming_text = clean_response + "▌"
+                st.session_state.api_streaming_text = full_response + "▌"
         
-        # Final update without cursor - apply Unicode cleaning
-        clean_final_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-        st.session_state.api_streaming_text = clean_final_response
-        st.session_state.api_response = clean_final_response
+        # Final update without cursor
+        st.session_state.api_streaming_text = full_response
+        st.session_state.api_response = full_response
         
         st.session_state.api_stream_complete = True
         st.session_state.generating_api_response = False
@@ -844,7 +852,9 @@ if st.session_state.transcription and not st.session_state.recording:
 
     # Web UI pane
     with col_web:
-        st.markdown("### Web UI")
+        st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
+        #st.markdown('<div class="tab-content">', unsafe_allow_html=True)
+        
         remove='markdown\nCopy\nEdit\n'
         if st.session_state.webui_streaming_text:
             # Show live streaming updates
@@ -857,10 +867,13 @@ if st.session_state.transcription and not st.session_state.recording:
             st.info("Response will appear here…")
         else:
             st.info("Click **Get Both Responses** to generate responses")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # API pane
     with col_api:
-        st.markdown("### API")
+        st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
+        #st.markdown('<div class="tab-content">', unsafe_allow_html=True)
         
         if st.session_state.api_streaming_text:
             # Show live streaming updates
@@ -872,6 +885,8 @@ if st.session_state.transcription and not st.session_state.recording:
             st.info("API response will appear here…")
         else:
             st.info("Responses will appear here")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 

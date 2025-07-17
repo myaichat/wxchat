@@ -8,6 +8,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
 import sounddevice as sd
 import numpy as np
 import wave, os, io, queue, threading, datetime
@@ -281,12 +282,8 @@ def api_streaming_worker(question):
         
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Store original prompt for logging and consistency
-        original_prompt = question.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        # Add to conversation history (separate copy for API) - use cleaned prompt for consistency
-        messages = st.session_state.conversation_history + [{"role": "user", "content": cleaned_prompt}]
+        # Add to conversation history (separate copy for API)
+        messages = st.session_state.conversation_history + [{"role": "user", "content": question}]
         
         full_response = ""
         
@@ -305,15 +302,12 @@ def api_streaming_worker(question):
                 
             if chunk.choices[0].delta.content is not None:
                 full_response += chunk.choices[0].delta.content
-                # Clean Unicode surrogates before displaying (consistency with Web UI)
-                clean_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
                 # Update session state with cursor
-                st.session_state.api_streaming_text = clean_response + "▌"
+                st.session_state.api_streaming_text = full_response + "▌"
         
-        # Final update without cursor - apply Unicode cleaning
-        clean_final_response = full_response.encode('utf-8', errors='replace').decode('utf-8')
-        st.session_state.api_streaming_text = clean_final_response
-        st.session_state.api_response = clean_final_response
+        # Final update without cursor
+        st.session_state.api_streaming_text = full_response
+        st.session_state.api_response = full_response
         
         st.session_state.api_stream_complete = True
         st.session_state.generating_api_response = False
@@ -845,14 +839,14 @@ if st.session_state.transcription and not st.session_state.recording:
     # Web UI pane
     with col_web:
         st.markdown("### Web UI")
-        remove='markdown\nCopy\nEdit\n'
+        
         if st.session_state.webui_streaming_text:
             # Show live streaming updates
-            st.markdown(st.session_state.webui_streaming_text.strip(remove))
+            st.markdown(st.session_state.webui_streaming_text)
         elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
             # Show final response when not streaming
             clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
-            st.markdown(clean.strip(remove))
+            st.markdown(clean)
         elif st.session_state.generating_response:
             st.info("Response will appear here…")
         else:

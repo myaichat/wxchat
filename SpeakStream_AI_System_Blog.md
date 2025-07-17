@@ -415,11 +415,114 @@ Launch Chrome with remote debugging:
 
 ### 3. Start Servers
 
+**Option A: Manual Start (Cross-platform)**
 ```bash
 # Terminal A: FastAPI proxy (Search Powered Web UI relay)
 python streaming_server.py
 
 # Terminal B: Streamlit frontend
+streamlit run chat_app.py
+```
+
+**Option B: Automated Start (Windows PowerShell)**
+
+For Windows users, two PowerShell scripts automate the setup process:
+
+**`start_streaming_server.ps1`** - Automated Server Management
+```powershell
+# Kill all running python processes
+taskkill /F /IM python.exe
+
+# Start the streaming server in a new cmd window
+Start-Process cmd -ArgumentList "/k", "python streaming_server.py"
+
+# Wait for port 8002 to open (up to 10 seconds)
+$timeout = 20
+$counter = 0
+while (-not (netstat -an | findstr ':8002') -and $counter -lt $timeout) {
+    Start-Sleep -Milliseconds 500
+    $counter++
+}
+
+if ($counter -lt $timeout) {
+    Write-Host "✅ Port 8002 is now open."
+} else {
+    Write-Host "❌ Port 8002 did not open in time."
+}
+```
+
+This script:
+- Kills any existing Python processes to avoid port conflicts
+- Launches the FastAPI server in a new command window
+- Monitors port 8002 until the server is ready
+- Provides visual feedback on server status
+
+**`start_chrome_debug.ps1`** - Chrome DevTools Setup
+```powershell
+# Kill only Chrome process using port 9222
+$port9222Process = netstat -ano | findstr ':9222' | findstr 'LISTENING'
+if ($port9222Process) {
+    $pid = ($port9222Process -split '\s+')[-1]
+    if ($pid) {
+        Write-Host "🔄 Killing Chrome process on port 9222 (PID: $pid)"
+        taskkill /F /PID $pid 2>$null
+        Start-Sleep -Seconds 1
+    }
+}
+
+# Start Chrome with remote debugging
+$chromeArgs = @(
+    "--remote-debugging-port=9222",
+    "--user-data-dir=chrome-debug",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows"
+)
+
+Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList $chromeArgs
+
+# Wait for port 9222 and get WebSocket URL
+$timeout = 20
+$counter = 0
+while (-not (netstat -an | findstr ':9222') -and $counter -lt $timeout) {
+    Start-Sleep -Milliseconds 500
+    $counter++
+}
+
+if ($counter -lt $timeout) {
+    Write-Host "✅ Port 9222 is now open."
+    
+    # Get the WebSocket debugger URL
+    try {
+        $response = curl -s http://localhost:9222/json
+        if ($response) {
+            $jsonData = $response | ConvertFrom-Json
+            if ($jsonData.Count -gt 1) {
+                $webSocketUrl = $jsonData[1].webSocketDebuggerUrl
+                Write-Host "🔗 WebSocket Debugger URL: $webSocketUrl"
+            }
+        }
+    } catch {
+        Write-Host "💡 You can manually check: http://localhost:9222/json"
+    }
+}
+```
+
+This script:
+- Intelligently kills only Chrome processes using port 9222
+- Launches Chrome with remote debugging enabled
+- Uses a dedicated user data directory to avoid conflicts
+- Disables background throttling for better streaming performance
+- Automatically retrieves and displays the WebSocket debugger URL
+- Provides the exact URL needed for the `CHATGPT_DEVTOOLS_WS` environment variable
+
+**Usage:**
+```powershell
+# Run both scripts in PowerShell
+.\start_streaming_server.ps1
+.\start_chrome_debug.ps1
+
+# Then start Streamlit manually
 streamlit run chat_app.py
 ```
 

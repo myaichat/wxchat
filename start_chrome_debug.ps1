@@ -1,5 +1,15 @@
-# Kill all running Chrome processes
-taskkill /F /IM chrome.exe 2>$null
+# Kill only Chrome process using port 9222
+$port9222Process = netstat -ano | findstr ':9222' | findstr 'LISTENING'
+if ($port9222Process) {
+    $pid = ($port9222Process -split '\s+')[-1]
+    if ($pid) {
+        Write-Host "🔄 Killing Chrome process on port 9222 (PID: $pid)"
+        taskkill /F /PID $pid 2>$null
+        Start-Sleep -Seconds 1
+    }
+} else {
+    Write-Host "ℹ️  No Chrome process found on port 9222"
+}
 
 # Start Chrome with remote debugging in a new process
 $chromeArgs = @(

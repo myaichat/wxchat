@@ -35,7 +35,8 @@ from dotenv import load_dotenv
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # Import the streaming function directly
-from simple_streaming_chat import send_message_with_streaming
+from streaming_chat import send_message_with_streaming
+import websockets
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=Path(".") / ".env", override=True)
@@ -95,12 +96,6 @@ if "api_stream_complete" not in st.session_state:
     st.session_state.api_stream_complete = False
 if "concurrent_streaming_active" not in st.session_state:
     st.session_state.concurrent_streaming_active = False
-if "pending_log_question" not in st.session_state:
-    st.session_state.pending_log_question = None  # store question for logging when both responses complete
-if "pending_log_webui_question" not in st.session_state:
-    st.session_state.pending_log_webui_question = None  # store Web UI question for logging
-if "pending_log_api_question" not in st.session_state:
-    st.session_state.pending_log_api_question = None  # store API question for logging
 
 # ───────────────────── helper functions ─────────────────────
 def start_thread(fn, *args, **kwargs):
@@ -156,37 +151,117 @@ def current_transcription() -> str | None:
     return st.session_state.get("transcription_display",
                                 st.session_state.transcription)
 
-def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None, webui_question: str = None, api_question: str = None):
-    """Log question/answer pair to session log file with both Web UI and API responses and raw questions"""
+def log_qa_pair(question: str, answer: str):
+    """Log question/answer pair to session log file"""
     try:
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "question": question,
+            "answer": answer,
             "model": st.session_state.selected_model
         }
         
-        # Add raw questions sent to each service if available
-        if webui_question:
-            log_entry["webui_question"] = webui_question
-        if api_question:
-            log_entry["api_question"] = api_question
-        
-        # Add responses if available
-        if webui_answer:
-            log_entry["webui_answer"] = webui_answer
-        if api_answer:
-            log_entry["api_answer"] = api_answer
-        
-        # Append to log file with pretty formatting (each field on new line)
+        # Append to log file
         with open(st.session_state.session_log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False, indent=2) + "\n")
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
             
     except Exception as e:
         st.error(f"Failed to log Q&A pair: {str(e)}")
 
+# ───────────────────── Observer Cleanup Functions ─────────────────────
+async def cleanup_browser_observers():
+    """Clean up any existing browser observers before starting new streams"""
+    ws_url = "ws://localhost:9222/devtools/page/88E0A660C0870B92DD1E7248EDABA645"
+    
+    try:
+        async with websockets.connect(ws_url) as websocket:
+            # Enable Runtime domain
+            await websocket.send(json.dumps({
+                "id": 1,
+                "method": "Runtime.enable"
+            }))
+            
+            # Wait for response
+            message = await websocket.recv()
+            
+            # Execute cleanup JavaScript
+            cleanup_js = '''
+                (function() {
+                    console.log("Cleaning up existing observers...");
+                    
+                    // Clear all existing intervals
+                    if (window.chatStreamingPollId) {
+                        clearInterval(window.chatStreamingPollId);
+                        window.chatStreamingPollId = null;
+                    }
+                    if (window.chatCompletionCheckId) {
+                        clearInterval(window.chatCompletionCheckId);
+                        window.chatCompletionCheckId = null;
+                    }
+                    
+                    // Disconnect all observers
+                    if (window.chatResponseObserver) {
+                        window.chatResponseObserver.disconnect();
+                        window.chatResponseObserver = null;
+                    }
+                    if (window.chatMainObserver) {
+                        window.chatMainObserver.disconnect();
+                        window.chatMainObserver = null;
+                    }
+                    
+                    // Reset flags
+                    window.chatObserverActive = false;
+                    
+                    console.log("Observer cleanup completed");
+                    return "Cleanup completed";
+                })();
+            '''
+            
+            await websocket.send(json.dumps({
+                "id": 2,
+                "method": "Runtime.evaluate",
+                "params": {
+                    "expression": cleanup_js,
+                    "returnByValue": True
+                }
+            }))
+            
+            # Wait for cleanup response
+            await websocket.recv()
+            
+    except Exception as e:
+        print(f"Observer cleanup error: {e}")
+
+def cleanup_observers_sync():
+    """Synchronous wrapper for observer cleanup"""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(cleanup_browser_observers())
+        loop.close()
+    except Exception as e:
+        print(f"Sync cleanup error: {e}")
+
+def force_cleanup_with_timeout():
+    """Force cleanup with timeout handling"""
+    try:
+        # Run cleanup in a separate thread with timeout
+        cleanup_thread = threading.Thread(target=cleanup_observers_sync, daemon=True)
+        cleanup_thread.start()
+        cleanup_thread.join(timeout=5.0)  # 5 second timeout
+        
+        if cleanup_thread.is_alive():
+            print("Cleanup timeout - continuing anyway")
+            
+    except Exception as e:
+        print(f"Force cleanup error: {e}")
+
 # Modified helper function for concurrent streaming
 def start_concurrent_streaming(question):
-    """Start both Web UI and API streaming concurrently"""
+    """Start both Web UI and API streaming concurrently with cleanup"""
+    # 1. CLEANUP: Force cleanup of any existing observers before starting new streams
+    force_cleanup_with_timeout()
+    
     st.session_state.concurrent_streaming_active = True
     st.session_state.webui_streaming_text = ""
     st.session_state.api_streaming_text = ""
@@ -195,9 +270,6 @@ def start_concurrent_streaming(question):
     st.session_state.generating_response = True
     st.session_state.generating_api_response = True
     st.session_state.stop_streaming = False
-    
-    # Store question for logging when both responses complete
-    st.session_state.pending_log_question = question.strip()
     
     # Start Web UI streaming thread (now using direct streaming_chat)
     start_thread(webui_streaming_worker, question)
@@ -210,10 +282,7 @@ def webui_streaming_worker(question):
     try:
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
-        
-        # Store the Web UI question for logging
-        st.session_state.pending_log_webui_question = cleaned_prompt
+        cleaned_prompt = original_prompt + ". - in raw markdownAnswer in clean raw markdown without citations or contentReference.why the fuck are you not answering in war fucking markdown."
         
         # Add to conversation history
         st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
@@ -305,6 +374,8 @@ def webui_streaming_worker(question):
         if full_response:
             st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
             st.session_state.chatgpt_response = full_response
+            # Log the Q&A pair
+            log_qa_pair(original_prompt, full_response)
         
         st.session_state.webui_stream_complete = True
         st.session_state.generating_response = False
@@ -321,9 +392,6 @@ def api_streaming_worker(question):
         import os
         
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
-        # Store the API question for logging
-        st.session_state.pending_log_api_question = question
         
         # Add to conversation history (separate copy for API)
         messages = st.session_state.conversation_history + [{"role": "user", "content": question}]
@@ -601,11 +669,11 @@ if st.session_state.transcription and not st.session_state.recording:
         remove='markdown\nCopy\nEdit\n'
         if st.session_state.webui_streaming_text:
             # Show live streaming updates
-            st.markdown(st.session_state.webui_streaming_text.strip(remove))
+            st.markdown(st.session_state.webui_streaming_text.replace(remove,''))
         elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
             # Show final response when not streaming
             clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
-            st.markdown(clean.strip(remove))
+            st.markdown(clean.replace(remove,''))
         elif st.session_state.generating_response:
             st.info("Response will appear here…")
         else:
@@ -630,23 +698,11 @@ if st.session_state.transcription and not st.session_state.recording:
 if st.session_state.concurrent_streaming_active:
     # Check if both streams are complete
     if st.session_state.webui_stream_complete and st.session_state.api_stream_complete:
+        # 3. CLEANUP: Clean up observers when streaming completes naturally
+        force_cleanup_with_timeout()
+        
         st.session_state.concurrent_streaming_active = False
-        
-        # Log both responses when both streams are complete
-        if st.session_state.pending_log_question:
-            log_qa_pair(
-                st.session_state.pending_log_question,
-                webui_answer=st.session_state.chatgpt_response,
-                api_answer=st.session_state.api_response,
-                webui_question=st.session_state.pending_log_webui_question,
-                api_question=st.session_state.pending_log_api_question
-            )
-            # Clear after logging
-            st.session_state.pending_log_question = None
-            st.session_state.pending_log_webui_question = None
-            st.session_state.pending_log_api_question = None
-        
-        st.success("✅ Both responses completed!")
+        st.success("✅ Both responses completed! - observers cleaned up")
         st.rerun()
     else:
         # More frequent auto-refresh during active streaming
@@ -677,11 +733,15 @@ if (st.session_state.transcribing and
 
 # ---------- Handle stopped streaming ----------
 if st.session_state.stop_streaming and (st.session_state.generating_response or st.session_state.generating_api_response):
+    # 2. CLEANUP: Clean up observers when user stops streaming
+    force_cleanup_with_timeout()
+    
     st.session_state.generating_response = False
     st.session_state.generating_api_response = False
     st.session_state.stop_streaming = False
+    st.session_state.concurrent_streaming_active = False
     st.session_state.manual_transcription = None  # Clear manual transcription if stopped
-    st.info("🛑 Streaming stopped by user")
+    st.info("🛑 Streaming stopped by user - observers cleaned up")
 
 # live status
 if st.session_state.recording:

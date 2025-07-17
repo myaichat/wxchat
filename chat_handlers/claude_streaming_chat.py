@@ -22,7 +22,7 @@ async def wait_for_response(websocket, command_id):
 
 async def send_message_with_streaming(message, timeout=120):
     """Generator that yields streaming responses as they arrive"""
-    ws_url = "ws://localhost:9222/devtools/page/88E0A660C0870B92DD1E7248EDABA645"
+    ws_url = "ws://localhost:9222/devtools/page/8DB73BEB74A6520C28B7C9607929F317"
     
     try:
         async with websockets.connect(ws_url) as websocket:
@@ -38,7 +38,7 @@ async def send_message_with_streaming(message, timeout=120):
             # Properly escape the message for JavaScript
             escaped_message = json.dumps(message)
             
-            # Set up new observer with proper cleanup
+            # Completely rewritten observer with simpler approach
             observer_js = f'''
                 (async function() {{
                     console.log("Setting up fresh streaming observer");
@@ -50,6 +50,7 @@ async def send_message_with_streaming(message, timeout=120):
                     let responseElement = null;
                     let sentMessageTimestamp = 0;
                     let lastUpdateTime = 0;
+                    let initialPageContent = "";
                     
                     // Cleanup function
                     function cleanup() {{
@@ -78,181 +79,84 @@ async def send_message_with_streaming(message, timeout=120):
                         return element.innerText || element.textContent || '';
                     }}
                     
-                    // Function to get response content (excluding headers/prefixes)
-                    function getResponseContent(element) {{
-                        let text = extractText(element);
+                    // Simple approach: look for new text content that appears after sending message
+                    function findNewResponseContent() {{
+                        // Get all text content from the page
+                        const currentPageContent = document.body.innerText || document.body.textContent || '';
                         
-                        const prefixes = [
-                            'ChatGPT said:',
-                            'Claude said:',
-                            'Assistant:',
-                            'AI:',
-                            'Bot:',
+                        if (!initialPageContent) {{
+                            initialPageContent = currentPageContent;
+                            return '';
+                        }}
+                        
+                        // Find new content that appeared after sending the message
+                        if (currentPageContent.length > initialPageContent.length) {{
+                            const newContent = currentPageContent.substring(initialPageContent.length).trim();
+                            
+                            // Filter out our own message and common UI elements
+                            const filteredContent = newContent
+                                .replace({escaped_message}, '')
+                                .replace(/^\\s*hello\\s*/i, '')
+                                .replace(/^\\s*Thinking about.*$/gm, '')
+                                .replace(/^\\s*Claude can make mistakes.*$/gm, '')
+                                .replace(/^\\s*Share\\s*$/gm, '')
+                                .replace(/^\\s*Retry\\s*$/gm, '')
+                                .replace(/^\\s*Copy\\s*$/gm, '')
+                                .replace(/^\\s*1s\\s*$/gm, '')
+                                .replace(/^\\s*Reply to Claude.*$/gm, '')
+                                .replace(/^\\s*Claude Sonnet.*$/gm, '')
+                                .trim();
+                            
+                            if (filteredContent && filteredContent.length > 5) {{
+                                return filteredContent;
+                            }}
+                        }}
+                        
+                        return '';
+                    }}
+                    
+                    // Alternative approach: look for specific response patterns
+                    function findResponseByPattern() {{
+                        // Look for text that appears to be a response
+                        const responsePatterns = [
+                            // Look for paragraphs that contain typical response content
+                            'Hello! It\\'s nice to meet you',
+                            'Hello!',
+                            'Hi there!',
+                            'How can I help',
+                            'I\\'m Claude',
+                            'I can help you'
                         ];
                         
-                        for (const prefix of prefixes) {{
-                            if (text.startsWith(prefix)) {{
-                                text = text.substring(prefix.length).trim();
-                            }}
-                        }}
-                        
-                        return text;
-                    }}
-                    
-                    // Function to check if this is an assistant message
-                    function isAssistantMessage(element) {{
-                        // Look for specific assistant indicators
-                        if (element.querySelector('[data-message-author-role="assistant"]') ||
-                            element.matches('[data-message-author-role="assistant"]')) {{
-                            return true;
-                        }}
-                        
-                        // Check if this appears after our sent message and doesn't contain our sent text
-                        const elementText = getResponseContent(element);
-                        if (elementText && elementText.length > 10 && !elementText.includes({escaped_message}) && messageSent) {{
-                            const timeSinceMessage = Date.now() - sentMessageTimestamp;
-                            if (timeSinceMessage > 0 && timeSinceMessage < 120000) {{
-                                return true;
-                            }}
-                        }}
-                        
-                        return false;
-                    }}
-                    
-                    // Simplified completion detection
-                    function checkIfComplete(element, text) {{
-                        if (text.length < 20) return false;
-                        
-                        // Check for copy button or other completion indicators
-                        const completionIndicators = [
-                            'button[aria-label*="Copy"]',
-                            'button[data-testid*="copy"]',
-                            'button[title*="Copy"]',
-                        ];
-                        
-                        for (const indicator of completionIndicators) {{
-                            if (element.querySelector(indicator) || document.querySelector(indicator)) {{
-                                return true;
-                            }}
-                        }}
-                        
-                        // Check if text appears to end naturally
-                        const trimmedText = text.trim();
-                        const endsNaturally = /[.!?]\\s*$/.test(trimmedText) || 
-                                             trimmedText.endsWith('```') ||
-                                             /\\n\\s*$/.test(trimmedText);
-                        
-                        return endsNaturally && text.length > 100;
-                    }}
-                    
-                    // Set up mutation observer
-                    window.chatMainObserver = new MutationObserver(function(mutations) {{
-                        if (!messageSent || responseComplete) return;
-                        
-                        mutations.forEach(function(mutation) {{
-                            if (mutation.type === 'childList') {{
-                                mutation.addedNodes.forEach(function(node) {{
-                                    if (node.nodeType === Node.ELEMENT_NODE && !responseFound) {{
-                                        if (isAssistantMessage(node)) {{
-                                            responseFound = true;
-                                            responseElement = node;
-                                            lastUpdateTime = Date.now();
-                                            console.log("RESPONSE_STARTED");
-                                            
-                                            const initialContent = getResponseContent(responseElement);
-                                            if (initialContent && initialContent.length > 0) {{
-                                                lastResponseText = initialContent;
-                                                console.log("RESPONSE_UPDATE:" + initialContent);
-                                            }}
-                                            
-                                            // Monitor this element for changes
-                                            window.chatResponseObserver = new MutationObserver(function(responseMutations) {{
-                                                if (responseComplete) return;
-                                                
-                                                const currentContent = getResponseContent(responseElement);
-                                                if (currentContent !== lastResponseText && currentContent.length > 0) {{
-                                                    lastResponseText = currentContent;
-                                                    lastUpdateTime = Date.now();
-                                                    console.log("RESPONSE_UPDATE:" + currentContent);
-                                                }}
-                                            }});
-                                            
-                                            window.chatResponseObserver.observe(responseElement, {{
-                                                childList: true,
-                                                subtree: true,
-                                                characterData: true,
-                                                attributes: true
-                                            }});
-                                            
-                                            // Polling for streaming updates
-                                            window.chatStreamingPollId = setInterval(() => {{
-                                                if (responseComplete) return;
-                                                
-                                                const currentContent = getResponseContent(responseElement);
-                                                if (currentContent !== lastResponseText && currentContent.length > 0) {{
-                                                    lastResponseText = currentContent;
-                                                    lastUpdateTime = Date.now();
-                                                    console.log("RESPONSE_UPDATE:" + currentContent);
-                                                }}
-                                            }}, 50);
-                                            
-                                            // Completion check with timeout
-                                            let stableCount = 0;
-                                            let maxChecks = 0;
-                                            
-                                            window.chatCompletionCheckId = setInterval(() => {{
-                                                if (responseComplete) return;
-                                                
-                                                maxChecks++;
-                                                if (maxChecks > 240) {{ // 2 minutes max
-                                                    responseComplete = true;
-                                                    console.log("RESPONSE_COMPLETE:" + lastResponseText);
-                                                    cleanup();
-                                                    return;
-                                                }}
-                                                
-                                                const currentContent = getResponseContent(responseElement);
-                                                const timeSinceUpdate = Date.now() - lastUpdateTime;
-                                                
-                                                if (currentContent === lastResponseText && timeSinceUpdate > 3000) {{
-                                                    stableCount++;
-                                                    if (stableCount >= 5) {{ // 2.5 seconds of stability
-                                                        if (checkIfComplete(responseElement, currentContent)) {{
-                                                            responseComplete = true;
-                                                            console.log("RESPONSE_COMPLETE:" + currentContent);
-                                                            cleanup();
-                                                        }} else if (stableCount >= 20) {{ // 10 seconds max stability wait
-                                                            responseComplete = true;
-                                                            console.log("RESPONSE_COMPLETE:" + currentContent);
-                                                            cleanup();
-                                                        }}
-                                                    }}
-                                                }} else {{
-                                                    stableCount = 0;
-                                                }}
-                                            }}, 500);
-                                        }}
+                        for (const pattern of responsePatterns) {{
+                            const elements = document.querySelectorAll('*');
+                            for (const element of elements) {{
+                                const text = extractText(element);
+                                if (text.includes(pattern) && text.length > 10 && text.length < 1000) {{
+                                    // Make sure this isn't our input message
+                                    if (!text.includes({escaped_message}) || text.length > {escaped_message}.length * 2) {{
+                                        return text.trim();
                                     }}
-                                }});
+                                }}
                             }}
-                        }});
-                    }});
+                        }}
+                        
+                        return '';
+                    }}
                     
-                    // Start observing
-                    window.chatMainObserver.observe(document.body, {{
-                        childList: true,
-                        subtree: true
-                    }});
+                    // Capture initial page state
+                    initialPageContent = document.body.innerText || document.body.textContent || '';
                     
                     console.log("Observer active, now sending message");
                     
                     // Find and populate textarea
                     const selectors = [
+                        'textarea[placeholder*="Reply"]',
                         'textarea[placeholder*="Message"]',
-                        'textarea[data-id*="root"]', 
-                        '#prompt-textarea',
+                        'textarea[placeholder*="message"]',
                         'textarea',
                         'div[contenteditable="true"]',
+                        '[role="textbox"]'
                     ];
                     
                     let textarea = null;
@@ -292,15 +196,17 @@ async def send_message_with_streaming(message, timeout=120):
                         textarea.dispatchEvent(new Event(eventType, {{ bubbles: true, cancelable: true }}));
                     }});
                     
-                    // Wait for interface to process (reduced delay)
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    // Wait for interface to process
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     
                     // Find send button
                     const buttonSelectors = [
                         'button[data-testid="send-button"]',
                         'button[aria-label*="Send"]',
+                        'button[aria-label*="send"]',
                         'button[type="submit"]',
                         'button:has(svg)',
+                        'button[class*="send"]',
                         'button:not([disabled])',
                     ];
                     
@@ -324,13 +230,67 @@ async def send_message_with_streaming(message, timeout=120):
                         sentMessageTimestamp = Date.now();
                         lastUpdateTime = Date.now();
                         messageSent = true;
+                        
+                        // Update initial content right before sending
+                        initialPageContent = document.body.innerText || document.body.textContent || '';
+                        
                         sendButton.click();
                         console.log("Message sent, observer monitoring for response");
                         
-                        // Set timeout with cleanup
+                        // Wait a moment for the message to be processed
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        
+                        // Start monitoring for response
+                        let checkCount = 0;
+                        let stableCount = 0;
+                        let hasStarted = false;
+                        
+                        const responseCheckInterval = setInterval(() => {{
+                            checkCount++;
+                            
+                            if (checkCount > 240) {{ // 2 minutes max
+                                console.log("TIMEOUT: Response incomplete after {timeout} seconds");
+                                cleanup();
+                                if (lastResponseText) {{
+                                    console.log("RESPONSE_COMPLETE:" + lastResponseText);
+                                }}
+                                return;
+                            }}
+                            
+                            // Try both approaches to find response
+                            let currentResponse = findNewResponseContent();
+                            if (!currentResponse) {{
+                                currentResponse = findResponseByPattern();
+                            }}
+                            
+                            if (currentResponse && currentResponse !== lastResponseText) {{
+                                if (!hasStarted) {{
+                                    hasStarted = true;
+                                    console.log("RESPONSE_STARTED");
+                                }}
+                                
+                                lastResponseText = currentResponse;
+                                lastUpdateTime = Date.now();
+                                stableCount = 0;
+                                console.log("RESPONSE_UPDATE:" + currentResponse);
+                            }} else if (currentResponse && currentResponse === lastResponseText) {{
+                                const timeSinceUpdate = Date.now() - lastUpdateTime;
+                                if (timeSinceUpdate > 3000) {{ // 3 seconds of stability
+                                    stableCount++;
+                                    if (stableCount >= 3) {{ // 1.5 seconds of stability checks
+                                        console.log("RESPONSE_COMPLETE:" + currentResponse);
+                                        clearInterval(responseCheckInterval);
+                                        cleanup();
+                                    }}
+                                }}
+                            }}
+                        }}, 500);
+                        
+                        // Set overall timeout
                         setTimeout(() => {{
                             if (!responseComplete) {{
                                 console.log("TIMEOUT: Response incomplete after {timeout} seconds");
+                                clearInterval(responseCheckInterval);
                                 cleanup();
                                 if (lastResponseText) {{
                                     console.log("RESPONSE_COMPLETE:" + lastResponseText);
@@ -382,8 +342,8 @@ async def send_message_with_streaming(message, timeout=120):
                                 yield {"status": "started", "content": ""}
                                 
                             elif console_message.startswith("RESPONSE_UPDATE:"):
-                                if response_started:
-                                    content = console_message.replace("RESPONSE_UPDATE:", "")
+                                content = console_message.replace("RESPONSE_UPDATE:", "")
+                                if content.strip():  # Only yield if there's actual content
                                     yield {"status": "streaming", "content": content}
                                     
                             elif console_message.startswith("RESPONSE_COMPLETE:"):

@@ -1,5 +1,6 @@
 streamlit
 openai
+anthropic
 python-dotenv
 SpeechRecognition
 PyAudio
@@ -7,3 +8,4 @@ pygame
 numpy
 requests
 sounddevice
+websocket

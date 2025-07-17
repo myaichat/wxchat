@@ -1,52 +1,52 @@
-# SpeakStream AI: A Voice-Enabled ChatGPT Streaming System
+# Speak & Compare: Real-Time API vs Search-Enhanced ChatGPT Responses
 
-## Overview
+*Record, transcribe, and compare ChatGPT answers from the API and the Search Powered Web UI side by side.*
 
-SpeakStream AI is a sophisticated voice-to-text-to-ChatGPT system that enables users to record audio, automatically transcribe it, and get streaming responses from ChatGPT through multiple channels. The system consists of three main components working together to provide a seamless voice-driven AI interaction experience.
+---
 
-## System Architecture
+## TL;DR
 
-The system is built with a three-tier architecture:
+SpeakStream AI helps you record voice, transcribe with Whisper, and send the same prompt to two ChatGPT endpoints (API and Search Powered Web UI) to compare responses in real time:
 
-1. **Frontend**: Streamlit web application (`chat_app.py`)
-2. **Backend Proxy**: FastAPI server (`streaming_server.py`) 
-3. **WebSocket Client**: Chrome DevTools integration (`streaming_chat.py`)
+* Record voice in the Streamlit app.
+* Transcribe via OpenAI Whisper.
+* Send prompt concurrently to:
+  * **API**: OpenAI Chat Completions.
+  * **Search Powered Web UI**: Browser injection and DOM streaming.
+* View both answers side by side and stop any stream.
+* Log all Q&A pairs in JSON for review.
+
+## Why I Built This
+
+We built SpeakStream AI to record voice, transcribe it, and instantly compare how ChatGPT answers the same question via the API versus the search-powered Web UI. This side-by-side setup highlights differences in speed, formatting, and content.
+
+## System At A Glance
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Streamlit     │───▶│   FastAPI        │───▶│  Chrome DevTools│
-│   Frontend      │    │   Proxy Server   │    │  WebSocket      │
-│   (chat_app.py) │    │(streaming_server)│    │(streaming_chat) │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                                               │
-         │              Direct OpenAI API               │
-         └──────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                       SpeakStream AI                       │
+├───────────────┬─────────────────────┬──────────────────────┤
+│   Streamlit   │  FastAPI Proxy      │ Chrome DevTools WS   │
+│  Frontend     │  (WebUI relay)      │  + Browser Injection │
+│ (chat_app.py) │ (streaming_server)  │ (streaming_chat.py)  │
+└──────┬────────┴───────────┬─────────┴──────────────┬──────┘
+       │                    │                        │
+       │                    └──────────────▶ Inject prompt into
+       │                                      open ChatGPT tab;
+       │                                      stream DOM text back
+       │
+       ├────────────────────────────────────▶ Direct OpenAI API
+       │                                      stream (Chat Completions)
+       │
+       └────────────────────────────────────▶ JSON logging (Q/A)
 ```
 
-## Key Features
+**Three tiers; two answer feeds; one voice prompt.**
 
-### 🎙️ Voice Recording & Transcription
-- **Real-time audio recording** using `sounddevice` library
-- **Thread-safe recording** with proper session state management
-- **Automatic transcription** using OpenAI Whisper API
-- **Manual transcription editing** with form-based input
-- **Auto-transcribe toggle** for hands-free operation
+---
 
-### 🚀 Dual Streaming Responses
-The system provides **concurrent streaming** from two sources:
-1. **Web UI Streaming**: Via Chrome DevTools WebSocket connection
-2. **API Streaming**: Direct OpenAI API calls
+## Key Capabilities
 
-Both streams run simultaneously, allowing users to compare responses in real-time.
-
-### 📝 Smart Streaming Display
-- **Incremental text updates** with cursor indicator (▌)
-- **Smart breakpoint detection** for natural text flow
-- **Unicode handling** for special characters and emojis
-- **Stop streaming** functionality with user control
-
-### 💾 Comprehensive Logging
-- **Session-based logging** with timestamped JSON files
 - **Question-answer pair tracking** with model information
 - **Separate logs** for server and client interactions
 - **UTF-8 encoding support** for international characters

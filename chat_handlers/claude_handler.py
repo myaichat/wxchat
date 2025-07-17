@@ -1,5 +1,5 @@
 """
-ChatGPT Handler Module - Handles both Web UI and API streaming responses
+Claude Handler Module - Handles both Web UI and API streaming responses
 """
 import streamlit as st
 import asyncio
@@ -7,9 +7,9 @@ import threading
 import datetime
 import json
 import os
-from openai import OpenAI
+import anthropic
 from streamlit.runtime.scriptrunner import add_script_run_ctx
-from chat_handlers.chatgpt_streaming_chat import send_message_with_streaming
+from chat_handlers.claude_streaming_chat import send_message_with_streaming
 
 TIMEOUT_SEC = 60
 
@@ -50,17 +50,17 @@ def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None,
 
 def start_concurrent_streaming(question):
     """Start both Web UI and API streaming concurrently"""
-    st.session_state.concurrent_streaming_active = True
-    st.session_state.webui_streaming_text = ""
-    st.session_state.api_streaming_text = ""
-    st.session_state.webui_stream_complete = False
-    st.session_state.api_stream_complete = False
-    st.session_state.generating_response = True
-    st.session_state.generating_api_response = True
+    st.session_state.claude_concurrent_streaming_active = True
+    st.session_state.claude_webui_streaming_text = ""
+    st.session_state.claude_api_streaming_text = ""
+    st.session_state.claude_webui_stream_complete = False
+    st.session_state.claude_api_stream_complete = False
+    st.session_state.claude_generating_response = True
+    st.session_state.claude_generating_api_response = True
     st.session_state.stop_streaming = False
     
     # Store question for logging when both responses complete
-    st.session_state.pending_log_question = question.strip()
+    st.session_state.claude_pending_log_question = question.strip()
     
     # Start Web UI streaming thread (now using direct streaming_chat)
     start_thread(webui_streaming_worker, question)
@@ -76,10 +76,10 @@ def webui_streaming_worker(question):
         cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
         
         # Store the Web UI question for logging
-        st.session_state.pending_log_webui_question = cleaned_prompt
+        st.session_state.claude_pending_log_webui_question = cleaned_prompt
         
         # Add to conversation history
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
+        st.session_state.claude_conversation_history.append({"role": "user", "content": cleaned_prompt})
         
         full_response = ""
         previous = ""
@@ -103,7 +103,7 @@ def webui_streaming_worker(question):
                     
                     if status == "started":
                         response_started = True
-                        st.session_state.webui_streaming_text = "🚀 Assistant started typing..."
+                        st.session_state.claude_webui_streaming_text = "🚀 Assistant started typing..."
                     elif status == "streaming":
                         # Update session state with streaming content
                         if len(content) > len(previous):
@@ -132,7 +132,7 @@ def webui_streaming_worker(question):
                                 new_chunk = content[len(previous):last_safe_pos]
                                 full_response += new_chunk
                                 # Update session state for UI display
-                                st.session_state.webui_streaming_text = full_response + "▌"
+                                st.session_state.claude_webui_streaming_text = full_response + "▌"
                                 previous = content[:last_safe_pos]
                             elif len(content) > len(previous) + 150:
                                 force_pos = len(previous) + 100
@@ -140,7 +140,7 @@ def webui_streaming_worker(question):
                                 if last_space > len(previous):
                                     new_chunk = content[len(previous):last_space + 1]
                                     full_response += new_chunk
-                                    st.session_state.webui_streaming_text = full_response + "▌"
+                                    st.session_state.claude_webui_streaming_text = full_response + "▌"
                                     previous = content[:last_space + 1]
                     elif status == "complete":
                         if len(content) > len(previous):
@@ -150,12 +150,12 @@ def webui_streaming_worker(question):
                             full_response = content
                         
                         # Final update to session state
-                        st.session_state.webui_streaming_text = full_response
+                        st.session_state.claude_webui_streaming_text = full_response
                         break
                     elif status in ["timeout", "error"]:
-                        st.session_state.webui_streaming_text = f"Streaming error: {content}"
-                        st.session_state.webui_stream_complete = True
-                        st.session_state.generating_response = False
+                        st.session_state.claude_webui_streaming_text = f"Streaming error: {content}"
+                        st.session_state.claude_webui_stream_complete = True
+                        st.session_state.claude_generating_response = False
                         return
             
             # Run the async streaming
@@ -166,66 +166,67 @@ def webui_streaming_worker(question):
         
         # Store final response
         if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-            st.session_state.chatgpt_response = full_response
+            st.session_state.claude_conversation_history.append({"role": "assistant", "content": full_response})
+            st.session_state.claude_response = full_response
         
-        st.session_state.webui_stream_complete = True
-        st.session_state.generating_response = False
+        st.session_state.claude_webui_stream_complete = True
+        st.session_state.claude_generating_response = False
         
     except Exception as e:
-        st.session_state.webui_streaming_text = f"Error: {str(e)}"
-        st.session_state.webui_stream_complete = True
-        st.session_state.generating_response = False
+        st.session_state.claude_webui_streaming_text = f"Error: {str(e)}"
+        st.session_state.claude_webui_stream_complete = True
+        st.session_state.claude_generating_response = False
 
 def api_streaming_worker(question):
-    """Worker thread for API streaming - updates session state incrementally"""
+    """Worker thread for Claude API streaming - updates session state incrementally"""
     try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         
         # Store the API question for logging
-        st.session_state.pending_log_api_question = question
+        st.session_state.claude_pending_log_api_question = question
         
         # Add to separate API conversation history
-        st.session_state.api_conversation_history.append({"role": "user", "content": question})
+        st.session_state.claude_api_conversation_history.append({"role": "user", "content": question})
         
-        # Use separate API conversation history
-        messages = st.session_state.api_conversation_history
+        # Use separate API conversation history - convert to Claude format
+        messages = []
+        for msg in st.session_state.claude_api_conversation_history:
+            if msg["role"] in ["user", "assistant"]:
+                messages.append(msg)
         
         full_response = ""
         
-        # Stream the response
-        stream = client.chat.completions.create(
-            model=st.session_state.selected_model,
-            messages=messages,
-            stream=True
-        )
-        
-        st.session_state.api_streaming_text = "🚀 API started typing..."
-        
-        for chunk in stream:
-            if st.session_state.stop_streaming:
-                break
-                
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
+        # Stream the response using Claude API
+        with client.messages.stream(
+            model="claude-3-5-sonnet-20241022",  # Use Claude model
+            max_tokens=4000,
+            messages=messages
+        ) as stream:
+            st.session_state.claude_api_streaming_text = "🚀 Claude API started typing..."
+            
+            for text in stream.text_stream:
+                if st.session_state.stop_streaming:
+                    break
+                    
+                full_response += text
                 # Update session state with cursor
-                st.session_state.api_streaming_text = full_response + "▌"
+                st.session_state.claude_api_streaming_text = full_response + "▌"
         
         # Final update without cursor
-        st.session_state.api_streaming_text = full_response
-        st.session_state.api_response = full_response
+        st.session_state.claude_api_streaming_text = full_response
+        st.session_state.claude_api_response = full_response
         
         # Add response to separate API conversation history
         if full_response:
-            st.session_state.api_conversation_history.append({"role": "assistant", "content": full_response})
+            st.session_state.claude_api_conversation_history.append({"role": "assistant", "content": full_response})
         
-        st.session_state.api_stream_complete = True
-        st.session_state.generating_api_response = False
+        st.session_state.claude_api_stream_complete = True
+        st.session_state.claude_generating_api_response = False
         
     except Exception as e:
-        st.session_state.api_streaming_text = f"Error: {str(e)}"
-        st.session_state.api_stream_complete = True
-        st.session_state.generating_api_response = False
+        st.session_state.claude_api_streaming_text = f"Error: {str(e)}"
+        st.session_state.claude_api_stream_complete = True
+        st.session_state.claude_generating_api_response = False
 
 def get_chatgpt_response(prompt, show_streaming=True, container=None):
     """Get streaming response from ChatGPT"""
@@ -286,35 +287,35 @@ def get_chatgpt_response(prompt, show_streaming=True, container=None):
         st.error(f"ChatGPT API error: {str(e)}")
         return None
 
-def render_chatgpt_responses():
-    """Render the ChatGPT response UI with tabs containing Web UI and API columns"""
+def render_claude_responses():
+    """Render the Claude response UI with tabs containing Web UI and API columns"""
     if not (st.session_state.transcription and not st.session_state.recording):
         return
         
-    st.subheader("🤖 ChatGPT Response")
+    st.subheader("🤖 Claude Response")
 
     # Show generating status
-    if st.session_state.generating_response or st.session_state.generating_api_response:
+    if st.session_state.claude_generating_response or st.session_state.claude_generating_api_response:
         active_streams = []
-        if st.session_state.generating_response:
+        if st.session_state.claude_generating_response:
             active_streams.append("Web UI")
-        if st.session_state.generating_api_response:
+        if st.session_state.claude_generating_api_response:
             active_streams.append("API")
         st.info(f"🔄 Generating responses: {', '.join(active_streams)}")
 
     # Stop button for concurrent streaming - placed above tabs
-    if st.session_state.concurrent_streaming_active:
-        if st.button("🛑 Stop All Streaming"):
+    if st.session_state.claude_concurrent_streaming_active:
+        if st.button("🛑 Stop All Streaming", key="claude_stop_streaming"):
             st.session_state.stop_streaming = True
-            st.session_state.concurrent_streaming_active = False
-            st.session_state.generating_response = False
-            st.session_state.generating_api_response = False
+            st.session_state.claude_concurrent_streaming_active = False
+            st.session_state.claude_generating_response = False
+            st.session_state.claude_generating_api_response = False
             st.rerun()
 
-    # Create tabs for ChatGPT responses
-    chatgpt_tab = st.tabs(["💬 ChatGPT"])
+    # Create tabs for Claude responses
+    claude_tab = st.tabs(["🤖 Claude"])
     
-    with chatgpt_tab[0]:
+    with claude_tab[0]:
         # Two side-by-side panes with concurrent streaming
         col_web, col_api = st.columns(2)
 
@@ -323,14 +324,14 @@ def render_chatgpt_responses():
             st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
             
             remove='markdown\nCopy\nEdit\n'
-            if st.session_state.webui_streaming_text:
+            if st.session_state.claude_webui_streaming_text:
                 # Show live streaming updates
-                st.markdown(st.session_state.webui_streaming_text.strip(remove))
-            elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
+                st.markdown(st.session_state.claude_webui_streaming_text.strip(remove))
+            elif st.session_state.claude_response and not st.session_state.claude_concurrent_streaming_active:
                 # Show final response when not streaming
-                clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
+                clean = st.session_state.claude_response.encode("utf-8", errors="replace").decode("utf-8")
                 st.markdown(clean.strip(remove))
-            elif st.session_state.generating_response:
+            elif st.session_state.claude_generating_response:
                 st.info("Response will appear here…")
             else:
                 st.info("Click **Get Both Responses** to generate responses")
@@ -339,41 +340,41 @@ def render_chatgpt_responses():
         with col_api:
             st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
             
-            if st.session_state.api_streaming_text:
+            if st.session_state.claude_api_streaming_text:
                 # Show live streaming updates
-                st.markdown(st.session_state.api_streaming_text)
-            elif st.session_state.api_response and not st.session_state.concurrent_streaming_active:
+                st.markdown(st.session_state.claude_api_streaming_text)
+            elif st.session_state.claude_api_response and not st.session_state.claude_concurrent_streaming_active:
                 # Show final response when not streaming
-                st.markdown(st.session_state.api_response)
-            elif st.session_state.generating_api_response:
+                st.markdown(st.session_state.claude_api_response)
+            elif st.session_state.claude_generating_api_response:
                 st.info("API response will appear here…")
             else:
                 st.info("Responses will appear here")
 
 def handle_concurrent_streaming():
     """Handle auto-refresh and completion logic for concurrent streaming"""
-    if not st.session_state.concurrent_streaming_active:
+    if not st.session_state.claude_concurrent_streaming_active:
         return
         
     # Check if both streams are complete
-    if st.session_state.webui_stream_complete and st.session_state.api_stream_complete:
-        st.session_state.concurrent_streaming_active = False
+    if st.session_state.claude_webui_stream_complete and st.session_state.claude_api_stream_complete:
+        st.session_state.claude_concurrent_streaming_active = False
         
         # Log both responses when both streams are complete
-        if st.session_state.pending_log_question:
+        if st.session_state.claude_pending_log_question:
             log_qa_pair(
-                st.session_state.pending_log_question,
-                webui_answer=st.session_state.chatgpt_response,
-                api_answer=st.session_state.api_response,
-                webui_question=st.session_state.pending_log_webui_question,
-                api_question=st.session_state.pending_log_api_question
+                st.session_state.claude_pending_log_question,
+                webui_answer=st.session_state.claude_response,
+                api_answer=st.session_state.claude_api_response,
+                webui_question=st.session_state.claude_pending_log_webui_question,
+                api_question=st.session_state.claude_pending_log_api_question
             )
             # Clear after logging
-            st.session_state.pending_log_question = None
-            st.session_state.pending_log_webui_question = None
-            st.session_state.pending_log_api_question = None
+            st.session_state.claude_pending_log_question = None
+            st.session_state.claude_pending_log_webui_question = None
+            st.session_state.claude_pending_log_api_question = None
         
-        st.success("✅ Both responses completed!")
+        st.success("✅ Both Claude responses completed!")
         st.rerun()
     else:
         # More frequent auto-refresh during active streaming
@@ -383,9 +384,9 @@ def handle_concurrent_streaming():
 
 def handle_stopped_streaming():
     """Handle stopped streaming cleanup"""
-    if st.session_state.stop_streaming and (st.session_state.generating_response or st.session_state.generating_api_response):
-        st.session_state.generating_response = False
-        st.session_state.generating_api_response = False
+    if st.session_state.stop_streaming and (st.session_state.claude_generating_response or st.session_state.claude_generating_api_response):
+        st.session_state.claude_generating_response = False
+        st.session_state.claude_generating_api_response = False
         st.session_state.stop_streaming = False
         st.session_state.manual_transcription = None  # Clear manual transcription if stopped
-        st.info("🛑 Streaming stopped by user")
+        st.info("🛑 Claude streaming stopped by user")

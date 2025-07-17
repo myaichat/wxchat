@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-simple_ask_chatgpt.py  –  directly call send_message_with_streaming and stream the reply
+simple_ask_claude.py  –  directly call send_message_with_streaming and stream the reply
 
 Usage:
-    python simple_ask_chatgpt.py "Your prompt here"
+    python simple_ask_claude.py "Your prompt here"
 """
 
 import asyncio
@@ -14,7 +14,7 @@ import os
 from datetime import datetime
 
 # Import the streaming function directly
-from chat_handlers.chatgpt_streaming_chat import send_message_with_streaming
+from chat_handlers.claude_streaming_chat import send_message_with_streaming
 
 # Fix Windows console encoding issues
 if sys.platform == "win32":
@@ -41,7 +41,7 @@ def safe_print(text, end="\n", flush=False):
             print(fallback_text, end=end, flush=flush)
 
 
-def save_chat_log(question: str, answer: str, model: str = "gpt-4o"):
+def save_chat_log(question: str, answer: str, model: str = "claude-3.5-sonnet"):
     """Save individual chat session to timestamped JSON file"""
     # Ensure logs directory exists
     os.makedirs("logs", exist_ok=True)
@@ -60,7 +60,7 @@ def save_chat_log(question: str, answer: str, model: str = "gpt-4o"):
     }
     
     # Save to individual timestamped file
-    filename = f"logs/simple_ask_chatgpt_chat_session_{filename_timestamp}.json"
+    filename = f"logs/simple_ask_claude_chat_session_{filename_timestamp}.json"
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(log_entry, f, ensure_ascii=False, indent=2)
     
@@ -177,7 +177,7 @@ async def stream_chat(prompt: str):
 
 async def main():
     if len(sys.argv) < 2:
-        print("Usage: python simple_ask_chatgpt.py \"Your prompt here\"")
+        print("Usage: python simple_ask_claude.py \"Your prompt here\"")
         sys.exit(1)
 
     await stream_chat(sys.argv[1])

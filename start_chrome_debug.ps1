@@ -1,59 +1,75 @@
-# Kill only Chrome process using port 9222
-$port9222Process = netstat -ano | findstr ':9222' | findstr 'LISTENING'
-if ($port9222Process) {
-    $pid = ($port9222Process -split '\s+')[-1]
+# Use a different port to avoid conflicts
+$debugPort = 9223
+
+# Kill only Chrome process using the debug port
+$portProcess = netstat -ano | findstr ":$debugPort" | findstr 'LISTENING'
+if ($portProcess) {
+    $pid = ($portProcess -split '\s+')[-1]
     if ($pid) {
-        Write-Host "🔄 Killing Chrome process on port 9222 (PID: $pid)"
+        Write-Host "Killing Chrome process on port $debugPort (PID: $pid)"
         taskkill /F /PID $pid 2>$null
         Start-Sleep -Seconds 1
     }
 } else {
-    Write-Host "ℹ️  No Chrome process found on port 9222"
+    Write-Host "No Chrome process found on port $debugPort"
+}
+
+# Remove existing debug directory to avoid conflicts
+$debugDir = "chrome-debug-$debugPort"
+if (Test-Path $debugDir) {
+    Write-Host "Removing existing debug directory..."
+    Remove-Item -Recurse -Force $debugDir -ErrorAction SilentlyContinue
 }
 
 # Start Chrome with remote debugging in a new process
 $chromeArgs = @(
-    "--remote-debugging-port=9222",
-    "--user-data-dir=chrome-debug",
+    "--remote-debugging-port=$debugPort",
+    "--user-data-dir=$debugDir",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
-    "--disable-backgrounding-occluded-windows"
+    "--disable-backgrounding-occluded-windows",
+    "--no-first-run",
+    "--disable-default-apps"
 )
 
+Write-Host "Starting Chrome with debugging enabled..."
 Start-Process -FilePath "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList $chromeArgs
 
-# Wait for port 9222 to open (up to 10 seconds)
-$timeout = 20
+# Wait for debug port to open (up to 20 seconds)
+$timeout = 40
 $counter = 0
-while (-not (netstat -an | findstr ':9222') -and $counter -lt $timeout) {
+Write-Host "Waiting for port $debugPort to open..."
+while (-not (netstat -an | findstr ":$debugPort") -and $counter -lt $timeout) {
     Start-Sleep -Milliseconds 500
     $counter++
+    if ($counter % 4 -eq 0) {
+        Write-Host "Still waiting... ($($counter/2) seconds elapsed)"
+    }
 }
 
-if ($counter -lt $timeout) {
-    Write-Host "✅ Port 9222 is now open."
-    
-    # Wait a bit more for Chrome to fully initialize
-    Start-Sleep -Seconds 2
-    
-    # Get the WebSocket debugger URL
-    try {
-        $response = curl -s http://localhost:9222/json
-        if ($response) {
-            $jsonData = $response | ConvertFrom-Json
-            if ($jsonData.Count -gt 1) {
-                $webSocketUrl = $jsonData[1].webSocketDebuggerUrl
-                Write-Host "🔗 WebSocket Debugger URL: $webSocketUrl"
-            } else {
-                Write-Host "⚠️  Not enough tabs/pages available. WebSocket URL: $($jsonData[0].webSocketDebuggerUrl)"
-            }
-        } else {
-            Write-Host "❌ Failed to get response from Chrome debugging endpoint."
-        }
-    } catch {
-        Write-Host "❌ Error retrieving WebSocket URL: $($_.Exception.Message)"
-        Write-Host "💡 You can manually check: http://localhost:9222/json"
+if ($counter -ge $timeout) {
+    Write-Host "Port $debugPort did not open in time after $($timeout/2) seconds."
+    Write-Host "Chrome may have failed to start or is taking longer than expected."
+    exit
+}
+
+Write-Host "Port $debugPort is now open."
+
+# Wait a bit more for Chrome to fully initialize
+Start-Sleep -Seconds 2
+
+# Get the WebSocket debugger URL
+$response = Invoke-RestMethod -Uri "http://localhost:$debugPort/json" -Method Get -ErrorAction SilentlyContinue
+
+if ($response -and $response.Count -gt 0) {
+    if ($response.Count -gt 1) {
+        $webSocketUrl = $response[1].webSocketDebuggerUrl
+        Write-Host "WebSocket Debugger URL: $webSocketUrl"
+    } else {
+        $webSocketUrl = $response[0].webSocketDebuggerUrl
+        Write-Host "Only one tab/page available. WebSocket URL: $webSocketUrl"
     }
 } else {
-    Write-Host "❌ Port 9222 did not open in time."
+    Write-Host "Error retrieving WebSocket URL or no response from Chrome debugging endpoint."
+    Write-Host "You can manually check: http://localhost:$debugPort/json"
 }

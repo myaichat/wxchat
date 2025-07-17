@@ -8,7 +8,6 @@ import json
 from include.transcribe import Transcribe
 from pathlib import Path
 from dotenv import load_dotenv
-from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=Path(".") / ".env", override=True)
@@ -60,25 +59,8 @@ if "api_response" not in st.session_state:
     st.session_state.api_response = None  # store API response separately
 if "generating_api_response" not in st.session_state:
     st.session_state.generating_api_response = False  # flag for API response generation
-if "webui_streaming_text" not in st.session_state:
-    st.session_state.webui_streaming_text = ""
-if "api_streaming_text" not in st.session_state:
-    st.session_state.api_streaming_text = ""
-if "webui_stream_complete" not in st.session_state:
-    st.session_state.webui_stream_complete = False
-if "api_stream_complete" not in st.session_state:
-    st.session_state.api_stream_complete = False
-if "concurrent_streaming_active" not in st.session_state:
-    st.session_state.concurrent_streaming_active = False
 
 # ───────────────────── helper functions ─────────────────────
-def start_thread(fn, *args, **kwargs):
-    """Utility – start a daemon thread that can call Streamlit commands."""
-    th = threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
-    add_script_run_ctx(th)          # <- critical line
-    th.start()
-    return th
-
 def record_worker(stop_evt: threading.Event,
                   audio_q: queue.Queue,
                   frames: list[np.ndarray]):
@@ -141,268 +123,6 @@ def log_qa_pair(question: str, answer: str):
             
     except Exception as e:
         st.error(f"Failed to log Q&A pair: {str(e)}")
-
-# Modified helper function for concurrent streaming
-def start_concurrent_streaming(question):
-    """Start both Web UI and API streaming concurrently"""
-    st.session_state.concurrent_streaming_active = True
-    st.session_state.webui_streaming_text = ""
-    st.session_state.api_streaming_text = ""
-    st.session_state.webui_stream_complete = False
-    st.session_state.api_stream_complete = False
-    st.session_state.generating_response = True
-    st.session_state.generating_api_response = True
-    st.session_state.stop_streaming = False
-    
-    # Start Web UI streaming thread
-    start_thread(webui_streaming_worker, question)
-    
-    # Start API streaming thread  
-    start_thread(api_streaming_worker, question)
-
-def webui_streaming_worker(question):
-    """Worker thread for Web UI streaming - updates session state incrementally"""
-    try:
-        # Store original prompt for logging
-        original_prompt = question.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        # Add to conversation history
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
-        
-        full_response = ""
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
-        
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
-            
-            previous = ""
-            response_started = False
-            
-            for raw in resp.iter_lines(decode_unicode=True):
-                if st.session_state.stop_streaming:
-                    break
-                
-                if not raw:
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
-                    
-                    if status == "started":
-                        response_started = True
-                        st.session_state.webui_streaming_text = "🚀 Assistant started typing..."
-                    elif status == "streaming":
-                        # Update session state with streaming content
-                        if len(content) > len(previous):
-                            # Smart streaming logic
-                            safe_patterns = [
-                                '\n\n', '\n- ', '\n## ', '\n### ', '. ', '! ', '? ', 
-                                ', ', '; ', ': ', '**.', '**,', '**:', '`.', '`,', '```\n'
-                            ]
-                            
-                            last_safe_pos = len(previous)
-                            for pattern in safe_patterns:
-                                pos = content.rfind(pattern, len(previous))
-                                if pos != -1 and pos + len(pattern) > last_safe_pos:
-                                    last_safe_pos = pos + len(pattern)
-                            
-                            space_pos = content.rfind(' ', len(previous))
-                            if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                                check_pos = space_pos + 1
-                                if check_pos < len(content):
-                                    before_space = content[max(0, space_pos-5):space_pos]
-                                    after_space = content[space_pos:min(len(content), space_pos+5)]
-                                    if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                        last_safe_pos = check_pos
-                            
-                            if last_safe_pos > len(previous) + 15:
-                                new_chunk = content[len(previous):last_safe_pos]
-                                full_response += new_chunk
-                                # Update session state for UI display
-                                st.session_state.webui_streaming_text = full_response + "▌"
-                                previous = content[:last_safe_pos]
-                            elif len(content) > len(previous) + 150:
-                                force_pos = len(previous) + 100
-                                last_space = content.rfind(' ', len(previous), force_pos)
-                                if last_space > len(previous):
-                                    new_chunk = content[len(previous):last_space + 1]
-                                    full_response += new_chunk
-                                    st.session_state.webui_streaming_text = full_response + "▌"
-                                    previous = content[:last_space + 1]
-                    elif status == "complete":
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            full_response = content
-                        
-                        # Final update to session state
-                        st.session_state.webui_streaming_text = full_response
-                        break
-                    elif status in ["timeout", "error"]:
-                        st.session_state.webui_streaming_text = f"Backend server {status}: {content}"
-                        st.session_state.webui_stream_complete = True
-                        st.session_state.generating_response = False
-                        return
-                        
-                except (json.JSONDecodeError, Exception):
-                    continue
-        
-        # Store final response
-        if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-            st.session_state.chatgpt_response = full_response
-            # Log the Q&A pair
-            log_qa_pair(original_prompt, full_response)
-        
-        st.session_state.webui_stream_complete = True
-        st.session_state.generating_response = False
-        
-    except Exception as e:
-        st.session_state.webui_streaming_text = f"Error: {str(e)}"
-        st.session_state.webui_stream_complete = True
-        st.session_state.generating_response = False
-
-def api_streaming_worker(question):
-    """Worker thread for API streaming - updates session state incrementally"""
-    try:
-        from openai import OpenAI
-        import os
-        
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
-        # Add to conversation history (separate copy for API)
-        messages = st.session_state.conversation_history + [{"role": "user", "content": question}]
-        
-        full_response = ""
-        
-        # Stream the response
-        stream = client.chat.completions.create(
-            model=st.session_state.selected_model,
-            messages=messages,
-            stream=True
-        )
-        
-        st.session_state.api_streaming_text = "🚀 API started typing..."
-        
-        for chunk in stream:
-            if st.session_state.stop_streaming:
-                break
-                
-            if chunk.choices[0].delta.content is not None:
-                full_response += chunk.choices[0].delta.content
-                # Update session state with cursor
-                st.session_state.api_streaming_text = full_response + "▌"
-        
-        # Final update without cursor
-        st.session_state.api_streaming_text = full_response
-        st.session_state.api_response = full_response
-        
-        st.session_state.api_stream_complete = True
-        st.session_state.generating_api_response = False
-        
-    except Exception as e:
-        st.session_state.api_streaming_text = f"Error: {str(e)}"
-        st.session_state.api_stream_complete = True
-        st.session_state.generating_api_response = False
-
-# Modified get_chatgpt_response_backend for thread-safe operation
-def get_chatgpt_response_backend_threaded(prompt):
-    """Thread-safe version that updates session state incrementally"""
-    try:
-        original_prompt = prompt.strip()
-        cleaned_prompt = original_prompt + ". Answer in clean raw markdown without citations."
-        
-        st.session_state.conversation_history.append({"role": "user", "content": cleaned_prompt})
-        
-        full_response = ""
-        payload = {"message": cleaned_prompt, "timeout": TIMEOUT_SEC}
-        
-        with requests.post(BACKEND_URL, json=payload, stream=True) as resp:
-            resp.raise_for_status()
-            
-            previous = ""
-            response_started = False
-            
-            for raw in resp.iter_lines(decode_unicode=True):
-                if st.session_state.stop_streaming:
-                    break
-                
-                if not raw:
-                    continue
-                
-                try:
-                    data = json.loads(raw)
-                    status, content = data["status"], data["content"]
-                    
-                    if status == "started":
-                        response_started = True
-                        st.session_state.webui_streaming_text = "🚀 Assistant started typing..."
-                    elif status == "streaming":
-                        # Update session state with streaming content
-                        if len(content) > len(previous):
-                            # Use same smart streaming logic but update session state
-                            safe_patterns = [
-                                '\n\n', '\n- ', '\n## ', '\n### ', '. ', '! ', '? ', 
-                                ', ', '; ', ': ', '**.', '**,', '**:', '`.', '`,', '```\n'
-                            ]
-                            
-                            last_safe_pos = len(previous)
-                            for pattern in safe_patterns:
-                                pos = content.rfind(pattern, len(previous))
-                                if pos != -1 and pos + len(pattern) > last_safe_pos:
-                                    last_safe_pos = pos + len(pattern)
-                            
-                            space_pos = content.rfind(' ', len(previous))
-                            if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                                check_pos = space_pos + 1
-                                if check_pos < len(content):
-                                    before_space = content[max(0, space_pos-5):space_pos]
-                                    after_space = content[space_pos:min(len(content), space_pos+5)]
-                                    if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                        last_safe_pos = check_pos
-                            
-                            if last_safe_pos > len(previous) + 15:
-                                new_chunk = content[len(previous):last_safe_pos]
-                                full_response += new_chunk
-                                # Update session state for UI display
-                                st.session_state.webui_streaming_text = full_response + "▌"
-                                previous = content[:last_safe_pos]
-                            elif len(content) > len(previous) + 150:
-                                force_pos = len(previous) + 100
-                                last_space = content.rfind(' ', len(previous), force_pos)
-                                if last_space > len(previous):
-                                    new_chunk = content[len(previous):last_space + 1]
-                                    full_response += new_chunk
-                                    st.session_state.webui_streaming_text = full_response + "▌"
-                                    previous = content[:last_space + 1]
-                    elif status == "complete":
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            full_response = content
-                        
-                        # Final update to session state
-                        st.session_state.webui_streaming_text = full_response
-                        break
-                    elif status in ["timeout", "error"]:
-                        st.session_state.webui_streaming_text = f"Backend server {status}: {content}"
-                        return None
-                        
-                except (json.JSONDecodeError, Exception):
-                    continue
-        
-        if full_response:
-            st.session_state.conversation_history.append({"role": "assistant", "content": full_response})
-        
-        return full_response, original_prompt
-        
-    except Exception as e:
-        st.session_state.webui_streaming_text = f"Error: {str(e)}"
-        return None
 
 def get_chatgpt_response(prompt, show_streaming=True, container=None):
     """Get streaming response from ChatGPT"""
@@ -796,82 +516,71 @@ if st.session_state.last_wav and not st.session_state.recording:
                 st.session_state.generating_response = False
                 st.rerun()
         
-        # Handle form submission (Ctrl+Enter or button click)  
+        # Handle form submission (Ctrl+Enter or button click)
         if submitted and not st.session_state.generating_response:
-            question = current_transcription()
-            start_concurrent_streaming(question)  # Use concurrent streaming
-            st.rerun()
+            st.session_state.generating_response = True
+            st.session_state.chatgpt_response = None
+            st.session_state.generating_api_response = True  # Also start API generation
+            st.session_state.api_response = None
+            st.session_state.stop_streaming = False
+            st.session_state.manual_transcription = edited_text  # Store for manual processing
+            st.rerun()  # Refresh to show generating status
 
-# Modified ChatGPT Response section with concurrent streaming
+# ---------- ChatGPT Response ----------
 if st.session_state.transcription and not st.session_state.recording:
     st.subheader("🤖 ChatGPT Response")
 
-    # Show generating status
-    if st.session_state.generating_response or st.session_state.generating_api_response:
-        active_streams = []
-        if st.session_state.generating_response:
-            active_streams.append("Web UI")
-        if st.session_state.generating_api_response:
-            active_streams.append("API")
-        st.info(f"🔄 Generating responses: {', '.join(active_streams)}")
+    # Show generating status only when in progress
+    if st.session_state.generating_response:
+        st.info("🔄 Generating response...")
 
-    # Stop button for concurrent streaming - placed above columns
-    if st.session_state.concurrent_streaming_active:
-        if st.button("🛑 Stop All Streaming"):
-            st.session_state.stop_streaming = True
-            st.session_state.concurrent_streaming_active = False
-            st.session_state.generating_response = False
-            st.session_state.generating_api_response = False
-            st.rerun()
-
-    # Two side-by-side panes with concurrent streaming
+    # ⬇️ NEW — two side‑by‑side panes instead of tabs
     col_web, col_api = st.columns(2)
 
-    # Web UI pane
+    # ───────── Web‑UI pane ─────────
     with col_web:
         st.markdown("### Web UI")
-        
-        if st.session_state.webui_streaming_text:
-            # Show live streaming updates
-            st.markdown(st.session_state.webui_streaming_text)
-        elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
-            # Show final response when not streaming
-            clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
-            st.markdown(clean)
-        elif st.session_state.generating_response:
-            st.info("Response will appear here…")
-        else:
-            st.info("Click **Get Both Responses** to generate responses")
+        webui_container = st.container()
 
-    # API pane
+        if st.session_state.chatgpt_response:
+            with webui_container:
+                clean = st.session_state.chatgpt_response.encode(
+                    "utf‑8", errors="replace"
+                ).decode("utf‑8")
+                st.markdown(clean)
+        elif st.session_state.generating_response:
+            with webui_container:
+                st.session_state.webui_streaming_container = webui_container
+                st.info("Response will appear here…")
+        else:
+            with webui_container:
+                st.info("Click **Get ChatGPT Response** to generate a response")
+
+    # ───────── API pane ─────────
     with col_api:
-        st.markdown("### API")
-        
-        if st.session_state.api_streaming_text:
-            # Show live streaming updates
-            st.markdown(st.session_state.api_streaming_text)
-        elif st.session_state.api_response and not st.session_state.concurrent_streaming_active:
-            # Show final response when not streaming
+        st.markdown("### API ")
+        api_container = st.container()
+        st.session_state.api_streaming_container = api_container
+
+        if st.button("🔄 Get API Response", key="api_response_btn"):
+            with st.spinner("Getting API response…"):
+                api_resp = get_chatgpt_response(
+                    current_transcription(),
+                    show_streaming=True,
+                    container=api_container,
+                )
+                if api_resp:
+                    st.session_state.api_response = api_resp
+                else:
+                    st.error("Failed to get API response")
+
+        elif st.session_state.api_response:
             st.markdown(st.session_state.api_response)
         elif st.session_state.generating_api_response:
-            st.info("API response will appear here…")
+            with api_container:
+                st.info("API response will appear here…")
         else:
-            st.info("Responses will appear here")
-
-
-
-# Auto-refresh during concurrent streaming with better timing
-if st.session_state.concurrent_streaming_active:
-    # Check if both streams are complete
-    if st.session_state.webui_stream_complete and st.session_state.api_stream_complete:
-        st.session_state.concurrent_streaming_active = False
-        st.success("✅ Both responses completed!")
-        st.rerun()
-    else:
-        # More frequent auto-refresh during active streaming
-        import time
-        time.sleep(0.2)  # Refresh every 200ms for smoother streaming
-        st.rerun()
+            st.info("Click **Get API Response** to generate a direct API response")
 
 # ---------- Auto-transcription handler ----------
 if (st.session_state.transcribing and 
@@ -887,12 +596,121 @@ if (st.session_state.transcribing and
     if transcript:
         st.success("✅ Auto-transcription complete")
         
-        # Automatically start concurrent streaming if auto_chatgpt is enabled
-        if st.session_state.auto_chatgpt and not st.session_state.concurrent_streaming_active:
-            question = current_transcription()
-            start_concurrent_streaming(question)
+        # Schedule ChatGPT generation **before** rerunning
+        if st.session_state.auto_chatgpt and not st.session_state.generating_response:
+            st.session_state.generating_response = True
+            st.session_state.chatgpt_response = None
+            # ⬇️ make sure the handler sees the edited text
+            st.session_state.manual_transcription = current_transcription()
+        
+        # Also schedule API generation
+        if st.session_state.auto_chatgpt and not st.session_state.generating_api_response:
+            st.session_state.generating_api_response = True
+            st.session_state.api_response = None
         
         st.rerun()  # Single rerun is enough
+
+# ---------- Auto-ChatGPT handler (separate from transcription) ----------
+if (st.session_state.generating_response and 
+    st.session_state.transcription and 
+    not st.session_state.recording and 
+    st.session_state.chatgpt_response is None and
+    st.session_state.auto_chatgpt and
+    not st.session_state.stop_streaming):
+    
+    # Stream visibly into the Web‑UI tab
+    question   = current_transcription()
+    container  = st.session_state.get("webui_streaming_container", None)
+    result     = get_chatgpt_response_backend(
+        question,
+        show_streaming=True,      # show progress!
+        container=container,      # write into tab
+    )
+    if result:
+        response, original_question = result
+        st.session_state.chatgpt_response = response
+        st.session_state.generating_response = False
+        
+        # Log the Q&A pair using original question
+        if response and original_question:
+            log_qa_pair(original_question, response)
+    else:
+        st.session_state.generating_response = False
+        response = None
+    
+    st.rerun()  # Refresh to show final results
+
+# ---------- Manual ChatGPT handler ----------
+if (st.session_state.generating_response and 
+    st.session_state.manual_transcription and 
+    not st.session_state.recording and 
+    st.session_state.chatgpt_response is None and
+    not st.session_state.stop_streaming):
+    
+    # Show streaming for manual generation using the container if available
+    question = current_transcription()
+    container = st.session_state.get("webui_streaming_container", None)
+    result = get_chatgpt_response_backend(question, show_streaming=True, container=container)
+    if result:
+        response, original_question = result
+        st.session_state.chatgpt_response = response
+        st.session_state.generating_response = False
+        st.session_state.manual_transcription = None  # Clear after processing
+        
+        # Log the Q&A pair using original question
+        if response and original_question:
+            log_qa_pair(original_question, response)
+    else:
+        st.session_state.generating_response = False
+        st.session_state.manual_transcription = None  # Clear after processing
+        response = None
+    
+    st.rerun()  # Refresh to show final results
+
+# ---------- Auto-API handler (separate from backend) ----------
+if (st.session_state.generating_api_response and 
+    st.session_state.transcription and 
+    not st.session_state.recording and 
+    st.session_state.api_response is None and
+    st.session_state.auto_chatgpt and
+    not st.session_state.stop_streaming):
+    
+    question   = current_transcription()
+    container  = st.session_state.api_streaming_container
+    api_response = get_chatgpt_response(
+        question,
+        show_streaming=True,      # show progress!
+        container=container,      # write into API tab
+    )
+    if api_response:
+        st.session_state.api_response = api_response
+        st.session_state.generating_api_response = False
+    else:
+        st.session_state.generating_api_response = False
+    
+    st.rerun()  # Refresh to show final results
+
+# ---------- Manual API handler ----------
+if (st.session_state.generating_api_response and 
+    st.session_state.manual_transcription and 
+    not st.session_state.recording and 
+    st.session_state.api_response is None and
+    not st.session_state.stop_streaming):
+    
+    question = current_transcription()
+    container = st.session_state.api_streaming_container
+    api_response = get_chatgpt_response(
+        question,
+        show_streaming=True,      # show progress!
+        container=container,      # write into API column
+    )
+    if api_response:
+        st.session_state.api_response = api_response
+        st.session_state.generating_api_response = False
+    else:
+        st.session_state.generating_api_response = False
+    
+    st.rerun()  # Refresh to show final results
 
 # ---------- Handle stopped streaming ----------
 if st.session_state.stop_streaming and (st.session_state.generating_response or st.session_state.generating_api_response):

@@ -815,15 +815,6 @@ if st.session_state.transcription and not st.session_state.recording:
             active_streams.append("API")
         st.info(f"🔄 Generating responses: {', '.join(active_streams)}")
 
-    # Stop button for concurrent streaming - placed above columns
-    if st.session_state.concurrent_streaming_active:
-        if st.button("🛑 Stop All Streaming"):
-            st.session_state.stop_streaming = True
-            st.session_state.concurrent_streaming_active = False
-            st.session_state.generating_response = False
-            st.session_state.generating_api_response = False
-            st.rerun()
-
     # Two side-by-side panes with concurrent streaming
     col_web, col_api = st.columns(2)
 
@@ -858,7 +849,20 @@ if st.session_state.transcription and not st.session_state.recording:
         else:
             st.info("Responses will appear here")
 
+    # Button to start concurrent streaming
+    if st.button("🔄 Get Both Responses Simultaneously", key="concurrent_btn"):
+        question = current_transcription()
+        start_concurrent_streaming(question)
+        st.rerun()
 
+    # Stop button for concurrent streaming
+    if st.session_state.concurrent_streaming_active:
+        if st.button("🛑 Stop All Streaming"):
+            st.session_state.stop_streaming = True
+            st.session_state.concurrent_streaming_active = False
+            st.session_state.generating_response = False
+            st.session_state.generating_api_response = False
+            st.rerun()
 
 # Auto-refresh during concurrent streaming with better timing
 if st.session_state.concurrent_streaming_active:
@@ -887,10 +891,17 @@ if (st.session_state.transcribing and
     if transcript:
         st.success("✅ Auto-transcription complete")
         
-        # Automatically start concurrent streaming if auto_chatgpt is enabled
-        if st.session_state.auto_chatgpt and not st.session_state.concurrent_streaming_active:
-            question = current_transcription()
-            start_concurrent_streaming(question)
+        # Schedule ChatGPT generation **before** rerunning
+        if st.session_state.auto_chatgpt and not st.session_state.generating_response:
+            st.session_state.generating_response = True
+            st.session_state.chatgpt_response = None
+            # ⬇️ make sure the handler sees the edited text
+            st.session_state.manual_transcription = current_transcription()
+        
+        # Also schedule API generation
+        if st.session_state.auto_chatgpt and not st.session_state.generating_api_response:
+            st.session_state.generating_api_response = True
+            st.session_state.api_response = None
         
         st.rerun()  # Single rerun is enough
 

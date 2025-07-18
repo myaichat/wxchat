@@ -237,59 +237,109 @@ class ChromeDebugChatBot:
             self.end_operation("SEND_MESSAGE", "- Message sent successfully")
             self.start_operation("WAIT_RESPONSE")
             
-            # Strategy 1: Wait and use pattern matching approach
+            # Strategy 1: Look for the complete response content
             try:
-                self.log("Strategy 1: Waiting for response and using pattern matching...")
+                self.log("Strategy 1: Looking for complete response content...")
                 
                 # Wait for response to complete
-                await asyncio.sleep(8)
+                await asyncio.sleep(10)
                 
                 # Get all page content
                 page_content = await self.page.evaluate("document.body.innerText")
+                
+                # Find the question in the content to locate the response
                 lines = [line.strip() for line in page_content.split('\n') if line.strip()]
                 
-                # Look for math answer patterns specifically
-                import re
-                math_patterns = [
-                    r'2\s*\+\s*2\s*=\s*4',  # "2 + 2 = 4"
-                    r'2\+2=4',               # "2+2=4"
-                    r'equals?\s*4',          # "equals 4"
-                    r'is\s*4',               # "is 4"
-                    r'answer\s*is\s*4',      # "answer is 4"
-                ]
+                # Find where our question appears
+                question_index = -1
+                for i, line in enumerate(lines):
+                    if question.lower() in line.lower() and len(line) > len(question) * 0.7:
+                        question_index = i
+                        self.log(f"Found question at line {i}: {line}")
+                        break
                 
-                # First, look for exact math equation
-                for line in reversed(lines):
-                    for pattern in math_patterns:
-                        if re.search(pattern, line, re.IGNORECASE):
-                            self.log(f"Found math answer: {line}")
-                            self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 1")
-                            return line
-                
-                # Then look for any line containing "4" that's not UI text
-                for line in reversed(lines):
-                    if ('4' in line and 
-                        len(line) <= 30 and  # Short lines more likely to be answers
-                        question.lower() not in line.lower() and
-                        not line.startswith('Thinking') and
-                        not line.startswith('Send') and
-                        not line.startswith('Type') and
-                        not line.startswith('The user') and
-                        not 'Sonnet' in line and  # Skip model name
-                        not 'Claude' in line and  # Skip Claude branding
-                        not 'user is asking' in line.lower() and
-                        not 'simple math' in line.lower()):
+                if question_index >= 0:
+                    # Collect all response content after the question, but skip reasoning
+                    response_lines = []
+                    collecting = False
+                    skip_reasoning = True
+                    
+                    for i in range(question_index + 1, len(lines)):
+                        line = lines[i].strip()
                         
-                        self.log(f"Found line with '4': {line}")
-                        self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 1")
-                        return line
+                        # Skip empty lines and UI elements
+                        if (not line or 
+                            line.startswith('Edit') or
+                            line.startswith('Thinking') or
+                            line.startswith('Send') or
+                            line.startswith('Type') or
+                            line.startswith('Message') or
+                            'Pondered' in line or
+                            line.endswith('s') and line[:-1].isdigit()):  # Skip timing like "2s"
+                            continue
+                        
+                        # Skip Claude's internal reasoning
+                        if skip_reasoning:
+                            # Look for reasoning patterns
+                            reasoning_indicators = [
+                                'The user is asking',
+                                'I should',
+                                'This means',
+                                'I think',
+                                'since they',
+                                'but they specifically',
+                                'This is a straightforward',
+                                'doesn\'t require',
+                                'Decoded user\'s',
+                                'planned inline response'
+                            ]
+                            
+                            # If this line contains reasoning, skip it
+                            if any(indicator in line for indicator in reasoning_indicators):
+                                continue
+                            
+                            # If we see the actual answer starting (like "Java is a popular...")
+                            # then stop skipping reasoning
+                            if (line.startswith('Java is') or 
+                                line.startswith('Here are') or
+                                line.startswith('Key features') or
+                                (len(line) > 30 and not any(indicator in line for indicator in reasoning_indicators))):
+                                skip_reasoning = False
+                                collecting = True
+                        
+                        # Start collecting when we see substantial content (non-reasoning)
+                        if len(line) > 20 and not collecting and not skip_reasoning:
+                            collecting = True
+                        
+                        if collecting:
+                            # Stop if we hit another question or UI element
+                            if (line.endswith('?') and len(line) > 50) or \
+                               any(ui in line for ui in ['Claude', 'Sonnet', 'Set as default', 'Google Chrome']):
+                                break
+                            
+                            # Skip if we encounter reasoning again (like "AB" markers or repeated questions)
+                            if (line in ['AB', 'A', 'B'] or 
+                                line == question.strip() or
+                                'The user is asking again' in line):
+                                break
+                            
+                            response_lines.append(line)
+                    
+                    if response_lines:
+                        full_response = '\n'.join(response_lines)
+                        
+                        # Create preview for logging
+                        preview = full_response[:300] + "..." if len(full_response) > 300 else full_response
+                        self.log(f"Found complete response via Strategy 1: {preview}")
+                        self.end_operation("WAIT_RESPONSE", "- Complete response found via Strategy 1")
+                        return full_response
                 
             except Exception as e:
                 self.log(f"Strategy 1 failed: {e}")
             
-            # Strategy 2: Look for any substantial response in page content
+            # Strategy 2: Look for response after question in lines
             try:
-                self.log("Strategy 2: Analyzing page content...")
+                self.log("Strategy 2: Looking for response after question...")
                 
                 # Wait a bit more for response to appear
                 await asyncio.sleep(5)
@@ -307,22 +357,32 @@ class ChromeDebugChatBot:
                         question_found = True
                         self.log(f"Found question at line {i}: {line}")
                         
-                        # Look for the response in the next few lines
-                        for j in range(i + 1, min(i + 10, len(lines))):
-                            potential_response = lines[j].strip()
+                        # Look for substantial response content in the following lines
+                        response_lines = []
+                        for j in range(i + 1, min(i + 50, len(lines))):  # Look further ahead
+                            potential_line = lines[j].strip()
                             
-                            # Check if this looks like a valid response
-                            if (potential_response and 
-                                len(potential_response) > 1 and  # At least some content
-                                potential_response != '0s' and  # Not timing indicator
-                                not potential_response.startswith('Thinking') and
-                                not potential_response.startswith('Send') and
-                                not potential_response.startswith('Type') and
-                                not potential_response.startswith('Message')):
+                            # Skip UI elements and short lines
+                            if (len(potential_line) < 20 or
+                                potential_line.startswith('Thinking') or
+                                potential_line.startswith('Send') or
+                                potential_line.startswith('Type') or
+                                potential_line.startswith('Message') or
+                                'Claude' in potential_line or
+                                'Sonnet' in potential_line):
+                                continue
+                            
+                            # Collect substantial lines
+                            if len(potential_line) > 30:
+                                response_lines.append(potential_line)
                                 
-                                self.log(f"Found response via Strategy 2: {potential_response}")
-                                self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 2")
-                                return potential_response
+                                # If we have enough content, return it
+                                if len(response_lines) >= 3 or len(' '.join(response_lines)) > 200:
+                                    full_response = ' '.join(response_lines)
+                                    preview = full_response[:200] + "..." if len(full_response) > 200 else full_response
+                                    self.log(f"Found response via Strategy 2: {preview}")
+                                    self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 2")
+                                    return full_response
                         break
                 
                 if not question_found:
@@ -331,35 +391,35 @@ class ChromeDebugChatBot:
             except Exception as e:
                 self.log(f"Strategy 2 failed: {e}")
             
-            # Strategy 3: Direct element inspection
+            # Strategy 3: Direct element inspection for substantial content
             try:
                 self.log("Strategy 3: Direct element inspection...")
                 
                 # Wait a bit more
                 await asyncio.sleep(3)
                 
-                # Look for any elements that might contain the response
+                # Look for elements that might contain substantial response content
                 all_elements = await self.page.query_selector_all('p, div, span')
                 
-                for element in reversed(all_elements[-20:]):  # Check last 20 elements
+                for element in reversed(all_elements[-50:]):  # Check more elements
                     try:
                         text = await element.inner_text()
                         text = text.strip()
                         
-                        # Look for simple responses (like math answers)
+                        # Look for substantial response content
                         if (text and 
-                            len(text) >= 1 and  # Any content
-                            len(text) <= 50 and  # Not too long (simple answers)
+                            len(text) > 100 and  # Substantial content
                             text != '0s' and
                             question.lower() not in text.lower() and
                             not text.startswith('Thinking') and
                             not text.startswith('Send') and
                             not text.startswith('Type') and
-                            ('=' in text or  # Math equation
-                             text.isdigit() or  # Just a number
-                             any(char.isdigit() for char in text))):  # Contains numbers
+                            not text.startswith('Message') and
+                            'Claude' not in text and
+                            'Sonnet' not in text):
                             
-                            self.log(f"Found response via Strategy 3: {text}")
+                            preview = text[:200] + "..." if len(text) > 200 else text
+                            self.log(f"Found response via Strategy 3: {preview}")
                             self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 3")
                             return text
                     except:
@@ -368,7 +428,7 @@ class ChromeDebugChatBot:
             except Exception as e:
                 self.log(f"Strategy 3 failed: {e}")
             
-            # Strategy 4: Screenshot analysis and final attempt
+            # Strategy 4: Final comprehensive search for any substantial content
             try:
                 self.log("Strategy 4: Final comprehensive search...")
                 await asyncio.sleep(5)
@@ -377,26 +437,26 @@ class ChromeDebugChatBot:
                 full_page_text = await self.page.evaluate("document.body.innerText")
                 all_lines = [line.strip() for line in full_page_text.split('\n') if line.strip()]
                 
-                # Look for any line that could be a response
+                # Look for any substantial content that could be a response
                 for line in reversed(all_lines):  # Start from the end
                     if (line and 
-                        len(line) >= 1 and
+                        len(line) > 50 and  # Substantial content
                         line != '0s' and
                         question.lower() not in line.lower() and
                         not line.startswith('Thinking') and
                         not line.startswith('Send') and
                         not line.startswith('Type') and
                         not line.startswith('Message') and
-                        not line.startswith('What is')):
+                        not line.startswith('What is') and
+                        'Claude' not in line and
+                        'Sonnet' not in line and
+                        'Set as default' not in line):
                         
-                        # For math questions, look for equations or numbers
-                        if ('=' in line or 
-                            any(char.isdigit() for char in line) or
-                            len(line) <= 20):  # Short responses are likely answers
-                            
-                            self.log(f"Found response via Strategy 4: {line}")
-                            self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 4")
-                            return line
+                        # This looks like substantial response content
+                        preview = line[:200] + "..." if len(line) > 200 else line
+                        self.log(f"Found response via Strategy 4: {preview}")
+                        self.end_operation("WAIT_RESPONSE", "- Response found via Strategy 4")
+                        return line
                 
             except Exception as e:
                 self.log(f"Strategy 4 failed: {e}")
@@ -427,7 +487,7 @@ async def main():
         if await bot.connect_to_existing_tab():
             
             # Send a question and get response
-            question = "What is 2+2?"
+            question = "What is java. show sample code? anwer inline. do not open side tab"
             bot.log(f"Sending question: {question}")
             
             response = await bot.send_message_and_get_response(question)

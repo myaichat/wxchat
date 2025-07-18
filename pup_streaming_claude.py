@@ -518,4 +518,4 @@ if __name__ == "__main__":
     # Make sure Chrome is running with debug enabled:
     # chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
     
-    asyncio.run(main())
+    asyncio.run(main_async())

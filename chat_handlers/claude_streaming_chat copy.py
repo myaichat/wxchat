@@ -266,13 +266,10 @@ class ChromeDebugChatBot:
             previous_content = ""
             last_response_length = 0
             response_started = False
-            max_iterations = 60  # Reduced from 120 to 60 (30 seconds max)
+            max_iterations = 120  # Maximum 2 minutes of monitoring
             iteration = 0
-            no_change_count = 0
-            max_no_change = 4  # Reduced from 6 to 4 (2 seconds of no changes)
-            
-            # Wait a moment for the response to start appearing
-            await asyncio.sleep(1.0)  # Give Claude time to respond
+            no_change_count = 0  # Track how many iterations without changes
+            max_no_change = 6  # Exit after 3 seconds of no changes (6 * 0.5s)
             
             while iteration < max_iterations:
                 try:
@@ -285,12 +282,6 @@ class ChromeDebugChatBot:
                         if self._detect_response_start(current_content, question, initial_content):
                             response_started = True
                             self.log("Response started - beginning to stream")
-                        else:
-                            # For very fast responses, check if there's already a complete response
-                            current_response = self._extract_current_response(current_content, question)
-                            if current_response and len(current_response.strip()) > 2:  # Even shorter threshold
-                                response_started = True
-                                self.log("Fast response detected - beginning to stream")
                     
                     if response_started:
                         # Extract the current response content
@@ -309,25 +300,17 @@ class ChromeDebugChatBot:
                             no_change_count += 1
                         
                         # Check if response is complete
-                        if self._is_response_complete(current_content, current_response, question):
+                        if self._is_response_complete(current_content, current_response):
                             self.log("Response appears to be complete")
                             break
                         
                         # Exit if no changes for too long and we have some content
-                        # Be more aggressive for very short responses
+                        # Reduced threshold for shorter responses
                         if (no_change_count >= max_no_change and 
                             current_response and 
-                            len(current_response.strip()) > 1):  # Very low threshold
+                            len(current_response) > 10):  # Reduced from 100 to 10
                             self.log(f"No changes detected for {no_change_count * 0.5} seconds, assuming complete")
                             break
-                    else:
-                        # If we haven't detected response start after some time, check for immediate completion
-                        if iteration > 4:  # After 2 seconds
-                            current_response = self._extract_current_response(current_content, question)
-                            if current_response and len(current_response.strip()) > 1:
-                                self.log("Late response detection - yielding content")
-                                yield current_response
-                                break
                     
                     # Wait before next check
                     await asyncio.sleep(0.5)  # Check every 500ms
@@ -340,13 +323,7 @@ class ChromeDebugChatBot:
                     continue
             
             if iteration >= max_iterations:
-                self.log("Reached maximum streaming iterations - checking for any response")
-                # Final attempt to get any response
-                current_content = await self.page.evaluate("document.body.innerText")
-                final_response = self._extract_current_response(current_content, question)
-                if final_response and len(final_response.strip()) > 1:
-                    self.log("Found response on final check")
-                    yield final_response
+                self.log("Reached maximum streaming iterations")
             
             self.end_operation("STREAM_RESPONSE", "- Streaming completed")
                 
@@ -487,21 +464,16 @@ class ChromeDebugChatBot:
                     
                     # Look for actual response content (not just reasoning)
                     # Common patterns for actual responses
-                    if (len(line) > 3 and  # Further reduced for very short responses
+                    if (len(line) > 5 and  # Reduced from 10 to 5 for shorter responses
                         not line.startswith('The ') and  # Avoid "The user..." reasoning
                         not line.startswith('This ') and  # Avoid "This is..." reasoning
                         (line[0].isupper() or line.startswith('I\'m') or 'Java' in line or 'programming' in line or
-                         'doing well' in line or 'good' in line or 'hello' in line or 'well!' in line or 'How are' in line)):
+                         'doing well' in line or 'good' in line or 'hello' in line)):
                         response_lines.append(line)
                         found_actual_content = True
                     elif found_actual_content:
                         # If we've found actual content, continue collecting
                         response_lines.append(line)
-                    elif len(line) > 3 and not any(skip in line for skip in ['Edit', 'Send', 'Type', 'Message']):
-                        # For very short responses, be more permissive
-                        # This catches responses that might not match the patterns above
-                        response_lines.append(line)
-                        found_actual_content = True
                 
                 if response_lines and found_actual_content:
                     return '\n'.join(response_lines)
@@ -512,17 +484,12 @@ class ChromeDebugChatBot:
             self.log(f"Error extracting response: {e}")
             return ""
 
-    def _is_response_complete(self, current_content, current_response, question):
-        """Check if the response appears to be complete - improved for short responses"""
+    def _is_response_complete(self, current_content, current_response):
+        """Check if the response appears to be complete"""
         try:
             # Look for completion indicators
             if not current_response:
                 return False
-            
-            # For very short questions like "how ru?", be more aggressive about completion
-            question_lower = question.lower().strip()
-            short_question_indicators = ['how ru', 'how are you', 'sup', 'hey', 'hi', 'hello']
-            is_short_question = any(indicator in question_lower for indicator in short_question_indicators)
             
             # Check if there are completion indicators in the content
             completion_indicators = [
@@ -556,41 +523,10 @@ class ChromeDebugChatBot:
                     self.log(f"Found completion pattern: {line}")
                     return True
             
-            # For short casual questions, be more aggressive about completion
-            if is_short_question:
-                response_lower = current_response.lower().strip()
-                # Common short response patterns that are likely complete
-                short_complete_patterns = [
-                    "i'm doing well",
-                    "i'm good",
-                    "doing well",
-                    "i'm fine",
-                    "good",
-                    "well",
-                    "fine",
-                    "not much",
-                    "all good",
-                    "pretty good"
-                ]
-                
-                for pattern in short_complete_patterns:
-                    if pattern in response_lower:
-                        self.log(f"Found short complete response pattern: {pattern}")
-                        return True
-                
-                # If response has punctuation and is reasonably short, likely complete
-                if (len(current_response.strip()) < 100 and 
-                    (current_response.strip().endswith('.') or 
-                     current_response.strip().endswith('!') or 
-                     current_response.strip().endswith('?'))):
-                    self.log("Short response with punctuation - likely complete")
-                    return True
-            
-            # Use "Thinking about responding to a casual greeting" for very short responses
-            # But only if it's actually a casual greeting question
+            # Only use "Thinking about responding to a casual greeting" for very short responses
+            # This prevents cutting off longer technical responses
             if (len(current_response.strip()) < 50 and 
-                'thinking about responding to a casual greeting' in current_content.lower() and
-                is_short_question):  # Only apply this to actual casual greetings
+                'thinking about responding to a casual greeting' in current_content.lower()):
                 self.log("Found casual greeting completion indicator for short response")
                 return True
             

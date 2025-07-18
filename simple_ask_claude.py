@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-simple_ask_claude.py  –  directly call send_message_with_streaming and stream the reply
+simple_ask_claude.py  –  directly call ChromeDebugChatBot and stream the reply
 
 Usage:
     python simple_ask_claude.py "Your prompt here"
@@ -13,8 +13,8 @@ import io
 import os
 from datetime import datetime
 
-# Import the streaming function directly
-from chat_handlers.claude_streaming_chat import send_message_with_streaming
+# Import the ChromeDebugChatBot class
+from chat_handlers.claude_streaming_chat import ChromeDebugChatBot
 
 # Fix Windows console encoding issues
 if sys.platform == "win32":
@@ -69,102 +69,59 @@ def save_chat_log(question: str, answer: str, model: str = "claude-3.5-sonnet"):
 
 
 async def stream_chat(prompt: str):
-    """Stream chat using direct streaming_chat function"""
-    previous = ""
-    response_started = False
+    """Stream chat using ChromeDebugChatBot - simplified version with timeout"""
+    bot = ChromeDebugChatBot()
     complete_answer = ""
     
     try:
-        async for chunk in send_message_with_streaming(prompt, TIMEOUT_SEC):
-            status = chunk.get("status")
-            content = chunk.get("content", "")
+        safe_print("🚀  Connecting to Chrome debug session...")
+        
+        # Connect to existing Chrome tab
+        if await bot.connect_to_existing_tab():
+            safe_print("✅  Connected successfully")
+            safe_print(f"📝  Sending question: {prompt}")
+            safe_print("\n=== STREAMING RESPONSE ===")
             
-            if status == "started":
-                safe_print("🚀  assistant started typing\n")
-                response_started = True
-            elif status == "streaming":
-                # Enhanced smart streaming with better breakpoint detection
-                if len(content) > len(previous):
-                    # More comprehensive safe breakpoints
-                    safe_patterns = [
-                        '\n\n',  # Paragraph breaks
-                        '\n- ',  # List items
-                        '\n## ', # Headers
-                        '\n### ', # Subheaders
-                        '. ',    # Sentence endings
-                        '! ',    # Exclamations
-                        '? ',    # Questions
-                        ', ',    # Commas
-                        '; ',    # Semicolons
-                        ': ',    # Colons
-                        '**.',   # Bold endings with period
-                        '**,',   # Bold endings with comma
-                        '**:',   # Bold endings with colon
-                        '`.',    # Code endings with period
-                        '`,',    # Code endings with comma
-                        '```\n', # Code block endings
-                    ]
-                    
-                    last_safe_pos = len(previous)
-                    
-                    # Find the latest safe position
-                    for pattern in safe_patterns:
-                        pos = content.rfind(pattern, len(previous))
-                        if pos != -1 and pos + len(pattern) > last_safe_pos:
-                            last_safe_pos = pos + len(pattern)
-                    
-                    # Also check for complete words (space-bounded)
-                    space_pos = content.rfind(' ', len(previous))
-                    if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                        # Make sure we're not in the middle of markdown formatting
-                        check_pos = space_pos + 1
-                        if check_pos < len(content):
-                            # Don't break if we're in the middle of ** or ` formatting
-                            before_space = content[max(0, space_pos-5):space_pos]
-                            after_space = content[space_pos:min(len(content), space_pos+5)]
-                            if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                last_safe_pos = check_pos
-                    
-                    # Display if we have a reasonable chunk and it's safe
-                    if last_safe_pos > len(previous) + 15:  # At least 15 chars ahead
-                        new_chunk = content[len(previous):last_safe_pos]
-                        safe_print(new_chunk, end="", flush=True)
-                        previous = content[:last_safe_pos]
-                    elif len(content) > len(previous) + 150:  # Force display if buffer gets too large
-                        # Find the last space to avoid cutting words
-                        force_pos = len(previous) + 100
-                        last_space = content.rfind(' ', len(previous), force_pos)
-                        if last_space > len(previous):
-                            new_chunk = content[len(previous):last_space + 1]
-                            safe_print(new_chunk, end="", flush=True)
-                            previous = content[:last_space + 1]
-            elif status == "complete":
-                complete_answer = content
-                # Show any remaining content that wasn't displayed during streaming
-                if len(content) > len(previous):
-                    remaining = content[len(previous):]
-                    safe_print(remaining, end="", flush=True)
-                elif not response_started:
-                    # If we never got streaming updates, show the complete content
-                    safe_print(content, end="", flush=True)
-                safe_print("\n\n✅  complete")
+            # Use asyncio.wait_for to add a timeout to the streaming
+            try:
+                async def stream_with_timeout():
+                    async for chunk in bot.send_message_with_streaming(prompt):
+                        if not chunk.startswith("Error:"):
+                            safe_print(chunk, end='', flush=True)
+                            complete_answer_ref[0] += chunk
+                        else:
+                            safe_print(f"\n❌  Error: {chunk}")
+                            complete_answer_ref[0] = f"Error: {chunk}"
+                            break
                 
-                # Save the complete conversation to log
-                try:
-                    save_chat_log(prompt, complete_answer)
-                except Exception as e:
-                    safe_print(f"Error saving chat log: {e}")
-                break
-            elif status in ["timeout", "error"]:
-                complete_answer = f"Error: {content}"
-                safe_print(f"\n❌  {status}: {content}")
+                # Use a list to make complete_answer mutable in the nested function
+                complete_answer_ref = [complete_answer]
                 
-                # Save error response to log
-                try:
-                    save_chat_log(prompt, complete_answer)
-                except Exception as e:
-                    safe_print(f"Error saving chat log: {e}")
-                break
+                # Set a reasonable timeout (30 seconds)
+                await asyncio.wait_for(stream_with_timeout(), timeout=30.0)
+                complete_answer = complete_answer_ref[0]
+                
+            except asyncio.TimeoutError:
+                safe_print(f"\n⏰  Response timeout after 30 seconds")
+                complete_answer = complete_answer_ref[0] if complete_answer_ref[0] else "Timeout: Response took too long"
+            
+            safe_print("\n=== END OF STREAMING ===")
+            safe_print("\n✅  Complete")
+            
+            # Save the complete conversation to log
+            try:
+                save_chat_log(prompt, complete_answer)
+            except Exception as e:
+                safe_print(f"Error saving chat log: {e}")
+                
+        else:
+            error_msg = "Failed to connect to Chrome debug session. Make sure Chrome is running with debug enabled."
+            safe_print(f"❌  {error_msg}")
+            complete_answer = f"Error: {error_msg}"
+            try:
+                save_chat_log(prompt, complete_answer)
+            except Exception as e:
+                safe_print(f"Error saving chat log: {e}")
                 
     except Exception as e:
         safe_print(f"\n❌  Unexpected error: {e}")
@@ -173,6 +130,13 @@ async def stream_chat(prompt: str):
             save_chat_log(prompt, complete_answer)
         except Exception as log_e:
             safe_print(f"Error saving chat log: {log_e}")
+    
+    finally:
+        # Clean up resources
+        try:
+            await bot.close()
+        except Exception as e:
+            safe_print(f"Error during cleanup: {e}")
 
 
 async def main():

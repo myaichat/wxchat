@@ -95,7 +95,7 @@ def webui_streaming_worker(question):
         
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
+        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ".  Wrapp the entire response in a markdown code block to show the actual syntax"
         
         # Store the Web UI question for logging
         st.session_state.claude_pending_log_webui_question = cleaned_prompt
@@ -142,24 +142,81 @@ def webui_streaming_worker(question):
                             st.session_state.claude_generating_response = False
                             return
                         
-                        # Stream the response
-                        async for chunk_data in bot.send_message_with_streaming(cleaned_prompt):
-                            if st.session_state.stop_streaming:
-                                break
+                        # Use custom streaming that updates session state in real-time
+                        try:
+                            # Wait a moment for the message to be processed
+                            import time
+                            time.sleep(2)
                             
-                            if "error" in chunk_data:
-                                st.session_state.claude_webui_streaming_text = f"Streaming error: {chunk_data['error']}"
-                                st.session_state.claude_webui_stream_complete = True
-                                st.session_state.claude_generating_response = False
-                                return
+                            # Custom streaming implementation that updates session state
+                            start_time = time.time()
+                            last_text = ""
+                            last_length = 0
+                            no_change_count = 0
+                            max_wait = 60
+                            update_interval = 0.5
                             
-                            if "chunk" in chunk_data and chunk_data["chunk"]:
-                                full_response += chunk_data["chunk"]
-                                # Update session state with streaming content and cursor
-                                st.session_state.claude_webui_streaming_text = full_response + "▌"
+                            while time.time() - start_time < max_wait:
+                                if st.session_state.stop_streaming:
+                                    break
+                                    
+                                try:
+                                    response_data = bot.get_current_response()
+                                    current_text = response_data.get('text', '')
+                                    is_generating = response_data.get('generating', False)
+                                    current_length = response_data.get('length', 0)
+                                    
+                                    # Check if we have new content
+                                    if current_text != last_text and current_length > 0:
+                                        # Update session state with streaming content and cursor
+                                        if is_generating:
+                                            st.session_state.claude_webui_streaming_text = current_text + "▌"
+                                        else:
+                                            st.session_state.claude_webui_streaming_text = current_text
+                                        
+                                        full_response = current_text
+                                        last_text = current_text
+                                        last_length = current_length
+                                        no_change_count = 0
+                                    
+                                    # Check if response is complete
+                                    if current_length > 20 and not is_generating:
+                                        full_response = current_text
+                                        st.session_state.claude_webui_streaming_text = current_text
+                                        break
+                                    
+                                    # Check for no changes (might indicate completion or error)
+                                    if current_text == last_text:
+                                        no_change_count += 1
+                                        if no_change_count > 10 and current_length > 10:  # 5 seconds of no change
+                                            full_response = current_text
+                                            st.session_state.claude_webui_streaming_text = current_text
+                                            break
+                                    
+                                    time.sleep(update_interval)
+                                    
+                                except Exception as e:
+                                    st.session_state.claude_webui_streaming_text = f"❌ Error during streaming: {str(e)}"
+                                    st.session_state.claude_webui_stream_complete = True
+                                    st.session_state.claude_generating_response = False
+                                    return
                             
-                            if chunk_data.get("complete", False):
-                                break
+                            # Handle timeout
+                            if time.time() - start_time >= max_wait:
+                                if last_text:
+                                    full_response = last_text
+                                    st.session_state.claude_webui_streaming_text = last_text + "\n\n⏰ *Streaming timeout reached*"
+                                else:
+                                    st.session_state.claude_webui_streaming_text = "❌ Timeout: No response received"
+                                    st.session_state.claude_webui_stream_complete = True
+                                    st.session_state.claude_generating_response = False
+                                    return
+                                
+                        except Exception as streaming_error:
+                            st.session_state.claude_webui_streaming_text = f"❌ Streaming error: {str(streaming_error)}"
+                            st.session_state.claude_webui_stream_complete = True
+                            st.session_state.claude_generating_response = False
+                            return
                         
                         # Final update to session state without cursor
                         st.session_state.claude_webui_streaming_text = full_response
@@ -383,14 +440,60 @@ def render_claude_responses():
         with col_web:
             st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
             
-            remove='markdown\nCopy\nEdit\n'
+            def clean_reasoning_text(text):
+                """Remove reasoning artifacts from Claude's response"""
+                if not text:
+                    return text
+                
+                import re
+                
+                # Remove common reasoning patterns - but be more careful with markdown
+                patterns = [
+                    r'^.*?Let me organize this into a comprehensive response\.?\s*',
+                    r'^.*?Let me format[^.]*\.\s*',
+                    r'^.*?Let me provide[^.]*\.\s*',
+                    r'^.*?I\'ll search[^.]*\.\s*',
+                    r'^.*?I need to search[^.]*\.\s*',
+                    r'^.*?Let me search[^.]*\.\s*',
+                    r'^.*?Searching the web[^\n]*\n?',
+                    r'^.*?Searching[^\n]*\n?',
+                    r'^.*?Thinking\.\.\.\s*\d*s?\s*',
+                    r'^.*?Thinking about[^.]*\.\s*',
+                    r'^.*?Great! I now have[^.]*\.\s*',
+                    r'^.*?Great![^.]*\.\s*',
+                    r'^.*?\d+s[^.]*\.\s*',
+                    r'^.*?I should[^.]*\.\s*',
+                    r'^.*?comprehensive overview\.\s*',
+                    r'^.*?Synthesized[^.]*\.\s*',
+                    r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
+                    r'^.*?markdown code block to show[^.]*\.?\s*',
+                    r'^.*?as requested[^.]*\.?\s*',
+                    r'^.*?markdown\s*',
+                ]
+                
+                # Apply all patterns
+                for pattern in patterns:
+                    text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+                
+                # More precise removal of artifacts before markdown headers - preserve markdown formatting
+                # Only remove text that looks like reasoning, not markdown syntax
+                text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
+                
+                # Clean up common UI artifacts
+                remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
+                for artifact in remove_artifacts:
+                    text = text.replace(artifact, '')
+                
+                return text.strip()
+            
             if st.session_state.claude_webui_streaming_text:
-                # Show live streaming updates
-                st.markdown(st.session_state.claude_webui_streaming_text.strip(remove))
+                # Show live streaming updates with reasoning removed
+                cleaned_text = clean_reasoning_text(st.session_state.claude_webui_streaming_text)
+                st.markdown(cleaned_text)
             elif st.session_state.claude_response and not st.session_state.claude_concurrent_streaming_active:
-                # Show final response when not streaming
-                clean = st.session_state.claude_response.encode("utf-8", errors="replace").decode("utf-8")
-                st.markdown(clean.strip(remove))
+                # Show final response when not streaming with reasoning removed
+                cleaned_text = clean_reasoning_text(st.session_state.claude_response)
+                st.markdown(cleaned_text)
             elif st.session_state.claude_generating_response:
                 st.info("Response will appear here…")
             else:

@@ -275,6 +275,17 @@ if st.button(label, key="rec_toggle"):
         st.session_state.generating_response = False
         st.session_state.api_response        = None  # Clear API response for new recording
         st.session_state.generating_api_response = False  # Clear API generation flag
+        
+        # Clear Claude responses for new recording
+        st.session_state.claude_response = None
+        st.session_state.claude_api_response = None
+        st.session_state.claude_webui_streaming_text = ""
+        st.session_state.claude_api_streaming_text = ""
+        st.session_state.claude_webui_stream_complete = False
+        st.session_state.claude_api_stream_complete = False
+        st.session_state.claude_concurrent_streaming_active = False
+        st.session_state.claude_generating_response = False
+        st.session_state.claude_generating_api_response = False
 
         audio_q  = queue.Queue()
         frames   = []
@@ -356,17 +367,22 @@ if st.session_state.last_wav and not st.session_state.recording:
             col_submit, col_stop = st.columns([2, 1])
             
             with col_submit:
-                submitted = st.form_submit_button("💬 Get ChatGPT Response (Ctrl+Enter)", disabled=st.session_state.generating_response)
+                submitted = st.form_submit_button("💬 Get AI Response (Ctrl+Enter)", disabled=st.session_state.generating_response)
             
             with col_stop:
                 # Stop button outside form since it needs immediate action
                 pass
         
         # Stop button outside the form for immediate response
-        if st.session_state.generating_response:
-            if st.button("🛑 Stop Streaming"):
+        if (st.session_state.generating_response or 
+            st.session_state.claude_generating_response or 
+            st.session_state.claude_generating_api_response):
+            if st.button("🛑 Stop All Streaming"):
                 st.session_state.stop_streaming = True
                 st.session_state.generating_response = False
+                st.session_state.claude_generating_response = False
+                st.session_state.claude_generating_api_response = False
+                st.session_state.claude_concurrent_streaming_active = False
                 st.rerun()
         
         # Handle form submission (Ctrl+Enter or button click)  

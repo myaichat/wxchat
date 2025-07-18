@@ -246,7 +246,7 @@ class StreamingClaude:
     
     def get_current_response(self):
         """Get current response text from Claude"""
-        js_code = r"""
+        js_code = """
         (function() {
             try {
                 // Find messages with multiple approaches
@@ -306,52 +306,10 @@ class StreamingClaude:
                 // Clean up the text
                 text = text.trim();
                 
-                // Remove thinking artifacts if present - comprehensive filtering
-                // Remove "I'll search/I need to search" patterns
-                text = text.replace(/^.*?I'll search[^.]*\.\s*/i, '');
-                text = text.replace(/^.*?I need to search[^.]*\.\s*/i, '');
-                text = text.replace(/^.*?Let me search[^.]*\.\s*/i, '');
-                
-                // Remove "Let me format/Let me organize" patterns
-                text = text.replace(/^.*?Let me format[^.]*\.\s*/i, '');
-                text = text.replace(/^.*?Let me organize[^.]*\.\s*/i, '');
-                text = text.replace(/^.*?Let me provide[^.]*\.\s*/i, '');
-                
-                // Remove specific patterns like "wrapping the entire response in a markdown code block"
-                text = text.replace(/^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*/i, '');
-                text = text.replace(/^.*?markdown code block to show[^.]*\.?\s*/i, '');
-                text = text.replace(/^.*?as requested[^.]*\.?\s*/i, '');
-                
-                // Remove "Searching the web" patterns
-                text = text.replace(/^.*?Searching the web[^\n]*\n?/gi, '');
-                text = text.replace(/^.*?Searching[^\n]*\n?/gi, '');
-                
-                // Remove "Thinking..." patterns
-                text = text.replace(/^.*?Thinking\.\.\.\s*\d*s?\s*/gi, '');
-                text = text.replace(/^.*?Thinking about[^.]*\.\s*/gi, '');
-                
-                // Remove "Great! I now have" patterns
-                text = text.replace(/^.*?Great! I now have[^.]*\.\s*/gi, '');
-                text = text.replace(/^.*?Great![^.]*\.\s*/gi, '');
-                
-                // Remove timing patterns like "1s", "2s", etc.
-                text = text.replace(/^.*?\d+s[^.]*\.\s*/g, '');
-                
-                // Remove "I should" patterns (original)
-                text = text.replace(/^.*?I should[^.]*\.\s*/gi, '');
-                
-                // Remove any remaining reasoning prefixes
-                text = text.replace(/^.*?comprehensive overview\.\s*/gi, '');
-                text = text.replace(/^.*?Synthesized[^.]*\.\s*/gi, '');
-                
-                // Clean up any remaining artifacts at the start
-                text = text.replace(/^[^#]*?(?=# |## |### |\w)/s, '');
-                
-                // Remove duplicate question at the start if present
-                const questionPattern = new RegExp('^' + text.split('\n')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\s*', 'i');
-                if (text.split('\n')[0].length < 100) { // Only if first line is short (likely a question)
-                    text = text.replace(questionPattern, '');
-                }
+                // Remove thinking artifacts if present
+                text = text.replace(/^.*?I should[^.]*\.\s*/, '');
+                text = text.replace(/^.*?\d+s[^.]*\.\s*/, '');
+                text = text.replace(/^Thinking about[^.]*\.\s*/, '');
                 
                 // Check if Claude is still generating
                 const isGenerating = !!(

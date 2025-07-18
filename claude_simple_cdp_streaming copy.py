@@ -12,7 +12,6 @@ import time
 import re
 import urllib.parse
 import threading
-import asyncio
 from datetime import datetime
 
 class StreamingClaude:
@@ -375,104 +374,6 @@ class StreamingClaude:
         else:
             self.streaming_active = True
     
-    async def send_message_with_streaming(self, question, max_wait=60, update_interval=0.5):
-        """
-        Async generator that yields chunks of Claude's response as they come in
-        Usage: async for chunk in claude.send_message_with_streaming(question):
-        """
-        # Send the question first
-        result = self.inject_and_ask(question)
-        if "Error:" in result or "error" in result.lower():
-            yield {"error": result, "complete": True}
-            return
-        
-        # Wait a moment for the message to be processed
-        await asyncio.sleep(2)
-        
-        start_time = time.time()
-        last_text = ""
-        last_length = 0
-        no_change_count = 0
-        
-        while time.time() - start_time < max_wait:
-            try:
-                response_data = self.get_current_response()
-                current_text = response_data.get('text', '')
-                is_generating = response_data.get('generating', False)
-                current_length = response_data.get('length', 0)
-                
-                # Check if we have new content
-                if current_text != last_text and current_length > 0:
-                    # Yield only the new part
-                    if current_length > last_length:
-                        new_part = current_text[last_length:]
-                        yield {
-                            "chunk": new_part,
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": is_generating,
-                            "complete": False
-                        }
-                    else:
-                        # Text changed but not necessarily longer (might be reformatted)
-                        yield {
-                            "chunk": "",
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": is_generating,
-                            "complete": False,
-                            "reformatted": True
-                        }
-                    
-                    last_text = current_text
-                    last_length = current_length
-                    no_change_count = 0
-                
-                # Check if response is complete
-                if current_length > 20 and not is_generating:
-                    yield {
-                        "chunk": "",
-                        "full_text": current_text,
-                        "length": current_length,
-                        "generating": False,
-                        "complete": True
-                    }
-                    return
-                
-                # Check for no changes (might indicate completion or error)
-                if current_text == last_text:
-                    no_change_count += 1
-                    if no_change_count > 10 and current_length > 10:  # 5 seconds of no change
-                        yield {
-                            "chunk": "",
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": False,
-                            "complete": True,
-                            "reason": "no_new_content"
-                        }
-                        return
-                
-                await asyncio.sleep(update_interval)
-                
-            except Exception as e:
-                yield {
-                    "error": f"Error during streaming: {e}",
-                    "complete": True
-                }
-                return
-        
-        # Timeout reached
-        yield {
-            "chunk": "",
-            "full_text": last_text,
-            "length": len(last_text) if last_text else 0,
-            "generating": False,
-            "complete": True,
-            "timeout": True,
-            "error": "Streaming timeout reached"
-        }
-
     def stream_response(self, max_wait=60, update_interval=0.5):
         """Stream Claude's response in real-time"""
         print("\n🤖 Claude is responding...")

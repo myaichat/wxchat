@@ -9,7 +9,8 @@ import json
 import os
 import anthropic
 from streamlit.runtime.scriptrunner import add_script_run_ctx
-from chat_handlers.claude_streaming_chat import send_message_with_streaming
+# Lazy import to avoid startup issues
+StreamingClaude = None
 
 TIMEOUT_SEC = 60
 
@@ -69,8 +70,29 @@ def start_concurrent_streaming(question):
     start_thread(api_streaming_worker, question)
 
 def webui_streaming_worker(question):
-    """Worker thread for Web UI streaming using direct streaming_chat - updates session state incrementally"""
+    """Worker thread for Web UI streaming using ChromeDebugChatBot - updates session state incrementally"""
+    bot = None
     try:
+        # Check if we're in a Streamlit environment that might have subprocess issues
+        import sys
+        import platform
+        
+        # Early detection of potential Playwright issues
+        if platform.system() == "Windows" and hasattr(sys, 'ps1') == False:
+            # We're likely in a non-interactive environment on Windows
+            st.session_state.claude_webui_streaming_text = "⚠️ Web UI mode may not work in this environment. Using API-only mode is recommended."
+        
+        # Lazy import StreamingClaude only when needed
+        global StreamingClaude
+        if StreamingClaude is None:
+            try:
+                from chat_handlers.claude_streaming_chat import StreamingClaude
+            except Exception as import_error:
+                st.session_state.claude_webui_streaming_text = f"❌ Import error: Could not import StreamingClaude - {str(import_error)}"
+                st.session_state.claude_webui_stream_complete = True
+                st.session_state.claude_generating_response = False
+                return
+        
         # Store original prompt for logging
         original_prompt = question.strip()
         cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
@@ -82,87 +104,115 @@ def webui_streaming_worker(question):
         st.session_state.claude_conversation_history.append({"role": "user", "content": cleaned_prompt})
         
         full_response = ""
-        previous = ""
-        response_started = False
         
-        # Create event loop for async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Try to create event loop, but handle subprocess issues gracefully
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        except Exception as loop_creation_error:
+            error_msg = str(loop_creation_error)
+            if "NotImplementedError" in error_msg:
+                st.session_state.claude_webui_streaming_text = "❌ Cannot create async event loop in this environment. Web UI mode is not supported. Please use API-only mode."
+            else:
+                st.session_state.claude_webui_streaming_text = f"❌ Event loop creation failed: {error_msg}"
+            st.session_state.claude_webui_stream_complete = True
+            st.session_state.claude_generating_response = False
+            return
         
         try:
-            # Use the direct streaming function
+            # Use the ChromeDebugChatBot class properly
             async def stream_response():
-                nonlocal full_response, previous, response_started
+                nonlocal full_response, bot
                 
-                async for chunk in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
-                    if st.session_state.stop_streaming:
-                        break
+                try:
+                    st.session_state.claude_webui_streaming_text = "🔄 Connecting to Claude browser tab..."
                     
-                    status = chunk.get("status")
-                    content = chunk.get("content", "")
+                    # Create bot instance only when needed
+                    bot = StreamingClaude(debug_port=9222)
                     
-                    if status == "started":
-                        response_started = True
-                        st.session_state.claude_webui_streaming_text = "🚀 Assistant started typing..."
-                    elif status == "streaming":
-                        # Update session state with streaming content
-                        if len(content) > len(previous):
-                            # Smart streaming logic (same as simple_ask_chatgpt.py)
-                            safe_patterns = [
-                                '\n\n', '\n- ', '\n## ', '\n### ', '. ', '! ', '? ', 
-                                ', ', '; ', ': ', '**.', '**,', '**:', '`.', '`,', '```\n'
-                            ]
-                            
-                            last_safe_pos = len(previous)
-                            for pattern in safe_patterns:
-                                pos = content.rfind(pattern, len(previous))
-                                if pos != -1 and pos + len(pattern) > last_safe_pos:
-                                    last_safe_pos = pos + len(pattern)
-                            
-                            space_pos = content.rfind(' ', len(previous))
-                            if space_pos != -1 and space_pos + 1 > last_safe_pos:
-                                check_pos = space_pos + 1
-                                if check_pos < len(content):
-                                    before_space = content[max(0, space_pos-5):space_pos]
-                                    after_space = content[space_pos:min(len(content), space_pos+5)]
-                                    if not ('**' in before_space and '**' not in after_space) and not ('`' in before_space and '`' not in after_space):
-                                        last_safe_pos = check_pos
-                            
-                            if last_safe_pos > len(previous) + 15:
-                                new_chunk = content[len(previous):last_safe_pos]
-                                full_response += new_chunk
-                                # Update session state for UI display
-                                st.session_state.claude_webui_streaming_text = full_response + "▌"
-                                previous = content[:last_safe_pos]
-                            elif len(content) > len(previous) + 150:
-                                force_pos = len(previous) + 100
-                                last_space = content.rfind(' ', len(previous), force_pos)
-                                if last_space > len(previous):
-                                    new_chunk = content[len(previous):last_space + 1]
-                                    full_response += new_chunk
-                                    st.session_state.claude_webui_streaming_text = full_response + "▌"
-                                    previous = content[:last_space + 1]
-                    elif status == "complete":
-                        if len(content) > len(previous):
-                            remaining = content[len(previous):]
-                            full_response += remaining
-                        elif not response_started:
-                            full_response = content
+                    # Connect to existing Chrome tab
+                    if bot.get_claude_tab():
+                        st.session_state.claude_webui_streaming_text = "🚀 Connected to Claude, starting response..."
                         
-                        # Final update to session state
+                        # Send message and get response
+                        result = bot.inject_and_ask(cleaned_prompt)
+                        if "Error:" in result or "error" in result.lower():
+                            st.session_state.claude_webui_streaming_text = f"❌ {result}"
+                            st.session_state.claude_webui_stream_complete = True
+                            st.session_state.claude_generating_response = False
+                            return
+                        
+                        # Stream the response
+                        async for chunk_data in bot.send_message_with_streaming(cleaned_prompt):
+                            if st.session_state.stop_streaming:
+                                break
+                            
+                            if "error" in chunk_data:
+                                st.session_state.claude_webui_streaming_text = f"Streaming error: {chunk_data['error']}"
+                                st.session_state.claude_webui_stream_complete = True
+                                st.session_state.claude_generating_response = False
+                                return
+                            
+                            if "chunk" in chunk_data and chunk_data["chunk"]:
+                                full_response += chunk_data["chunk"]
+                                # Update session state with streaming content and cursor
+                                st.session_state.claude_webui_streaming_text = full_response + "▌"
+                            
+                            if chunk_data.get("complete", False):
+                                break
+                        
+                        # Final update to session state without cursor
                         st.session_state.claude_webui_streaming_text = full_response
-                        break
-                    elif status in ["timeout", "error"]:
-                        st.session_state.claude_webui_streaming_text = f"Streaming error: {content}"
+                        
+                    else:
+                        st.session_state.claude_webui_streaming_text = "❌ Could not connect to Claude browser tab. Make sure Chrome is running with debug enabled and Claude.ai is open."
                         st.session_state.claude_webui_stream_complete = True
                         st.session_state.claude_generating_response = False
                         return
+                        
+                except Exception as connection_error:
+                    # Handle connection-specific errors more gracefully
+                    error_msg = str(connection_error)
+                    if "NotImplementedError" in error_msg or "subprocess" in error_msg:
+                        st.session_state.claude_webui_streaming_text = "❌ Subprocess creation failed. Web UI mode is not supported in this environment. Please use API-only mode or run Chrome with debug mode manually."
+                    elif "playwright" in error_msg.lower():
+                        st.session_state.claude_webui_streaming_text = "❌ Playwright connection failed. Chrome debug mode may not be available in this environment."
+                    else:
+                        st.session_state.claude_webui_streaming_text = f"❌ Connection error: {error_msg}"
+                    st.session_state.claude_webui_stream_complete = True
+                    st.session_state.claude_generating_response = False
+                    return
+                        
+                finally:
+                    # Clean up bot resources - StreamingClaude doesn't need explicit cleanup
+                    pass
             
-            # Run the async streaming
-            loop.run_until_complete(stream_response())
+            # Run the async streaming with better error handling
+            try:
+                loop.run_until_complete(stream_response())
+            except RuntimeError as runtime_error:
+                error_msg = str(runtime_error)
+                if "NotImplementedError" in error_msg or "subprocess" in error_msg:
+                    st.session_state.claude_webui_streaming_text = "❌ Runtime error: Web UI mode is not supported in this environment. Please disable Web UI and use API-only mode."
+                else:
+                    st.session_state.claude_webui_streaming_text = f"❌ Runtime error: {error_msg}"
+                st.session_state.claude_webui_stream_complete = True
+                st.session_state.claude_generating_response = False
             
+        except Exception as loop_error:
+            # Handle any loop-level errors
+            error_msg = str(loop_error)
+            if "NotImplementedError" in error_msg or "subprocess" in error_msg:
+                st.session_state.claude_webui_streaming_text = "❌ Web UI mode is not supported in this environment. Please disable Claude Web UI checkbox and use API-only mode."
+            else:
+                st.session_state.claude_webui_streaming_text = f"❌ Loop error: {error_msg}"
+            st.session_state.claude_webui_stream_complete = True
+            st.session_state.claude_generating_response = False
         finally:
-            loop.close()
+            try:
+                loop.close()
+            except:
+                pass  # Ignore loop cleanup errors
         
         # Store final response
         if full_response:
@@ -173,9 +223,19 @@ def webui_streaming_worker(question):
         st.session_state.claude_generating_response = False
         
     except Exception as e:
-        st.session_state.claude_webui_streaming_text = f"Error: {str(e)}"
+        # Top-level error handling with more specific messages
+        error_msg = str(e)
+        if "NotImplementedError" in error_msg or "subprocess" in error_msg:
+            st.session_state.claude_webui_streaming_text = "❌ Web UI mode is not supported in this environment. Please disable the Claude Web UI checkbox and use API-only mode instead."
+        elif "playwright" in error_msg.lower():
+            st.session_state.claude_webui_streaming_text = "❌ Playwright is not available in this environment. Please disable Web UI mode and use API-only."
+        else:
+            st.session_state.claude_webui_streaming_text = f"❌ Error: {error_msg}"
         st.session_state.claude_webui_stream_complete = True
         st.session_state.claude_generating_response = False
+    finally:
+        # Final cleanup attempt - StreamingClaude doesn't need explicit cleanup
+        pass
 
 def api_streaming_worker(question):
     """Worker thread for Claude API streaming - updates session state incrementally"""
@@ -377,10 +437,12 @@ def handle_concurrent_streaming():
         st.success("✅ Both Claude responses completed!")
         st.rerun()
     else:
-        # More frequent auto-refresh during active streaming
-        import time
-        time.sleep(0.2)  # Refresh every 200ms for smoother streaming
-        st.rerun()
+        # Only auto-refresh if we're actually streaming (not just at startup)
+        if (st.session_state.claude_generating_response or 
+            st.session_state.claude_generating_api_response):
+            import time
+            time.sleep(0.2)  # Refresh every 200ms for smoother streaming
+            st.rerun()
 
 def handle_stopped_streaming():
     """Handle stopped streaming cleanup"""
@@ -390,3 +452,72 @@ def handle_stopped_streaming():
         st.session_state.stop_streaming = False
         st.session_state.manual_transcription = None  # Clear manual transcription if stopped
         st.info("🛑 Claude streaming stopped by user")
+
+def main():
+    """Main function for standalone execution"""
+    import sys
+    from datetime import datetime
+    
+    if len(sys.argv) < 2:
+        print("Usage: python claude_handler.py 'your question'")
+        print("Example: python claude_handler.py 'how are you?'")
+        return
+    
+    question = sys.argv[1]
+    
+    print("🚀 Claude Handler (Standalone Mode)")
+    print("=" * 50)
+    print(f"📝 Question: {question}")
+    print(f"⏰ Started at: {datetime.now().strftime('%H:%M:%S')}")
+    print()
+    
+    # Import StreamingClaude directly
+    try:
+        from chat_handlers.claude_streaming_chat import StreamingClaude
+    except ImportError:
+        try:
+            # Try relative import if we're running from within chat_handlers
+            from claude_streaming_chat import StreamingClaude
+        except ImportError:
+            print("❌ Could not import StreamingClaude from claude_streaming_chat")
+            print("Make sure you're running from the project root directory")
+            return
+    
+    # Initialize Claude
+    claude = StreamingClaude()
+    
+    # Find Claude tab
+    if not claude.get_claude_tab():
+        print("❌ No Claude.ai tab found")
+        print("Please open https://claude.ai in Chrome and login")
+        return
+    
+    print("✅ Found Claude.ai tab")
+    
+    # Send question
+    print("📤 Sending question...")
+    result = claude.inject_and_ask(question)
+    print(f"📋 Send result: {result}")
+    
+    if "Error:" in result or "error" in result.lower():
+        print(f"❌ {result}")
+        return
+    
+    # Wait a moment for the message to be processed
+    print("⏳ Waiting for Claude to start responding...")
+    import time
+    time.sleep(2)
+    
+    # Stream the response
+    response = claude.stream_response()
+    
+    print()
+    print("📊 Final Response:")
+    print("-" * 50)
+    print(response)
+    print("-" * 50)
+    print(f"📏 Length: {len(response)} characters")
+    print(f"⏰ Completed at: {datetime.now().strftime('%H:%M:%S')}")
+
+if __name__ == "__main__":
+    main()

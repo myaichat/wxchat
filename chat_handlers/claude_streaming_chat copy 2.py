@@ -122,6 +122,54 @@ class ChromeDebugChatBot:
             self.end_operation("CONNECT", "- Failed")
             return False
 
+    async def get_existing_weather_info(self):
+        """Check if there's already weather information on the page"""
+        try:
+            # Get all text content from the page
+            page_text = await self.page.evaluate("document.body.innerText")
+            
+            # Look for weather-related paragraphs
+            paragraphs = [p.strip() for p in page_text.split('\n\n') if p.strip()]
+            
+            # Find the best weather-related paragraph
+            best_response = None
+            best_score = 0
+            
+            for paragraph in paragraphs:
+                if len(paragraph) > 100:  # Substantial content
+                    # Score based on weather-related content
+                    score = 0
+                    weather_terms = ['weather', 'temperature', 'cloudy', 'sunny', 'forecast', 
+                                   'burien', '°F', '°C', 'high', 'low', 'today', 'currently',
+                                   'pleasant', 'mild', 'comfortable']
+                    
+                    for term in weather_terms:
+                        if term.lower() in paragraph.lower():
+                            score += 1
+                    
+                    # Prefer longer, more complete responses
+                    if len(paragraph) > 200:
+                        score += 2
+                    
+                    # Bonus for specific weather patterns
+                    if ('today' in paragraph.lower() and 
+                        ('°F' in paragraph or '°C' in paragraph) and
+                        ('high' in paragraph.lower() or 'low' in paragraph.lower())):
+                        score += 3
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_response = paragraph
+            
+            if best_response and best_score >= 5:  # Must have substantial weather content
+                return best_response
+                
+            return None
+            
+        except Exception as e:
+            print(f"Error checking existing weather info: {e}")
+            return None
+
     async def send_message_with_streaming(self, question):
         """Send a message to the chat and stream the response as it appears"""
         self.start_operation("SEND_MESSAGE")
@@ -224,7 +272,7 @@ class ChromeDebugChatBot:
             max_no_change = 4  # Reduced from 6 to 4 (2 seconds of no changes)
             
             # Wait a moment for the response to start appearing
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(1.0)  # Give Claude time to respond
             
             while iteration < max_iterations:
                 try:
@@ -260,7 +308,7 @@ class ChromeDebugChatBot:
                             # No new content detected
                             no_change_count += 1
                         
-                        # Check if response is complete - more aggressive for short responses
+                        # Check if response is complete
                         if self._is_response_complete(current_content, current_response, question):
                             self.log("Response appears to be complete")
                             break
@@ -282,7 +330,7 @@ class ChromeDebugChatBot:
                                 break
                     
                     # Wait before next check
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.5)  # Check every 500ms
                     iteration += 1
                     
                 except Exception as e:
@@ -307,7 +355,7 @@ class ChromeDebugChatBot:
             yield f"Error: {e}"
 
     def _detect_response_start(self, current_content, question, initial_content):
-        """Detect if Claude has started responding - improved for short responses"""
+        """Detect if Claude has started responding"""
         try:
             # Look for new substantial content that wasn't in initial content
             current_lines = [line.strip() for line in current_content.split('\n') if line.strip()]
@@ -316,7 +364,7 @@ class ChromeDebugChatBot:
             # Find lines that are new
             new_lines = []
             for line in current_lines:
-                if line not in initial_lines and len(line) > 1:  # Very low threshold
+                if line not in initial_lines and len(line) > 3:  # Reduced from 10 to 3
                     new_lines.append(line)
             
             # Look for response indicators
@@ -334,35 +382,25 @@ class ChromeDebugChatBot:
                     return True
                 
                 # If we find any substantial new content, response has started
-                if len(line) > 2:  # Very low threshold for short responses
+                # Reduced threshold for shorter responses
+                if len(line) > 5:  # Reduced from 20 to 5
                     return True
             
-            # Additional check: look for common response patterns (case insensitive)
+            # Additional check: look for common response patterns
             content_lower = current_content.lower()
-            initial_lower = initial_content.lower()
-            
             response_indicators = [
                 "i'm doing well",
                 "i'm good",
-                "doing well",
-                "i'm fine",
-                "fine",
-                "good",
-                "well",
+                "hello! what's up",
                 "hello",
                 "hi there",
-                "hi",
-                "hey",
                 "how can i help",
                 "thanks for asking",
-                "what's up",
-                "sup",
-                "not much",
-                "all good"
+                "what's up"
             ]
             
             for indicator in response_indicators:
-                if indicator in content_lower and indicator not in initial_lower:
+                if indicator in content_lower and indicator not in initial_content.lower():
                     return True
             
             return False
@@ -372,17 +410,15 @@ class ChromeDebugChatBot:
             return False
 
     def _extract_current_response(self, current_content, question):
-        """Extract the current response content from the page - improved for short responses"""
+        """Extract the current response content from the page"""
         try:
             lines = [line.strip() for line in current_content.split('\n') if line.strip()]
             
             # Find the LAST occurrence of our question (most recent)
             question_index = -1
-            question_lower = question.lower().strip()
-            
             for i in range(len(lines) - 1, -1, -1):  # Search backwards
-                line = lines[i].lower().strip()
-                if question_lower in line and len(line) >= len(question_lower) * 0.7:  # More flexible matching
+                line = lines[i]
+                if question.lower() in line.lower() and len(line) >= len(question):
                     question_index = i
                     break
             
@@ -407,7 +443,7 @@ class ChromeDebugChatBot:
                     # Skip Claude's internal reasoning - be more comprehensive
                     reasoning_indicators = [
                         'The user is asking',
-                        'The user',
+                        'The user',  # Often starts Claude's reasoning
                         'I should',
                         'This means',
                         'I think',
@@ -449,17 +485,25 @@ class ChromeDebugChatBot:
                         found_actual_content = True
                         continue
                     
-                    # Look for actual response content - be more permissive for short responses
-                    if len(line) > 1:  # Very low threshold
-                        # Check if it's likely a real response vs UI element
-                        if not any(skip in line for skip in ['Edit', 'Send', 'Type', 'Message', 'Chrome', 'Tab']):
-                            response_lines.append(line)
-                            found_actual_content = True
+                    # Look for actual response content (not just reasoning)
+                    # Common patterns for actual responses
+                    if (len(line) > 3 and  # Further reduced for very short responses
+                        not line.startswith('The ') and  # Avoid "The user..." reasoning
+                        not line.startswith('This ') and  # Avoid "This is..." reasoning
+                        (line[0].isupper() or line.startswith('I\'m') or 'Java' in line or 'programming' in line or
+                         'doing well' in line or 'good' in line or 'hello' in line or 'well!' in line or 'How are' in line)):
+                        response_lines.append(line)
+                        found_actual_content = True
                     elif found_actual_content:
                         # If we've found actual content, continue collecting
                         response_lines.append(line)
+                    elif len(line) > 3 and not any(skip in line for skip in ['Edit', 'Send', 'Type', 'Message']):
+                        # For very short responses, be more permissive
+                        # This catches responses that might not match the patterns above
+                        response_lines.append(line)
+                        found_actual_content = True
                 
-                if response_lines:
+                if response_lines and found_actual_content:
                     return '\n'.join(response_lines)
             
             return ""
@@ -543,8 +587,10 @@ class ChromeDebugChatBot:
                     return True
             
             # Use "Thinking about responding to a casual greeting" for very short responses
+            # But only if it's actually a casual greeting question
             if (len(current_response.strip()) < 50 and 
-                'thinking about responding to a casual greeting' in current_content.lower()):
+                'thinking about responding to a casual greeting' in current_content.lower() and
+                is_short_question):  # Only apply this to actual casual greetings
                 self.log("Found casual greeting completion indicator for short response")
                 return True
             

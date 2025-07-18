@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Streaming Claude alternative using Chrome DevTools Protocol (no Playwright)
-Shows response streaming in real-time as Claude types
-Usage: python claude_simple_cdp_streaming.py "tell me more about java?"
+Simple Claude alternative using Chrome DevTools Protocol (no Playwright)
+Direct replacement for: python './chat_handlers/claude_streaming_chat.py' 'how ry?'
 """
 
 import sys
@@ -11,18 +10,13 @@ import requests
 import time
 import re
 import urllib.parse
-import threading
-import asyncio
-from datetime import datetime
 
-class StreamingClaude:
+class SimpleClaude:
     def __init__(self, debug_port=9222):
         self.debug_port = debug_port
         self.base_url = f"http://localhost:{debug_port}"
         self.tab_id = None
         self.ws_url = None
-        self.last_response_length = 0
-        self.streaming_active = False
         
     def get_claude_tab(self):
         """Find Claude.ai tab"""
@@ -244,15 +238,19 @@ class StreamingClaude:
         
         return result
     
-    def get_current_response(self):
-        """Get current response text from Claude"""
+    def wait_for_response(self, max_wait=30):
+        """Wait for Claude's response"""
         js_code = """
         (function() {
             try {
-                // Find messages with multiple approaches
+                // Debug: Let's see what elements are available
+                const allDivs = document.querySelectorAll('div');
+                const allElements = document.querySelectorAll('*');
+                
+                // Try multiple approaches to find messages
                 let messages = [];
                 
-                // Try multiple selectors for message containers
+                // Approach 1: Look for common message containers
                 const selectors = [
                     '[data-testid="conversation-turn"]',
                     '.message',
@@ -275,281 +273,169 @@ class StreamingClaude:
                     if (messages.length > 0) break;
                 }
                 
-                // Fallback: Look for any div with substantial text
+                // Approach 2: Look for any div that contains substantial text
                 if (messages.length === 0) {
-                    const allDivs = document.querySelectorAll('div');
                     const textDivs = Array.from(allDivs).filter(div => {
                         const text = div.textContent || '';
                         return text.length > 20 && 
                                !div.querySelector('input') && 
                                !div.querySelector('textarea') &&
-                               !div.querySelector('button');
+                               !div.querySelector('button') &&
+                               text.toLowerCase().includes('doing') || 
+                               text.toLowerCase().includes('well') ||
+                               text.toLowerCase().includes('how') ||
+                               text.toLowerCase().includes('today');
                     });
                     if (textDivs.length > 0) {
                         messages = textDivs;
                     }
                 }
                 
+                // Approach 3: Look for any element containing the expected response
                 if (messages.length === 0) {
+                    const responseElements = Array.from(allElements).filter(el => {
+                        const text = el.textContent || '';
+                        return text.includes("I'm doing well") || 
+                               text.includes("How are you") ||
+                               (text.length > 10 && text.toLowerCase().includes('doing'));
+                    });
+                    if (responseElements.length > 0) {
+                        messages = responseElements;
+                    }
+                }
+                
+                if (messages.length === 0) {
+                    // Return debug info
                     return {
-                        text: "",
+                        text: "No messages found",
                         generating: false,
                         length: 0,
-                        error: "No messages found"
+                        debug: "Total elements: " + allElements.length + 
+                               ", Divs: " + allDivs.length +
+                               ", Body text preview: " + (document.body.textContent || '').substring(0, 200)
                     };
                 }
                 
-                // Get the last message (most recent)
+                // Get the last/best message
                 const lastMessage = messages[messages.length - 1];
                 let text = lastMessage.textContent || lastMessage.innerText || '';
                 
-                // Clean up the text
+                // Clean up the text and separate thinking from actual response
                 text = text.trim();
                 
-                // Remove thinking artifacts if present
+                // Try to separate the thinking part from the actual response
+                // Look for patterns that indicate thinking vs actual response
+                if (text.includes('Thinking about') || text.includes('0s')) {
+                    // Look for the actual response after thinking patterns
+                    // Pattern 1: Find text after "I should..." or similar thinking conclusions
+                    let responseMatch = text.match(/I should[^.]*\.\s*(.+)/);
+                    if (responseMatch) {
+                        text = responseMatch[1].trim();
+                    } else {
+                        // Pattern 2: Find text after thinking time indicators like "0s"
+                        responseMatch = text.match(/\d+s[^.]*\.\s*(.+)/);
+                        if (responseMatch) {
+                            text = responseMatch[1].trim();
+                        } else {
+                            // Pattern 3: Split by "Thinking about" and take the last meaningful part
+                            const parts = text.split('Thinking about');
+                            if (parts.length > 1) {
+                                // Look for the actual response in the last part
+                                const lastPart = parts[parts.length - 1];
+                                const actualResponse = lastPart.match(/[.!?]\s*([A-Z][^]*)/);
+                                if (actualResponse) {
+                                    text = actualResponse[1].trim();
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Additional cleanup - remove any remaining thinking artifacts
                 text = text.replace(/^.*?I should[^.]*\.\s*/, '');
                 text = text.replace(/^.*?\d+s[^.]*\.\s*/, '');
                 text = text.replace(/^Thinking about[^.]*\.\s*/, '');
                 
-                // Check if Claude is still generating
+                // Check if it's still generating
                 const isGenerating = !!(
                     document.querySelector('[data-testid="stop-button"]') ||
                     document.querySelector('.stop-button') ||
                     document.querySelector('[aria-label*="Stop"]') ||
                     text.includes('▌') ||
                     text.endsWith('...') ||
-                    lastMessage.querySelector('.loading') ||
-                    lastMessage.querySelector('.spinner')
+                    text.length < 5
                 );
                 
                 return {
                     text: text,
                     generating: isGenerating,
                     length: text.length,
-                    messageCount: messages.length
+                    messageCount: messages.length,
+                    selector: messages.length > 0 ? (lastMessage.className || lastMessage.tagName) : 'none'
                 };
             } catch (error) {
                 return {
-                    text: "",
+                    text: "Error: " + error.message,
                     generating: false,
                     length: 0,
-                    error: error.message
+                    error: error.stack
                 };
             }
         })();
         """
         
-        # Try WebSocket first, then fallback
-        result_str = self.execute_js_websocket(js_code)
+        print("Waiting for Claude's response...")
         
-        if isinstance(result_str, str) and ("error" in result_str.lower() or "timeout" in result_str.lower()):
-            result_str = self.execute_js_simple(js_code)
-        
-        # Parse the result
-        if isinstance(result_str, str) and result_str.startswith('{'):
+        for i in range(max_wait):
             try:
-                return json.loads(result_str)
-            except:
-                return {"text": result_str, "generating": False, "length": len(result_str)}
-        elif isinstance(result_str, dict):
-            return result_str
-        else:
-            return {"text": str(result_str), "generating": False, "length": len(str(result_str))}
-    
-    def print_streaming_response(self, new_text, is_complete=False):
-        """Print new text as it streams in"""
-        if not new_text:
-            return
-            
-        # Clear the current line and print new text
-        if self.streaming_active:
-            # Move cursor to beginning of line and clear it
-            print('\r' + ' ' * 80 + '\r', end='', flush=True)
-        
-        # Print the new text
-        print(new_text, end='', flush=True)
-        
-        if is_complete:
-            print()  # New line when complete
-            self.streaming_active = False
-        else:
-            self.streaming_active = True
-    
-    async def send_message_with_streaming(self, question, max_wait=60, update_interval=0.5):
-        """
-        Async generator that yields chunks of Claude's response as they come in
-        Usage: async for chunk in claude.send_message_with_streaming(question):
-        """
-        # Send the question first
-        result = self.inject_and_ask(question)
-        if "Error:" in result or "error" in result.lower():
-            yield {"error": result, "complete": True}
-            return
-        
-        # Wait a moment for the message to be processed
-        await asyncio.sleep(2)
-        
-        start_time = time.time()
-        last_text = ""
-        last_length = 0
-        no_change_count = 0
-        
-        while time.time() - start_time < max_wait:
-            try:
-                response_data = self.get_current_response()
-                current_text = response_data.get('text', '')
-                is_generating = response_data.get('generating', False)
-                current_length = response_data.get('length', 0)
+                # Try WebSocket first, then fallback
+                result_str = self.execute_js_websocket(js_code)
                 
-                # Check if we have new content
-                if current_text != last_text and current_length > 0:
-                    # Yield only the new part
-                    if current_length > last_length:
-                        new_part = current_text[last_length:]
-                        yield {
-                            "chunk": new_part,
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": is_generating,
-                            "complete": False
-                        }
-                    else:
-                        # Text changed but not necessarily longer (might be reformatted)
-                        yield {
-                            "chunk": "",
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": is_generating,
-                            "complete": False,
-                            "reformatted": True
-                        }
-                    
-                    last_text = current_text
-                    last_length = current_length
-                    no_change_count = 0
+                # Check if result_str is a string before calling .lower()
+                if isinstance(result_str, str) and ("error" in result_str.lower() or "timeout" in result_str.lower()):
+                    result_str = self.execute_js_simple(js_code)
                 
-                # Check if response is complete
-                if current_length > 20 and not is_generating:
-                    yield {
-                        "chunk": "",
-                        "full_text": current_text,
-                        "length": current_length,
-                        "generating": False,
-                        "complete": True
-                    }
-                    return
+                # Parse the result
+                if isinstance(result_str, str) and result_str.startswith('{'):
+                    try:
+                        value = json.loads(result_str)
+                    except:
+                        value = {"text": result_str, "generating": False, "length": len(result_str)}
+                elif isinstance(result_str, dict):
+                    value = result_str
+                else:
+                    value = {"text": str(result_str), "generating": False, "length": len(str(result_str))}
                 
-                # Check for no changes (might indicate completion or error)
-                if current_text == last_text:
-                    no_change_count += 1
-                    if no_change_count > 10 and current_length > 10:  # 5 seconds of no change
-                        yield {
-                            "chunk": "",
-                            "full_text": current_text,
-                            "length": current_length,
-                            "generating": False,
-                            "complete": True,
-                            "reason": "no_new_content"
-                        }
-                        return
+                text = value.get('text', '')
+                generating = value.get('generating', False)
+                length = value.get('length', 0)
                 
-                await asyncio.sleep(update_interval)
+                if text and length > 20 and not generating:
+                    return text
+                elif text and generating:
+                    print(f"Claude is typing... ({length} chars)")
+                elif text:
+                    print(f"Got response but might be incomplete: {text[:50]}...")
+                
+                time.sleep(1)
                 
             except Exception as e:
-                yield {
-                    "error": f"Error during streaming: {e}",
-                    "complete": True
-                }
-                return
-        
-        # Timeout reached
-        yield {
-            "chunk": "",
-            "full_text": last_text,
-            "length": len(last_text) if last_text else 0,
-            "generating": False,
-            "complete": True,
-            "timeout": True,
-            "error": "Streaming timeout reached"
-        }
-
-    def stream_response(self, max_wait=60, update_interval=0.5):
-        """Stream Claude's response in real-time"""
-        print("\n🤖 Claude is responding...")
-        print("=" * 50)
-        
-        start_time = time.time()
-        last_text = ""
-        last_length = 0
-        no_change_count = 0
-        
-        while time.time() - start_time < max_wait:
-            try:
-                response_data = self.get_current_response()
-                current_text = response_data.get('text', '')
-                is_generating = response_data.get('generating', False)
-                current_length = response_data.get('length', 0)
-                
-                # Check if we have new content
-                if current_text != last_text and current_length > 0:
-                    # Print only the new part
-                    if current_length > last_length:
-                        new_part = current_text[last_length:]
-                        print(new_part, end='', flush=True)
-                    else:
-                        # Text changed but not necessarily longer (might be reformatted)
-                        print(f"\r{current_text}", end='', flush=True)
-                    
-                    last_text = current_text
-                    last_length = current_length
-                    no_change_count = 0
-                
-                # Check if response is complete
-                if current_length > 20 and not is_generating:
-                    print()  # New line
-                    print("=" * 50)
-                    print("✅ Response complete!")
-                    return current_text
-                
-                # Show progress for long responses
-                if is_generating and current_length > 0:
-                    # Update status occasionally
-                    if int(time.time()) % 5 == 0:
-                        elapsed = int(time.time() - start_time)
-                        print(f"\n[Streaming... {current_length} chars, {elapsed}s elapsed]", end='', flush=True)
-                
-                # Check for no changes (might indicate completion or error)
-                if current_text == last_text:
-                    no_change_count += 1
-                    if no_change_count > 10 and current_length > 10:  # 5 seconds of no change
-                        print()
-                        print("=" * 50)
-                        print("✅ Response appears complete (no new content)")
-                        return current_text
-                
-                time.sleep(update_interval)
-                
-            except Exception as e:
-                print(f"\n❌ Error during streaming: {e}")
+                print(f"Error waiting for response: {e}")
                 time.sleep(1)
         
-        print()
-        print("=" * 50)
-        print("⏰ Streaming timeout reached")
-        return last_text if last_text else "Timeout: No response received"
+        return "Timeout: No complete response received within 30 seconds"
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python claude_simple_cdp_streaming.py 'your question'")
-        print("Example: python claude_simple_cdp_streaming.py 'tell me more about java?'")
+        print("Usage: python claude_simple_cdp.py 'your question'")
+        print("Example: python claude_simple_cdp.py 'how ry?'")
         return
     
     question = sys.argv[1]
     
-    print("🚀 Claude Streaming CDP (Real-time Response)")
-    print("=" * 50)
-    print(f"📝 Question: {question}")
-    print(f"⏰ Started at: {datetime.now().strftime('%H:%M:%S')}")
+    print("Claude Simple CDP (No Playwright)")
+    print("=" * 40)
+    print(f"Question: {question}")
     print()
     
     # Check Chrome debug
@@ -560,7 +446,7 @@ def main():
     except:
         print("❌ Chrome debug port not accessible")
         print()
-        print("🔧 Setup required:")
+        print("Setup required:")
         print("1. Close all Chrome instances")
         print("2. Start Chrome with:")
         print("   chrome --remote-debugging-port=9222 --user-data-dir=C:\\temp\\chrome-debug")
@@ -568,14 +454,14 @@ def main():
         print("4. Start a new conversation")
         print("5. Run this script again")
         print()
-        print("💡 Optional: Install websocket support for better reliability:")
+        print("Optional: Install websocket support for better reliability:")
         print("   pip install websocket-client")
         return
     
     print("✅ Chrome debug accessible")
     
     # Initialize Claude
-    claude = StreamingClaude()
+    claude = SimpleClaude()
     
     # Find Claude tab
     if not claude.get_claude_tab():
@@ -586,44 +472,38 @@ def main():
     print("✅ Found Claude.ai tab")
     
     # Send question
-    print("📤 Sending question...")
+    print("Sending question...")
     result = claude.inject_and_ask(question)
-    print(f"📋 Send result: {result}")
+    print(f"Send result: {result}")
     
     if "Error:" in result or "error" in result.lower():
         print(f"❌ {result}")
         print()
-        print("🔧 Troubleshooting tips:")
+        print("Troubleshooting tips:")
         print("1. Make sure you're on the Claude conversation page")
         print("2. Try refreshing the Claude.ai page")
         print("3. Make sure the input field is visible and not blocked")
         return
     
-    # Wait a moment for the message to be processed
-    print("⏳ Waiting for Claude to start responding...")
-    time.sleep(2)
-    
-    # Stream the response
-    response = claude.stream_response()
+    # Wait for response
+    response = claude.wait_for_response()
     
     print()
-    print("📊 Final Response:")
-    print("-" * 50)
+    print("Claude Response:")
+    print("-" * 40)
     print(response)
-    print("-" * 50)
-    print(f"📏 Length: {len(response)} characters")
-    print(f"⏰ Completed at: {datetime.now().strftime('%H:%M:%S')}")
+    print("-" * 40)
     
     if "Error:" in response or "Timeout:" in response or "error" in response.lower():
         print("❌ Failed to get complete response")
         print()
-        print("🔧 Try:")
+        print("Try:")
         print("1. Make sure you're on the conversation page")
         print("2. Try asking a question manually first")
         print("3. Refresh the Claude.ai page")
         print("4. Check if Claude is responding to manual input")
     else:
-        print("🎉 Streaming completed successfully!")
+        print("✅ Success!")
 
 if __name__ == "__main__":
     main()

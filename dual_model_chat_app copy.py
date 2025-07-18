@@ -244,10 +244,6 @@ with ai_col2:
     st.session_state.enable_claude = st.checkbox("🤖 Claude", 
                                                  value=st.session_state.enable_claude)
 
-# Add warning about Web UI mode in Streamlit environment
-if st.session_state.enable_claude:
-    st.info("💡 **Note**: Claude Web UI mode may not work in Streamlit due to browser automation limitations. The API mode will work reliably. If you see Web UI connection errors, this is expected behavior.")
-
 # ---------- Settings ----------
 settings_col1, settings_col2, settings_col3 = st.columns(3)
 

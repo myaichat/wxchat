@@ -57,28 +57,52 @@ def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None,
         st.error(f"Failed to log Q&A pair: {str(e)}")
 
 def start_concurrent_streaming(question):
-    """Start both Web UI and API streaming concurrently"""
+    """Start Web UI and/or API streaming based on enabled checkboxes"""
+    webui_enabled = st.session_state.get("enable_chatgpt_webui", False)
+    api_enabled = st.session_state.get("enable_chatgpt_api", False)
+    
+    # Debug: Print checkbox states
+    print(f"DEBUG: ChatGPT WebUI enabled: {webui_enabled}, API enabled: {api_enabled}")
+    
+    if not webui_enabled and not api_enabled:
+        print("DEBUG: Neither WebUI nor API enabled, returning early")
+        return  # Nothing to start
+    
     st.session_state.concurrent_streaming_active = True
     st.session_state.webui_streaming_text = ""
     st.session_state.api_streaming_text = ""
-    st.session_state.webui_stream_complete = False
-    st.session_state.api_stream_complete = False
-    st.session_state.generating_response = True
-    st.session_state.generating_api_response = True
+    st.session_state.webui_stream_complete = not webui_enabled  # Mark as complete if not enabled
+    st.session_state.api_stream_complete = not api_enabled     # Mark as complete if not enabled
+    st.session_state.generating_response = webui_enabled
+    st.session_state.generating_api_response = api_enabled
     st.session_state.stop_streaming = False
     
-    # Store question for logging when both responses complete
+    # Store question for logging when responses complete
     st.session_state.pending_log_question = question.strip()
     
-    # Start Web UI streaming thread (now using direct streaming_chat)
-    start_thread(webui_streaming_worker, question)
+    # Start Web UI streaming thread only if enabled
+    if webui_enabled:
+        print("DEBUG: Starting WebUI streaming worker")
+        start_thread(webui_streaming_worker, question)
+    else:
+        print("DEBUG: WebUI disabled, not starting WebUI worker")
     
-    # Start API streaming thread  
-    start_thread(api_streaming_worker, question)
+    # Start API streaming thread only if enabled
+    if api_enabled:
+        print("DEBUG: Starting API streaming worker")
+        start_thread(api_streaming_worker, question)
+    else:
+        print("DEBUG: API disabled, not starting API worker")
 
 def webui_streaming_worker(question):
     """Worker thread for Web UI streaming using direct streaming_chat - updates session state incrementally"""
     try:
+        # Double-check that WebUI is enabled before proceeding
+        if not st.session_state.get("enable_chatgpt_webui", False):
+            st.session_state.webui_stream_complete = True
+            st.session_state.generating_response = False
+            return
+        
         # Store original prompt for logging
         original_prompt = question.strip()
         cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
@@ -188,6 +212,12 @@ def webui_streaming_worker(question):
 def api_streaming_worker(question):
     """Worker thread for API streaming - updates session state incrementally"""
     try:
+        # Double-check that API is enabled before proceeding
+        if not st.session_state.get("enable_chatgpt_api", False):
+            st.session_state.api_stream_complete = True
+            st.session_state.generating_api_response = False
+            return
+        
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
         # Store the API question for logging
@@ -334,11 +364,48 @@ def render_chatgpt_responses():
         with st.expander("📚 ChatGPT Web UI Session History", expanded=True):
             show_chatgpt_session_history()
 
-    # Two side-by-side panes with concurrent streaming
-    col_web, col_api = st.columns(2)
+    # Determine which columns to show based on enabled checkboxes
+    webui_enabled = st.session_state.get("enable_chatgpt_webui", False)
+    api_enabled = st.session_state.get("enable_chatgpt_api", False)
+    
+    if webui_enabled and api_enabled:
+        # Show both columns side-by-side
+        col_web, col_api = st.columns(2)
+        
+        # Web UI pane
+        with col_web:
+            st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
+            
+            remove='markdown\nCopy\nEdit\n'
+            if st.session_state.webui_streaming_text:
+                # Show live streaming updates
+                st.markdown(st.session_state.webui_streaming_text.strip(remove))
+            elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
+                # Show final response when not streaming
+                clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
+                st.markdown(clean.strip(remove))
+            elif st.session_state.generating_response:
+                st.info("Response will appear here…")
+            else:
+                st.info("Click **Get AI Response** to generate responses")
 
-    # Web UI pane
-    with col_web:
+        # API pane
+        with col_api:
+            st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
+            
+            if st.session_state.api_streaming_text:
+                # Show live streaming updates
+                st.markdown(st.session_state.api_streaming_text)
+            elif st.session_state.api_response and not st.session_state.concurrent_streaming_active:
+                # Show final response when not streaming
+                st.markdown(st.session_state.api_response)
+            elif st.session_state.generating_api_response:
+                st.info("API response will appear here…")
+            else:
+                st.info("Responses will appear here")
+                
+    elif webui_enabled:
+        # Show only Web UI column (full width)
         st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
         
         remove='markdown\nCopy\nEdit\n'
@@ -352,10 +419,10 @@ def render_chatgpt_responses():
         elif st.session_state.generating_response:
             st.info("Response will appear here…")
         else:
-            st.info("Click **Get Both Responses** to generate responses")
-
-    # API pane
-    with col_api:
+            st.info("Click **Get AI Response** to generate responses")
+            
+    elif api_enabled:
+        # Show only API column (full width)
         st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
         
         if st.session_state.api_streaming_text:
@@ -368,6 +435,9 @@ def render_chatgpt_responses():
             st.info("API response will appear here…")
         else:
             st.info("Responses will appear here")
+    else:
+        # Neither enabled
+        st.info("Enable WebUI and/or API checkboxes above to see ChatGPT responses")
 
 def handle_concurrent_streaming():
     """Handle auto-refresh and completion logic for concurrent streaming - now handled centrally in main app"""

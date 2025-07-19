@@ -240,16 +240,26 @@ with model_col:
     )
 
 # ---------- AI Model Selection ----------
-if "enable_chatgpt" not in st.session_state:
-    st.session_state.enable_chatgpt = False
+if "enable_chatgpt_webui" not in st.session_state:
+    st.session_state.enable_chatgpt_webui = True
+if "enable_chatgpt_api" not in st.session_state:
+    st.session_state.enable_chatgpt_api = True
 if "enable_claude" not in st.session_state:
     st.session_state.enable_claude = True
 
 ai_col1, ai_col2 = st.columns(2)
 
 with ai_col1:
-    st.session_state.enable_chatgpt = st.checkbox("💬 ChatGPT", 
-                                                  value=st.session_state.enable_chatgpt)
+    st.markdown("**💬 ChatGPT**")
+    chatgpt_col1, chatgpt_col2 = st.columns(2)
+    with chatgpt_col1:
+        st.session_state.enable_chatgpt_webui = st.checkbox("WebUI", 
+                                                           value=st.session_state.enable_chatgpt_webui,
+                                                           key="chatgpt_webui")
+    with chatgpt_col2:
+        st.session_state.enable_chatgpt_api = st.checkbox("API", 
+                                                         value=st.session_state.enable_chatgpt_api,
+                                                         key="chatgpt_api")
 
 with ai_col2:
     st.session_state.enable_claude = st.checkbox("🤖 Claude", 
@@ -397,7 +407,7 @@ if st.session_state.last_wav and not st.session_state.recording:
         if submitted and not st.session_state.generating_response:
             question = current_transcription()
             # Start streaming for enabled models only
-            if st.session_state.enable_chatgpt:
+            if st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api:
                 chatgpt_start_concurrent_streaming(question)
             if st.session_state.enable_claude:
                 claude_start_concurrent_streaming(question)
@@ -409,7 +419,7 @@ if st.session_state.transcription and not st.session_state.recording:
     
     # Create tabs only for enabled models
     tab_names = []
-    if st.session_state.enable_chatgpt:
+    if st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api:
         tab_names.append("💬 ChatGPT")
     if st.session_state.enable_claude:
         tab_names.append("🤖 Claude")
@@ -418,7 +428,7 @@ if st.session_state.transcription and not st.session_state.recording:
         tabs = st.tabs(tab_names)
         tab_index = 0
         
-        if st.session_state.enable_chatgpt:
+        if st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api:
             with tabs[tab_index]:
                 render_chatgpt_responses()
             tab_index += 1
@@ -448,7 +458,7 @@ if (st.session_state.transcribing and
         
         # Start ChatGPT streaming if auto_chatgpt is enabled
         if (st.session_state.auto_chatgpt and 
-            st.session_state.enable_chatgpt and 
+            (st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api) and 
             not st.session_state.concurrent_streaming_active):
             chatgpt_start_concurrent_streaming(question)
         

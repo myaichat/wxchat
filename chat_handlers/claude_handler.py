@@ -59,39 +59,41 @@ def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None,
 
 def start_concurrent_streaming(question):
     """Start Web UI and/or API streaming based on enabled checkboxes"""
+    webui_enabled = st.session_state.get('enable_claude_webui', False)
+    api_enabled = st.session_state.get('enable_claude_api', False)
+    
+    # Debug: Print checkbox states
+    print(f"DEBUG: Claude WebUI enabled: {webui_enabled}, API enabled: {api_enabled}")
+    
+    if not webui_enabled and not api_enabled:
+        print("DEBUG: Neither Claude WebUI nor API enabled, returning early")
+        return  # Nothing to start
+    
     st.session_state.claude_concurrent_streaming_active = True
     st.session_state.claude_webui_streaming_text = ""
     st.session_state.claude_api_streaming_text = ""
-    st.session_state.claude_webui_stream_complete = False
-    st.session_state.claude_api_stream_complete = False
+    st.session_state.claude_webui_stream_complete = not webui_enabled  # Mark as complete if not enabled
+    st.session_state.claude_api_stream_complete = not api_enabled     # Mark as complete if not enabled
+    st.session_state.claude_generating_response = webui_enabled
+    st.session_state.claude_generating_api_response = api_enabled
     st.session_state.stop_streaming = False
     
-    # Store question for logging when both responses complete
+    # Store question for logging when responses complete
     st.session_state.claude_pending_log_question = question.strip()
     
-    # Only start enabled services
-    webui_enabled = st.session_state.get('enable_claude_webui', True)
-    api_enabled = st.session_state.get('enable_claude_api', True)
-    
+    # Start Web UI streaming thread only if enabled
     if webui_enabled:
-        st.session_state.claude_generating_response = True
-        # Start Web UI streaming thread
+        print("DEBUG: Starting Claude WebUI streaming worker")
         start_thread(webui_streaming_worker, question)
     else:
-        # Mark WebUI as complete if disabled
-        st.session_state.claude_webui_stream_complete = True
-        st.session_state.claude_generating_response = False
-        st.session_state.claude_webui_streaming_text = "ℹ️ Claude WebUI is disabled"
+        print("DEBUG: Claude WebUI disabled, not starting WebUI worker")
     
+    # Start API streaming thread only if enabled
     if api_enabled:
-        st.session_state.claude_generating_api_response = True
-        # Start API streaming thread  
+        print("DEBUG: Starting Claude API streaming worker")
         start_thread(api_streaming_worker, question)
     else:
-        # Mark API as complete if disabled
-        st.session_state.claude_api_stream_complete = True
-        st.session_state.claude_generating_api_response = False
-        st.session_state.claude_api_streaming_text = "ℹ️ Claude API is disabled"
+        print("DEBUG: Claude API disabled, not starting API worker")
 
 def webui_streaming_worker(question):
     """Worker thread for Web UI streaming using ChromeDebugChatBot - updates session state incrementally"""
@@ -468,58 +470,95 @@ def render_claude_responses():
         with st.expander("📚 Claude Web UI Session History", expanded=True):
             show_claude_session_history()
 
-    # Two side-by-side panes with concurrent streaming
-    col_web, col_api = st.columns(2)
-
-    # Web UI pane
-    with col_web:
-        st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
+    # Determine which columns to show based on enabled checkboxes
+    webui_enabled = st.session_state.get("enable_claude_webui", False)
+    api_enabled = st.session_state.get("enable_claude_api", False)
+    
+    def clean_reasoning_text(text):
+        """Remove reasoning artifacts from Claude's response"""
+        if not text:
+            return text
         
-        def clean_reasoning_text(text):
-            """Remove reasoning artifacts from Claude's response"""
-            if not text:
-                return text
+        import re
+        
+        # Remove common reasoning patterns - but be more careful with markdown
+        patterns = [
+            r'^.*?Let me organize this into a comprehensive response\.?\s*',
+            r'^.*?Let me format[^.]*\.\s*',
+            r'^.*?Let me provide[^.]*\.\s*',
+            r'^.*?I\'ll search[^.]*\.\s*',
+            r'^.*?I need to search[^.]*\.\s*',
+            r'^.*?Let me search[^.]*\.\s*',
+            r'^.*?Searching the web[^\n]*\n?',
+            r'^.*?Searching[^\n]*\n?',
+            r'^.*?Thinking\.\.\.\s*\d*s?\s*',
+            r'^.*?Thinking about[^.]*\.\s*',
+            r'^.*?Great! I now have[^.]*\.\s*',
+            r'^.*?Great![^.]*\.\s*',
+            r'^.*?\d+s[^.]*\.\s*',
+            r'^.*?I should[^.]*\.\s*',
+            r'^.*?comprehensive overview\.\s*',
+            r'^.*?Synthesized[^.]*\.\s*',
+            r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
+            r'^.*?markdown code block to show[^.]*\.?\s*',
+            r'^.*?as requested[^.]*\.?\s*',
+            r'^.*?markdown\s*',
+        ]
+        
+        # Apply all patterns
+        for pattern in patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+        
+        # More precise removal of artifacts before markdown headers - preserve markdown formatting
+        # Only remove text that looks like reasoning, not markdown syntax
+        text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
+        
+        # Clean up common UI artifacts
+        remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
+        for artifact in remove_artifacts:
+            text = text.replace(artifact, '')
+        
+        return text.strip()
+    
+    if webui_enabled and api_enabled:
+        # Show both columns side-by-side
+        col_web, col_api = st.columns(2)
+        
+        # Web UI pane
+        with col_web:
+            st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
             
-            import re
+            if st.session_state.claude_webui_streaming_text:
+                # Show live streaming updates with reasoning removed
+                cleaned_text = clean_reasoning_text(st.session_state.claude_webui_streaming_text)
+                st.markdown(cleaned_text)
+            elif st.session_state.claude_response and not st.session_state.claude_concurrent_streaming_active:
+                # Show final response when not streaming with reasoning removed
+                cleaned_text = clean_reasoning_text(st.session_state.claude_response)
+                st.markdown(cleaned_text)
+            elif st.session_state.claude_generating_response:
+                st.info("Response will appear here…")
+            else:
+                st.info("Click **Get AI Response** to generate responses")
+
+        # API pane
+        with col_api:
+            st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
             
-            # Remove common reasoning patterns - but be more careful with markdown
-            patterns = [
-                r'^.*?Let me organize this into a comprehensive response\.?\s*',
-                r'^.*?Let me format[^.]*\.\s*',
-                r'^.*?Let me provide[^.]*\.\s*',
-                r'^.*?I\'ll search[^.]*\.\s*',
-                r'^.*?I need to search[^.]*\.\s*',
-                r'^.*?Let me search[^.]*\.\s*',
-                r'^.*?Searching the web[^\n]*\n?',
-                r'^.*?Searching[^\n]*\n?',
-                r'^.*?Thinking\.\.\.\s*\d*s?\s*',
-                r'^.*?Thinking about[^.]*\.\s*',
-                r'^.*?Great! I now have[^.]*\.\s*',
-                r'^.*?Great![^.]*\.\s*',
-                r'^.*?\d+s[^.]*\.\s*',
-                r'^.*?I should[^.]*\.\s*',
-                r'^.*?comprehensive overview\.\s*',
-                r'^.*?Synthesized[^.]*\.\s*',
-                r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
-                r'^.*?markdown code block to show[^.]*\.?\s*',
-                r'^.*?as requested[^.]*\.?\s*',
-                r'^.*?markdown\s*',
-            ]
-            
-            # Apply all patterns
-            for pattern in patterns:
-                text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
-            
-            # More precise removal of artifacts before markdown headers - preserve markdown formatting
-            # Only remove text that looks like reasoning, not markdown syntax
-            text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
-            
-            # Clean up common UI artifacts
-            remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
-            for artifact in remove_artifacts:
-                text = text.replace(artifact, '')
-            
-            return text.strip()
+            if st.session_state.claude_api_streaming_text:
+                # Show live streaming updates
+                st.markdown(st.session_state.claude_api_streaming_text)
+            elif st.session_state.claude_api_response and not st.session_state.claude_concurrent_streaming_active:
+                # Show final response when not streaming
+                st.markdown(st.session_state.claude_api_response)
+            elif st.session_state.claude_generating_api_response:
+                st.info("API response will appear here…")
+            else:
+                st.info("Responses will appear here")
+                
+    elif webui_enabled:
+        # Show only Web UI column (full width)
+        st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
         
         if st.session_state.claude_webui_streaming_text:
             # Show live streaming updates with reasoning removed
@@ -532,10 +571,10 @@ def render_claude_responses():
         elif st.session_state.claude_generating_response:
             st.info("Response will appear here…")
         else:
-            st.info("Click **Get Both Responses** to generate responses")
-
-    # API pane
-    with col_api:
+            st.info("Click **Get AI Response** to generate responses")
+            
+    elif api_enabled:
+        # Show only API column (full width)
         st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
         
         if st.session_state.claude_api_streaming_text:
@@ -548,6 +587,9 @@ def render_claude_responses():
             st.info("API response will appear here…")
         else:
             st.info("Responses will appear here")
+    else:
+        # Neither enabled
+        st.info("Enable WebUI and/or API checkboxes above to see Claude responses")
 
 def handle_concurrent_streaming():
     """Handle auto-refresh and completion logic for concurrent streaming - now handled centrally in main app"""

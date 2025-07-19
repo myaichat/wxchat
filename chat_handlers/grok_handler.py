@@ -242,7 +242,7 @@ def webui_streaming_worker(question):
         st.session_state.grok_generating_response = False
 
 def api_streaming_worker(question):
-    """Worker thread for API streaming - updates session state incrementally"""
+    """Worker thread for API streaming using actual Grok API - updates session state incrementally"""
     try:
         # Double-check that API is enabled before proceeding
         if not st.session_state.get("enable_grok_api", False):
@@ -250,8 +250,15 @@ def api_streaming_worker(question):
             st.session_state.grok_generating_api_response = False
             return
         
-        # For now, simulate API response since Grok API might not be available
-        # In a real implementation, you would use the actual Grok API
+        # Check for API key
+        import os
+        api_key = os.getenv("XAI_API_KEY")
+        if not api_key or api_key == "your_xai_api_key_here":
+            st.session_state.grok_api_streaming_text = "❌ Grok API Error: XAI_API_KEY not found or not set in .env file. Please add your xAI API key."
+            st.session_state.grok_api_stream_complete = True
+            st.session_state.grok_generating_api_response = False
+            return
+        
         st.session_state.grok_api_streaming_text = "🚀 Grok API started typing..."
         
         # Store the API question for logging
@@ -260,31 +267,72 @@ def api_streaming_worker(question):
         # Add to separate API conversation history
         st.session_state.grok_api_conversation_history.append({"role": "user", "content": question})
         
-        # Simulate streaming response
-        import time
-        full_response = f"Grok API Response: {question}\n\nThis is a simulated Grok API response. In a real implementation, this would connect to the actual Grok API endpoint."
+        # Initialize OpenAI client for xAI Grok API
+        from openai import OpenAI
         
-        # Simulate streaming by adding text gradually
-        for i in range(0, len(full_response), 10):
-            if st.session_state.stop_streaming:
-                break
-            chunk = full_response[:i+10]
-            st.session_state.grok_api_streaming_text = chunk + "▌"
-            time.sleep(0.1)
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.x.ai/v1"
+        )
+        
+        # Prepare messages for API call
+        messages = [
+            {"role": "system", "content": "You are Grok, a helpful AI assistant created by xAI. Provide clear, informative, and engaging responses."},
+            {"role": "user", "content": question}
+        ]
+        
+        # Make streaming API call
+        full_response = ""
+        try:
+            stream = client.chat.completions.create(
+                model="grok-beta",  # Use the available Grok model
+                messages=messages,
+                stream=True,
+                max_tokens=4000,
+                temperature=0.7
+            )
+            
+            for chunk in stream:
+                if st.session_state.stop_streaming:
+                    break
+                    
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    
+                    # Update streaming text with cursor
+                    st.session_state.grok_api_streaming_text = full_response + "▌"
+                    
+        except Exception as api_error:
+            error_msg = str(api_error)
+            if "401" in error_msg or "authentication" in error_msg.lower():
+                st.session_state.grok_api_streaming_text = "❌ Grok API Error: Invalid API key. Please check your XAI_API_KEY in the .env file."
+            elif "429" in error_msg or "rate limit" in error_msg.lower():
+                st.session_state.grok_api_streaming_text = "❌ Grok API Error: Rate limit exceeded. Please try again later."
+            elif "quota" in error_msg.lower() or "billing" in error_msg.lower():
+                st.session_state.grok_api_streaming_text = "❌ Grok API Error: API quota exceeded or billing issue. Please check your xAI account."
+            else:
+                st.session_state.grok_api_streaming_text = f"❌ Grok API Error: {error_msg}"
+            
+            st.session_state.grok_api_stream_complete = True
+            st.session_state.grok_generating_api_response = False
+            return
         
         # Final update without cursor
-        st.session_state.grok_api_streaming_text = full_response
-        st.session_state.grok_api_response = full_response
-        
-        # Add response to separate API conversation history
         if full_response:
+            st.session_state.grok_api_streaming_text = full_response
+            st.session_state.grok_api_response = full_response
+            
+            # Add response to separate API conversation history
             st.session_state.grok_api_conversation_history.append({"role": "assistant", "content": full_response})
+        else:
+            st.session_state.grok_api_streaming_text = "❌ No response received from Grok API"
         
         st.session_state.grok_api_stream_complete = True
         st.session_state.grok_generating_api_response = False
         
     except Exception as e:
-        st.session_state.grok_api_streaming_text = f"Grok API Error: {str(e)}"
+        st.session_state.grok_api_streaming_text = f"❌ Grok API Error: {str(e)}"
         st.session_state.grok_api_stream_complete = True
         st.session_state.grok_generating_api_response = False
 

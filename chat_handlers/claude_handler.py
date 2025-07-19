@@ -22,12 +22,12 @@ def start_thread(fn, *args, **kwargs):
     return th
 
 def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None, webui_question: str = None, api_question: str = None):
-    """Log question/answer pair to session log file with both Web UI and API responses and raw questions"""
+    """Log question/answer pair to individual chat session history file with both Web UI and API responses and raw questions"""
     try:
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
             "question": question,
-            "model": st.session_state.selected_model
+            "model": "claude-3-5-sonnet-20241022"  # Claude model instead of GPT model
         }
         
         # Add raw questions sent to each service if available
@@ -42,8 +42,16 @@ def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None,
         if api_answer:
             log_entry["api_answer"] = api_answer
         
-        # Append to log file with pretty formatting (each field on new line)
-        with open(st.session_state.session_log_file, "a", encoding="utf-8") as f:
+        # Create individual log file for this specific conversation
+        conversation_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
+        individual_log_file = os.path.join("logs/claude", f"chat_session_history_{conversation_timestamp}.json")
+        
+        # Write to individual conversation log file
+        with open(individual_log_file, "w", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False, indent=2))
+        
+        # Also append to the main session log file for backward compatibility
+        with open(st.session_state.claude_log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False, indent=2) + "\n")
             
     except Exception as e:
@@ -420,132 +428,232 @@ def render_claude_responses():
             active_streams.append("API")
         st.info(f"🔄 Generating responses: {', '.join(active_streams)}")
 
-    # Stop button for concurrent streaming - placed above tabs
-    if st.session_state.claude_concurrent_streaming_active:
-        if st.button("🛑 Stop All Streaming", key="claude_stop_streaming"):
-            st.session_state.stop_streaming = True
-            st.session_state.claude_concurrent_streaming_active = False
-            st.session_state.claude_generating_response = False
-            st.session_state.claude_generating_api_response = False
+    # Control buttons row
+    button_col1, button_col2, button_col3 = st.columns([1, 1, 2])
+    
+    # Stop button for concurrent streaming
+    with button_col1:
+        if st.session_state.claude_concurrent_streaming_active:
+            if st.button("🛑 Stop All Streaming", key="claude_stop_streaming"):
+                st.session_state.stop_streaming = True
+                st.session_state.claude_concurrent_streaming_active = False
+                st.session_state.claude_generating_response = False
+                st.session_state.claude_generating_api_response = False
+                st.rerun()
+    
+    # Session History button
+    with button_col2:
+        if st.button("📚 Session History", key="claude_history_button"):
+            st.session_state.show_claude_history = not st.session_state.get("show_claude_history", False)
             st.rerun()
 
-    # Create tabs for Claude responses
-    claude_tab = st.tabs(["🤖 Claude"])
-    
-    with claude_tab[0]:
-        # Two side-by-side panes with concurrent streaming
-        col_web, col_api = st.columns(2)
+    # Show session history if toggled
+    if st.session_state.get("show_claude_history", False):
+        with st.expander("📚 Claude Web UI Session History", expanded=True):
+            show_claude_session_history()
 
-        # Web UI pane
-        with col_web:
-            st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
-            
-            def clean_reasoning_text(text):
-                """Remove reasoning artifacts from Claude's response"""
-                if not text:
-                    return text
-                
-                import re
-                
-                # Remove common reasoning patterns - but be more careful with markdown
-                patterns = [
-                    r'^.*?Let me organize this into a comprehensive response\.?\s*',
-                    r'^.*?Let me format[^.]*\.\s*',
-                    r'^.*?Let me provide[^.]*\.\s*',
-                    r'^.*?I\'ll search[^.]*\.\s*',
-                    r'^.*?I need to search[^.]*\.\s*',
-                    r'^.*?Let me search[^.]*\.\s*',
-                    r'^.*?Searching the web[^\n]*\n?',
-                    r'^.*?Searching[^\n]*\n?',
-                    r'^.*?Thinking\.\.\.\s*\d*s?\s*',
-                    r'^.*?Thinking about[^.]*\.\s*',
-                    r'^.*?Great! I now have[^.]*\.\s*',
-                    r'^.*?Great![^.]*\.\s*',
-                    r'^.*?\d+s[^.]*\.\s*',
-                    r'^.*?I should[^.]*\.\s*',
-                    r'^.*?comprehensive overview\.\s*',
-                    r'^.*?Synthesized[^.]*\.\s*',
-                    r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
-                    r'^.*?markdown code block to show[^.]*\.?\s*',
-                    r'^.*?as requested[^.]*\.?\s*',
-                    r'^.*?markdown\s*',
-                ]
-                
-                # Apply all patterns
-                for pattern in patterns:
-                    text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
-                
-                # More precise removal of artifacts before markdown headers - preserve markdown formatting
-                # Only remove text that looks like reasoning, not markdown syntax
-                text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
-                
-                # Clean up common UI artifacts
-                remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
-                for artifact in remove_artifacts:
-                    text = text.replace(artifact, '')
-                
-                return text.strip()
-            
-            if st.session_state.claude_webui_streaming_text:
-                # Show live streaming updates with reasoning removed
-                cleaned_text = clean_reasoning_text(st.session_state.claude_webui_streaming_text)
-                st.markdown(cleaned_text)
-            elif st.session_state.claude_response and not st.session_state.claude_concurrent_streaming_active:
-                # Show final response when not streaming with reasoning removed
-                cleaned_text = clean_reasoning_text(st.session_state.claude_response)
-                st.markdown(cleaned_text)
-            elif st.session_state.claude_generating_response:
-                st.info("Response will appear here…")
-            else:
-                st.info("Click **Get Both Responses** to generate responses")
+    # Two side-by-side panes with concurrent streaming
+    col_web, col_api = st.columns(2)
 
-        # API pane
-        with col_api:
-            st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
+    # Web UI pane
+    with col_web:
+        st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
+        
+        def clean_reasoning_text(text):
+            """Remove reasoning artifacts from Claude's response"""
+            if not text:
+                return text
             
-            if st.session_state.claude_api_streaming_text:
-                # Show live streaming updates
-                st.markdown(st.session_state.claude_api_streaming_text)
-            elif st.session_state.claude_api_response and not st.session_state.claude_concurrent_streaming_active:
-                # Show final response when not streaming
-                st.markdown(st.session_state.claude_api_response)
-            elif st.session_state.claude_generating_api_response:
-                st.info("API response will appear here…")
-            else:
-                st.info("Responses will appear here")
+            import re
+            
+            # Remove common reasoning patterns - but be more careful with markdown
+            patterns = [
+                r'^.*?Let me organize this into a comprehensive response\.?\s*',
+                r'^.*?Let me format[^.]*\.\s*',
+                r'^.*?Let me provide[^.]*\.\s*',
+                r'^.*?I\'ll search[^.]*\.\s*',
+                r'^.*?I need to search[^.]*\.\s*',
+                r'^.*?Let me search[^.]*\.\s*',
+                r'^.*?Searching the web[^\n]*\n?',
+                r'^.*?Searching[^\n]*\n?',
+                r'^.*?Thinking\.\.\.\s*\d*s?\s*',
+                r'^.*?Thinking about[^.]*\.\s*',
+                r'^.*?Great! I now have[^.]*\.\s*',
+                r'^.*?Great![^.]*\.\s*',
+                r'^.*?\d+s[^.]*\.\s*',
+                r'^.*?I should[^.]*\.\s*',
+                r'^.*?comprehensive overview\.\s*',
+                r'^.*?Synthesized[^.]*\.\s*',
+                r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
+                r'^.*?markdown code block to show[^.]*\.?\s*',
+                r'^.*?as requested[^.]*\.?\s*',
+                r'^.*?markdown\s*',
+            ]
+            
+            # Apply all patterns
+            for pattern in patterns:
+                text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+            
+            # More precise removal of artifacts before markdown headers - preserve markdown formatting
+            # Only remove text that looks like reasoning, not markdown syntax
+            text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
+            
+            # Clean up common UI artifacts
+            remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
+            for artifact in remove_artifacts:
+                text = text.replace(artifact, '')
+            
+            return text.strip()
+        
+        if st.session_state.claude_webui_streaming_text:
+            # Show live streaming updates with reasoning removed
+            cleaned_text = clean_reasoning_text(st.session_state.claude_webui_streaming_text)
+            st.markdown(cleaned_text)
+        elif st.session_state.claude_response and not st.session_state.claude_concurrent_streaming_active:
+            # Show final response when not streaming with reasoning removed
+            cleaned_text = clean_reasoning_text(st.session_state.claude_response)
+            st.markdown(cleaned_text)
+        elif st.session_state.claude_generating_response:
+            st.info("Response will appear here…")
+        else:
+            st.info("Click **Get Both Responses** to generate responses")
+
+    # API pane
+    with col_api:
+        st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
+        
+        if st.session_state.claude_api_streaming_text:
+            # Show live streaming updates
+            st.markdown(st.session_state.claude_api_streaming_text)
+        elif st.session_state.claude_api_response and not st.session_state.claude_concurrent_streaming_active:
+            # Show final response when not streaming
+            st.markdown(st.session_state.claude_api_response)
+        elif st.session_state.claude_generating_api_response:
+            st.info("API response will appear here…")
+        else:
+            st.info("Responses will appear here")
 
 def handle_concurrent_streaming():
-    """Handle auto-refresh and completion logic for concurrent streaming"""
-    if not st.session_state.claude_concurrent_streaming_active:
+    """Handle auto-refresh and completion logic for concurrent streaming - now handled centrally in main app"""
+    # This function is now a no-op since refresh logic is centralized in the main app
+    pass
+
+def load_claude_session_history():
+    """Load Claude session history from individual log files"""
+    try:
+        claude_logs_dir = "logs/claude"
+        if not os.path.exists(claude_logs_dir):
+            return []
+        
+        history_files = []
+        # Get all chat_session_history files
+        for filename in os.listdir(claude_logs_dir):
+            if filename.startswith("chat_session_history_") and filename.endswith(".json"):
+                filepath = os.path.join(claude_logs_dir, filename)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        data["filename"] = filename
+                        history_files.append(data)
+                except Exception as e:
+                    st.error(f"Error reading {filename}: {str(e)}")
+        
+        # Sort by timestamp (newest first)
+        history_files.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return history_files
+        
+    except Exception as e:
+        st.error(f"Error loading Claude session history: {str(e)}")
+        return []
+
+def show_claude_session_history():
+    """Display Claude Web UI session history in a popup-style expander"""
+    history = load_claude_session_history()
+    
+    if not history:
+        st.info("No Claude session history found.")
         return
+    
+    st.subheader("📚 Claude Web UI Session History")
+    st.write(f"Found {len(history)} conversation(s)")
+    
+    for i, entry in enumerate(history):
+        timestamp = entry.get("timestamp", "Unknown")
+        question = entry.get("question", "No question")
+        webui_answer = entry.get("webui_answer", "No Web UI answer")
         
-    # Check if both streams are complete
-    if st.session_state.claude_webui_stream_complete and st.session_state.claude_api_stream_complete:
-        st.session_state.claude_concurrent_streaming_active = False
+        # Format timestamp for display
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            formatted_time = timestamp
         
-        # Log both responses when both streams are complete
-        if st.session_state.claude_pending_log_question:
-            log_qa_pair(
-                st.session_state.claude_pending_log_question,
-                webui_answer=st.session_state.claude_response,
-                api_answer=st.session_state.claude_api_response,
-                webui_question=st.session_state.claude_pending_log_webui_question,
-                api_question=st.session_state.claude_pending_log_api_question
-            )
-            # Clear after logging
-            st.session_state.claude_pending_log_question = None
-            st.session_state.claude_pending_log_webui_question = None
-            st.session_state.claude_pending_log_api_question = None
-        
-        st.success("✅ Both Claude responses completed!")
-        st.rerun()
-    else:
-        # Only auto-refresh if we're actually streaming (not just at startup)
-        if (st.session_state.claude_generating_response or 
-            st.session_state.claude_generating_api_response):
-            import time
-            time.sleep(0.2)  # Refresh every 200ms for smoother streaming
-            st.rerun()
+        # Create an expander for each conversation
+        with st.expander(f"🕒 {formatted_time} - {question[:50]}{'...' if len(question) > 50 else ''}"):
+            st.markdown("**❓ Question:**")
+            st.markdown(question)
+            
+            if webui_answer and webui_answer != "No Web UI answer":
+                st.markdown("**🤖 Claude Web UI Response:**")
+                
+                # Clean the response text like in the main UI
+                def clean_reasoning_text(text):
+                    """Remove reasoning artifacts from Claude's response"""
+                    if not text:
+                        return text
+                    
+                    import re
+                    
+                    # Remove common reasoning patterns
+                    patterns = [
+                        r'^.*?Let me organize this into a comprehensive response\.?\s*',
+                        r'^.*?Let me format[^.]*\.\s*',
+                        r'^.*?Let me provide[^.]*\.\s*',
+                        r'^.*?I\'ll search[^.]*\.\s*',
+                        r'^.*?I need to search[^.]*\.\s*',
+                        r'^.*?Let me search[^.]*\.\s*',
+                        r'^.*?Searching the web[^\n]*\n?',
+                        r'^.*?Searching[^\n]*\n?',
+                        r'^.*?Thinking\.\.\.\s*\d*s?\s*',
+                        r'^.*?Thinking about[^.]*\.\s*',
+                        r'^.*?Great! I now have[^.]*\.\s*',
+                        r'^.*?Great![^.]*\.\s*',
+                        r'^.*?\d+s[^.]*\.\s*',
+                        r'^.*?I should[^.]*\.\s*',
+                        r'^.*?comprehensive overview\.\s*',
+                        r'^.*?Synthesized[^.]*\.\s*',
+                        r'^.*?wrapping the entire response in a markdown code block[^.]*\.?\s*',
+                        r'^.*?markdown code block to show[^.]*\.?\s*',
+                        r'^.*?as requested[^.]*\.?\s*',
+                        r'^.*?markdown\s*',
+                    ]
+                    
+                    # Apply all patterns
+                    for pattern in patterns:
+                        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+                    
+                    # More precise removal of artifacts before markdown headers
+                    text = re.sub(r'^[^#*\n]*?(?=# |## |### )', '', text, flags=re.MULTILINE | re.DOTALL)
+                    
+                    # Clean up common UI artifacts
+                    remove_artifacts = ['markdown\nCopy\nEdit\n', 'markdown\n', 'Copy\n', 'Edit\n']
+                    for artifact in remove_artifacts:
+                        text = text.replace(artifact, '')
+                    
+                    return text.strip()
+                
+                cleaned_answer = clean_reasoning_text(webui_answer)
+                st.markdown(cleaned_answer)
+            else:
+                st.info("No Web UI response recorded")
+            
+            # Show API response if available
+            api_answer = entry.get("api_answer")
+            if api_answer:
+                st.markdown("**⚡ Claude API Response:**")
+                st.markdown(api_answer)
 
 def handle_stopped_streaming():
     """Handle stopped streaming cleanup"""

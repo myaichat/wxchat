@@ -61,11 +61,7 @@ TIMEOUT_SEC = 60
 
 # Logging configuration
 LOGS_DIR = "logs"
-CHATGPT_LOGS_DIR = os.path.join(LOGS_DIR, "chatgpt")
-CLAUDE_LOGS_DIR = os.path.join(LOGS_DIR, "claude")
 os.makedirs(LOGS_DIR, exist_ok=True)
-os.makedirs(CHATGPT_LOGS_DIR, exist_ok=True)
-os.makedirs(CLAUDE_LOGS_DIR, exist_ok=True)
 
 # ───────────────────── session defaults ─────────────────────
 if "recording" not in st.session_state:
@@ -98,17 +94,10 @@ if "stop_streaming" not in st.session_state:
     st.session_state.stop_streaming = False  # flag to stop streaming
 if "manual_transcription" not in st.session_state:
     st.session_state.manual_transcription = None  # store manual transcription for processing
-if "chatgpt_log_file" not in st.session_state:
-    # Create a unique ChatGPT log file for this session
-    session_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    st.session_state.chatgpt_log_file = os.path.join(CHATGPT_LOGS_DIR, f"chatgpt_session_{session_timestamp}.json")
-if "claude_log_file" not in st.session_state:
-    # Create a unique Claude log file for this session
-    session_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    st.session_state.claude_log_file = os.path.join(CLAUDE_LOGS_DIR, f"claude_session_{session_timestamp}.json")
-# Keep the old session_log_file for backward compatibility (will be used by ChatGPT by default)
 if "session_log_file" not in st.session_state:
-    st.session_state.session_log_file = st.session_state.chatgpt_log_file
+    # Create a unique log file for this session
+    session_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    st.session_state.session_log_file = os.path.join(LOGS_DIR, f"chat_session_{session_timestamp}.json")
 if "api_response" not in st.session_state:
     st.session_state.api_response = None  # store API response separately
 if "generating_api_response" not in st.session_state:
@@ -255,6 +244,9 @@ with ai_col2:
     st.session_state.enable_claude = st.checkbox("🤖 Claude", 
                                                  value=st.session_state.enable_claude)
 
+# Add warning about Web UI mode in Streamlit environment
+if st.session_state.enable_claude:
+    st.info("💡 **Note**: Claude Web UI mode may not work in Streamlit due to browser automation limitations. The API mode will work reliably. If you see Web UI connection errors, this is expected behavior.")
 
 # ---------- Settings ----------
 settings_col1, settings_col2, settings_col3 = st.columns(3)
@@ -385,7 +377,7 @@ if st.session_state.last_wav and not st.session_state.recording:
         if (st.session_state.generating_response or 
             st.session_state.claude_generating_response or 
             st.session_state.claude_generating_api_response):
-            if st.button("🛑 Stop All Streaming", key="main_stop_streaming"):
+            if st.button("🛑 Stop All Streaming"):
                 st.session_state.stop_streaming = True
                 st.session_state.generating_response = False
                 st.session_state.claude_generating_response = False
@@ -421,11 +413,13 @@ if st.session_state.transcription and not st.session_state.recording:
         if st.session_state.enable_chatgpt:
             with tabs[tab_index]:
                 render_chatgpt_responses()
+                chatgpt_handle_concurrent_streaming()
             tab_index += 1
         
         if st.session_state.enable_claude:
             with tabs[tab_index]:
                 render_claude_responses()
+                claude_handle_concurrent_streaming()
     else:
         st.info("Please enable at least one AI model using the checkboxes above.")
 
@@ -459,68 +453,6 @@ if (st.session_state.transcribing and
             claude_start_concurrent_streaming(question)
         
         st.rerun()  # Single rerun is enough
-
-# Centralized streaming refresh logic
-def handle_all_streaming():
-    """Centralized handler for all streaming activities"""
-    any_streaming = False
-    
-    # Check ChatGPT streaming status
-    if st.session_state.concurrent_streaming_active:
-        any_streaming = True
-        # Check if both ChatGPT streams are complete
-        if st.session_state.webui_stream_complete and st.session_state.api_stream_complete:
-            st.session_state.concurrent_streaming_active = False
-            
-            # Log both responses when both streams are complete
-            if st.session_state.pending_log_question:
-                from chat_handlers.chatgpt_handler import log_qa_pair
-                log_qa_pair(
-                    st.session_state.pending_log_question,
-                    webui_answer=st.session_state.chatgpt_response,
-                    api_answer=st.session_state.api_response,
-                    webui_question=st.session_state.pending_log_webui_question,
-                    api_question=st.session_state.pending_log_api_question
-                )
-                # Clear after logging
-                st.session_state.pending_log_question = None
-                st.session_state.pending_log_webui_question = None
-                st.session_state.pending_log_api_question = None
-            
-            st.success("✅ ChatGPT responses completed!")
-    
-    # Check Claude streaming status
-    if st.session_state.claude_concurrent_streaming_active:
-        any_streaming = True
-        # Check if both Claude streams are complete
-        if st.session_state.claude_webui_stream_complete and st.session_state.claude_api_stream_complete:
-            st.session_state.claude_concurrent_streaming_active = False
-            
-            # Log both responses when both streams are complete
-            if st.session_state.claude_pending_log_question:
-                from chat_handlers.claude_handler import log_qa_pair as claude_log_qa_pair
-                claude_log_qa_pair(
-                    st.session_state.claude_pending_log_question,
-                    webui_answer=st.session_state.claude_response,
-                    api_answer=st.session_state.claude_api_response,
-                    webui_question=st.session_state.claude_pending_log_webui_question,
-                    api_question=st.session_state.claude_pending_log_api_question
-                )
-                # Clear after logging
-                st.session_state.claude_pending_log_question = None
-                st.session_state.claude_pending_log_webui_question = None
-                st.session_state.claude_pending_log_api_question = None
-            
-            st.success("✅ Claude responses completed!")
-    
-    # Auto-refresh if any streaming is active
-    if any_streaming:
-        import time
-        time.sleep(0.2)  # Refresh every 200ms for smoother streaming
-        st.rerun()
-
-# Handle centralized streaming logic
-handle_all_streaming()
 
 # Handle stopped streaming using the imported modules
 chatgpt_handle_stopped_streaming()

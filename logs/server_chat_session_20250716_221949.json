@@ -1,6 +1,0 @@
-{
-  "timestamp": "2025-07-16T22:19:49.961549",
-  "question": "Tell me about Rust key principles briefly",
-  "answer": "markdown\nCopy\nEdit\n# 🦀 Rust Key Principles (Brief Overview)\n\n1. **Memory Safety without Garbage Collection**  \n   Uses ownership, borrowing, and lifetimes to prevent memory bugs at compile time.\n\n2. **Zero-Cost Abstractions**  \n   High-level features with no performance penalty, matching C/C++ speeds.\n\n3. **Fearless Concurrency**  \n   Enables safe, efficient multithreading without data races.\n\n4. **Strong Static Typing**  \n   Type checks at compile time reduce runtime errors; supports type inference.\n\n5. **Modern Tooling**  \n   Built-in tools like `cargo`, `clippy`, and `rustfmt` improve development workflow.\n\n6. **Pragmatic and Ergonomic**  \n   Designed for both performance and developer friendliness with helpful compiler messages.",
-  "model": "gpt-4o"
-}

@@ -94,9 +94,17 @@ def send_message_to_grok(message):
     print("✅ Message sent!")
     return True
 
-def stream_grok_response(timeout=120):
+def send_message_with_streaming(question, timeout=120):
     """Stream Grok's response in real-time as it appears"""
     print(f"⏳ Starting to stream Grok's response (timeout: {timeout}s)...")
+    
+    # First, send the message to Grok
+    if not send_message_to_grok(question):
+        print("❌ Failed to send message to Grok")
+        return
+    
+    # Wait a moment for the message to be processed
+    time.sleep(2)
     
     # Get initial page content
     initial_text = get_page_text()
@@ -145,7 +153,7 @@ def stream_grok_response(timeout=120):
                         continue
                         
                     # Skip known UI elements
-                    if paragraph in ['How can Grok help?', 'DeepSearch', 'Think', 'Send', 'Upload', 'Grok 3', 'Upgrade to SuperGrok']:
+                    if paragraph in ['How can Grok help?', 'DeepSearch', 'Think', 'Send', 'Upload', 'Grok 3', 'Upgrade to SuperGrok', 'markdown', 'Collapse', 'Wrap', 'Copy']:
                         if found_start:
                             print(f"🛑 Found end marker: '{paragraph}', stopping stream")
                             break
@@ -166,7 +174,7 @@ def stream_grok_response(timeout=120):
                 # Join current response
                 current_response = '\n\n'.join(current_response_parts)
                 
-                # Yield only new content
+                # Yield only new content (delta)
                 if current_response and current_response != last_yielded_content:
                     if last_yielded_content:
                         # Find the new part
@@ -176,11 +184,29 @@ def stream_grok_response(timeout=120):
                                 print(f"📤 Streaming new content: '{new_content[:100]}...'")
                                 yield new_content
                         else:
-                            # Content changed significantly, yield the difference
-                            print(f"📤 Streaming updated content: '{current_response[:100]}...'")
-                            yield current_response
+                            # Content changed significantly - find what's actually new
+                            # This can happen when Grok reformats or restructures the response
+                            print(f"📤 Content restructured, finding delta...")
+                            
+                            # Try to find common prefix and yield only the new part
+                            common_len = 0
+                            min_len = min(len(last_yielded_content), len(current_response))
+                            
+                            # Find how much content is the same from the beginning
+                            for i in range(min_len):
+                                if last_yielded_content[i] == current_response[i]:
+                                    common_len = i + 1
+                                else:
+                                    break
+                            
+                            # Yield only the new part after the common prefix
+                            if len(current_response) > common_len:
+                                new_content = current_response[common_len:].strip()
+                                if new_content:
+                                    print(f"📤 Streaming delta after restructure: '{new_content[:100]}...'")
+                                    yield new_content
                     else:
-                        # First content
+                        # First content - yield the entire response for the first time
                         print(f"📤 Streaming initial content: '{current_response[:100]}...'")
                         yield current_response
                     
@@ -205,7 +231,7 @@ def stream_grok_response(timeout=120):
     else:
         print("🏁 Streaming completed")
 
-def run_streaming_grok_chat(question):
+def main(question, timeout=120):
     """Main function to run the streaming Grok chat"""
     print("🤖 GROK STREAMING CHAT INTERFACE")
     print("=" * 40)
@@ -224,7 +250,7 @@ def run_streaming_grok_chat(question):
             
             # Stream the response
             full_response = ""
-            for chunk in stream_grok_response(120):
+            for chunk in send_message_with_streaming(question,timeout):
                 if chunk:
                     print(chunk, end='', flush=True)  # Print without newline for streaming effect
                     full_response += chunk
@@ -246,7 +272,7 @@ def run_streaming_grok_chat(question):
         print("\n✅ Session completed!")
 
 # Generator function for use by other scripts
-def ask_grok_streaming(question_text, ws_url_override=None):
+def ask_grok_streaming(question_text, timeout=120, ws_url_override=None):
     """
     Generator function that yields Grok response chunks in real-time.
     Can be imported and used by other scripts.
@@ -276,7 +302,7 @@ def ask_grok_streaming(question_text, ws_url_override=None):
         # Send the message
         if send_message_to_grok(question):
             # Stream the response
-            for chunk in stream_grok_response(120):
+            for chunk in send_message_with_streaming(question, timeout):
                 if chunk:
                     yield chunk
         else:
@@ -298,4 +324,4 @@ if __name__ == "__main__":
 
     question = sys.argv[1]
 
-    run_streaming_grok_chat(question)
+    main(question)

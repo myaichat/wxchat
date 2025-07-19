@@ -58,24 +58,40 @@ def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None,
         st.error(f"Failed to log Q&A pair: {str(e)}")
 
 def start_concurrent_streaming(question):
-    """Start both Web UI and API streaming concurrently"""
+    """Start Web UI and/or API streaming based on enabled checkboxes"""
     st.session_state.claude_concurrent_streaming_active = True
     st.session_state.claude_webui_streaming_text = ""
     st.session_state.claude_api_streaming_text = ""
     st.session_state.claude_webui_stream_complete = False
     st.session_state.claude_api_stream_complete = False
-    st.session_state.claude_generating_response = True
-    st.session_state.claude_generating_api_response = True
     st.session_state.stop_streaming = False
     
     # Store question for logging when both responses complete
     st.session_state.claude_pending_log_question = question.strip()
     
-    # Start Web UI streaming thread (now using direct streaming_chat)
-    start_thread(webui_streaming_worker, question)
+    # Only start enabled services
+    webui_enabled = st.session_state.get('enable_claude_webui', True)
+    api_enabled = st.session_state.get('enable_claude_api', True)
     
-    # Start API streaming thread  
-    start_thread(api_streaming_worker, question)
+    if webui_enabled:
+        st.session_state.claude_generating_response = True
+        # Start Web UI streaming thread
+        start_thread(webui_streaming_worker, question)
+    else:
+        # Mark WebUI as complete if disabled
+        st.session_state.claude_webui_stream_complete = True
+        st.session_state.claude_generating_response = False
+        st.session_state.claude_webui_streaming_text = "ℹ️ Claude WebUI is disabled"
+    
+    if api_enabled:
+        st.session_state.claude_generating_api_response = True
+        # Start API streaming thread  
+        start_thread(api_streaming_worker, question)
+    else:
+        # Mark API as complete if disabled
+        st.session_state.claude_api_stream_complete = True
+        st.session_state.claude_generating_api_response = False
+        st.session_state.claude_api_streaming_text = "ℹ️ Claude API is disabled"
 
 def webui_streaming_worker(question):
     """Worker thread for Web UI streaming using ChromeDebugChatBot - updates session state incrementally"""

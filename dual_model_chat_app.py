@@ -244,8 +244,10 @@ if "enable_chatgpt_webui" not in st.session_state:
     st.session_state.enable_chatgpt_webui = True
 if "enable_chatgpt_api" not in st.session_state:
     st.session_state.enable_chatgpt_api = True
-if "enable_claude" not in st.session_state:
-    st.session_state.enable_claude = True
+if "enable_claude_webui" not in st.session_state:
+    st.session_state.enable_claude_webui = True
+if "enable_claude_api" not in st.session_state:
+    st.session_state.enable_claude_api = True
 
 ai_col1, ai_col2 = st.columns(2)
 
@@ -262,8 +264,16 @@ with ai_col1:
                                                          key="chatgpt_api")
 
 with ai_col2:
-    st.session_state.enable_claude = st.checkbox("🤖 Claude", 
-                                                 value=st.session_state.enable_claude)
+    st.markdown("**🤖 Claude**")
+    claude_col1, claude_col2 = st.columns(2)
+    with claude_col1:
+        st.session_state.enable_claude_webui = st.checkbox("WebUI", 
+                                                          value=st.session_state.enable_claude_webui,
+                                                          key="claude_webui")
+    with claude_col2:
+        st.session_state.enable_claude_api = st.checkbox("API", 
+                                                        value=st.session_state.enable_claude_api,
+                                                        key="claude_api")
 
 
 # ---------- Settings ----------
@@ -409,7 +419,7 @@ if st.session_state.last_wav and not st.session_state.recording:
             # Start streaming for enabled models only
             if st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api:
                 chatgpt_start_concurrent_streaming(question)
-            if st.session_state.enable_claude:
+            if st.session_state.enable_claude_webui or st.session_state.enable_claude_api:
                 claude_start_concurrent_streaming(question)
             st.rerun()
 
@@ -421,7 +431,7 @@ if st.session_state.transcription and not st.session_state.recording:
     tab_names = []
     if st.session_state.enable_chatgpt_webui or st.session_state.enable_chatgpt_api:
         tab_names.append("💬 ChatGPT")
-    if st.session_state.enable_claude:
+    if st.session_state.enable_claude_webui or st.session_state.enable_claude_api:
         tab_names.append("🤖 Claude")
     
     if tab_names:
@@ -433,7 +443,7 @@ if st.session_state.transcription and not st.session_state.recording:
                 render_chatgpt_responses()
             tab_index += 1
         
-        if st.session_state.enable_claude:
+        if st.session_state.enable_claude_webui or st.session_state.enable_claude_api:
             with tabs[tab_index]:
                 render_claude_responses()
     else:
@@ -464,7 +474,7 @@ if (st.session_state.transcribing and
         
         # Start Claude streaming if auto_claude is enabled
         if (st.session_state.auto_claude and 
-            st.session_state.enable_claude and 
+            (st.session_state.enable_claude_webui or st.session_state.enable_claude_api) and 
             not st.session_state.claude_concurrent_streaming_active):
             claude_start_concurrent_streaming(question)
         

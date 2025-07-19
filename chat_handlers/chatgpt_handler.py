@@ -105,7 +105,7 @@ def webui_streaming_worker(question):
         
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference. Answer in clean raw markdown language"
+        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference.  Wrapp the entire response in a markdown code block to show the actual syntax"
         
         # Store the Web UI question for logging
         st.session_state.pending_log_webui_question = cleaned_prompt
@@ -379,11 +379,13 @@ def render_chatgpt_responses():
             remove='markdown\nCopy\nEdit\n'
             if st.session_state.webui_streaming_text:
                 # Show live streaming updates
-                st.markdown(st.session_state.webui_streaming_text.strip(remove))
+                with st.container():
+                    st.markdown(st.session_state.webui_streaming_text.strip(remove))
             elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
                 # Show final response when not streaming
                 clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
-                st.markdown(clean.strip(remove))
+                with st.container():
+                    st.markdown(clean.strip(remove))
             elif st.session_state.generating_response:
                 st.info("Response will appear here…")
             else:
@@ -395,10 +397,12 @@ def render_chatgpt_responses():
             
             if st.session_state.api_streaming_text:
                 # Show live streaming updates
-                st.markdown(st.session_state.api_streaming_text)
+                with st.container():
+                    st.markdown(st.session_state.api_streaming_text)
             elif st.session_state.api_response and not st.session_state.concurrent_streaming_active:
                 # Show final response when not streaming
-                st.markdown(st.session_state.api_response)
+                with st.container():
+                    st.markdown(st.session_state.api_response)
             elif st.session_state.generating_api_response:
                 st.info("API response will appear here…")
             else:
@@ -411,11 +415,13 @@ def render_chatgpt_responses():
         remove='markdown\nCopy\nEdit\n'
         if st.session_state.webui_streaming_text:
             # Show live streaming updates
-            st.markdown(st.session_state.webui_streaming_text.strip(remove))
+            with st.container():
+                st.markdown(st.session_state.webui_streaming_text.strip(remove))
         elif st.session_state.chatgpt_response and not st.session_state.concurrent_streaming_active:
             # Show final response when not streaming
             clean = st.session_state.chatgpt_response.encode("utf-8", errors="replace").decode("utf-8")
-            st.markdown(clean.strip(remove))
+            with st.container():
+                st.markdown(clean.strip(remove))
         elif st.session_state.generating_response:
             st.info("Response will appear here…")
         else:
@@ -427,10 +433,12 @@ def render_chatgpt_responses():
         
         if st.session_state.api_streaming_text:
             # Show live streaming updates
-            st.markdown(st.session_state.api_streaming_text)
+            with st.container():
+                st.markdown(st.session_state.api_streaming_text)
         elif st.session_state.api_response and not st.session_state.concurrent_streaming_active:
             # Show final response when not streaming
-            st.markdown(st.session_state.api_response)
+            with st.container():
+                st.markdown(st.session_state.api_response)
         elif st.session_state.generating_api_response:
             st.info("API response will appear here…")
         else:

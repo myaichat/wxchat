@@ -119,7 +119,7 @@ def send_message_to_perplexity(message):
     print("✅ Message sent!")
     return True
 
-def stream_perplexity_response(timeout=120):
+def stream_perplexity_response(question_text, timeout=120):
     """Stream Perplexity's response in real-time as it appears"""
     print(f"⏳ Starting to stream Perplexity's response (timeout: {timeout}s)...")
     
@@ -138,13 +138,8 @@ def stream_perplexity_response(timeout=120):
     
     print("🔄 Monitoring for new content...")
     
-    # Perplexity-specific UI elements to skip
-    perplexity_ui_elements = [
-        'Ask anything...', 'Search', 'Pro', 'Sources', 'Related', 
-        'Follow-up', 'Share', 'Copy', 'Regenerate', 'Ask follow-up',
-        'View sources', 'Pro Search', 'Focus', 'All', 'Academic',
-        'Writing', 'Wolfram|Alpha', 'YouTube', 'Reddit', 'News'
-    ]
+    # No filtering - return all content as-is
+    perplexity_ui_elements = []
     
     while time.time() - start_time < timeout:
         time.sleep(1)  # Check every 1 second for more responsive streaming
@@ -156,59 +151,80 @@ def stream_perplexity_response(timeout=120):
         if current_length > last_content_length + 50:  # Lower threshold for more responsive streaming
             print(f"📈 Content increased: {last_content_length} → {current_length}")
             
-            # Extract new content since our question
-            if question in current_text:
-                question_pos = current_text.rfind(question)
-                text_after_question = current_text[question_pos + len(question):]
+            # Extract new content since our question - try multiple approaches
+            question_found = False
+            text_after_question = ""
+            
+            # Try exact match first
+            if question_text in current_text:
+                print(f"🔍 Found exact question in page content")
+                question_pos = current_text.rfind(question_text)
+                text_after_question = current_text[question_pos + len(question_text):]
+                question_found = True
+            else:
+                # Try first few words of the question
+                question_words = question_text.split()[:8]  # First 8 words
+                short_question = ' '.join(question_words)
+                if short_question in current_text:
+                    print(f"🔍 Found partial question: '{short_question}'")
+                    question_pos = current_text.rfind(short_question)
+                    text_after_question = current_text[question_pos + len(short_question):]
+                    question_found = True
+                else:
+                    # Try even shorter - first 4 words
+                    shorter_question = ' '.join(question_words[:4])
+                    if shorter_question in current_text:
+                        print(f"🔍 Found shorter question: '{shorter_question}'")
+                        question_pos = current_text.rfind(shorter_question)
+                        text_after_question = current_text[question_pos + len(shorter_question):]
+                        question_found = True
+                    else:
+                        # Last resort - look for any substantial content after a reasonable point
+                        # Skip the first part of the page and look for response content
+                        if len(current_text) > 1000:
+                            print(f"🔍 Using fallback approach - looking for response content")
+                            text_after_question = current_text[len(current_text)//2:]  # Start from middle
+                            question_found = True
+            
+            if question_found:
+                print(f"📄 Text after question (first 200 chars): '{text_after_question[:200]}...'")
                 
                 # Process the content to find response parts
                 paragraphs = text_after_question.split('\n\n')
                 if len(paragraphs) < 2:
                     paragraphs = text_after_question.split('\n')
                 
+                print(f"📝 Found {len(paragraphs)} paragraphs to process")
+                
                 # Build current response content
                 current_response_parts = []
                 found_start = False
                 
-                for paragraph in paragraphs[:100]:
+                for i, paragraph in enumerate(paragraphs[:100]):
                     paragraph = paragraph.strip()
                     
-                    # Skip empty content
+                    # Skip only empty content
                     if not paragraph:
                         continue
-                        
-                    # Skip known Perplexity UI elements
-                    if paragraph in perplexity_ui_elements:
-                        if found_start:
-                            print(f"🛑 Found end marker: '{paragraph}', stopping stream")
-                            break
-                        continue
                     
-                    # Skip time indicators, pure numbers, and very short content
-                    if (re.match(r'^\d+\.?\d*[smh]$', paragraph) or 
-                        paragraph.isdigit() or 
-                        len(paragraph) < 3):
-                        continue
-                    
-                    # Skip source indicators like "[1]", "[2]", etc.
-                    if re.match(r'^\[\d+\]$', paragraph):
-                        continue
-                    
-                    # Include substantial content
-                    if len(paragraph) > 5:  # Lower threshold for Perplexity
-                        if not found_start:
-                            print(f"🎯 Response started: '{paragraph[:50]}...'")
-                            response_started = True
-                        found_start = True
-                        current_response_parts.append(paragraph)
+                    # Include all content without filtering
+                    if not found_start:
+                        print(f"🎯 Response started: '{paragraph[:50]}...'")
+                        response_started = True
+                    found_start = True
+                    current_response_parts.append(paragraph)
+                    print(f"✅ Added paragraph {i}: '{paragraph[:50]}...'")
+                
+                print(f"📋 Total response parts collected: {len(current_response_parts)}")
                 
                 # Join current response
                 current_response = '\n\n'.join(current_response_parts)
+                print(f"📄 Current response length: {len(current_response)} chars")
                 
                 # Yield only new content
                 if current_response and current_response != last_yielded_content:
                     if last_yielded_content:
-                        # Find the new part
+                        # Find the new part - be more careful about duplicates
                         if current_response.startswith(last_yielded_content):
                             new_content = current_response[len(last_yielded_content):].strip()
                             if new_content:
@@ -220,20 +236,26 @@ def stream_perplexity_response(timeout=120):
                             old_lines = last_yielded_content.split('\n') if last_yielded_content else []
                             new_lines = current_response.split('\n')
                             
-                            # Find the longest common prefix
+                            # Find the longest common prefix by comparing line by line
                             common_length = 0
                             for i, (old_line, new_line) in enumerate(zip(old_lines, new_lines)):
-                                if old_line == new_line:
+                                if old_line.strip() == new_line.strip():  # Compare stripped lines
                                     common_length = i + 1
                                 else:
                                     break
                             
                             # Get only the new lines
                             if common_length < len(new_lines):
-                                new_content = '\n'.join(new_lines[common_length:]).strip()
-                                if new_content:
-                                    print(f"📤 Streaming new content: '{new_content[:100]}...'")
-                                    yield new_content
+                                new_lines_content = new_lines[common_length:]
+                                # Filter out empty lines at the beginning
+                                while new_lines_content and not new_lines_content[0].strip():
+                                    new_lines_content.pop(0)
+                                
+                                if new_lines_content:
+                                    new_content = '\n'.join(new_lines_content).strip()
+                                    if new_content:
+                                        print(f"📤 Streaming new content: '{new_content[:100]}...'")
+                                        yield new_content
                     else:
                         # First content
                         print(f"📤 Streaming initial content: '{current_response[:100]}...'")
@@ -245,6 +267,15 @@ def stream_perplexity_response(timeout=120):
                     stable_count += 1
                     if response_started:
                         print(f"⏸️  Content stable for {stable_count} seconds")
+            else:
+                print(f"❌ Question not found in page content. Question length: {len(question_text)}, Page length: {len(current_text)}")
+                # Let's check if a shorter version of the question is in the content
+                question_words = question_text.split()[:5]  # First 5 words
+                short_question = ' '.join(question_words)
+                if short_question in current_text:
+                    print(f"✅ Found shorter question: '{short_question}'")
+                else:
+                    print(f"❌ Even shorter question not found: '{short_question}'")
             
             last_content_length = current_length
         else:
@@ -338,7 +369,7 @@ def send_message_with_streaming(question_text, timeout=120,ws_url_override=None)
         # Send the message
         if send_message_to_perplexity(question):
             # Stream the response
-            for chunk in stream_perplexity_response(timeout):
+            for chunk in stream_perplexity_response(question, timeout):
                 if chunk:
                     yield chunk
         else:

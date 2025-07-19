@@ -8,6 +8,7 @@ import datetime
 import json
 import os
 import sys
+import requests
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # Handle imports for both standalone and module usage
@@ -28,70 +29,11 @@ def start_thread(fn, *args, **kwargs):
     return th
 
 def clean_perplexity_response(text):
-    """Remove UI artifacts and unwanted elements from Perplexity's response"""
-    if not text:
-        return text
-    
-    # List of artifacts to remove - Perplexity-specific UI elements
-    remove_artifacts = [
-        'Ask anything...',
-        'Search',
-        'Pro',
-        'Sources',
-        'Related',
-        'Follow-up',
-        'Share',
-        'Copy',
-        'Regenerate',
-        'Ask follow-up',
-        'View sources',
-        'Pro Search',
-        'Focus',
-        'All',
-        'Academic',
-        'Writing',
-        'Wolfram|Alpha',
-        'YouTube',
-        'Reddit',
-        'News',
-        'Answer',
-        'Ask a follow-up…',
-        'American English'
-    ]
-    
-    # Clean the text - multiple passes to catch all variations
-    cleaned_text = text
-    
-    # First pass: exact string replacements
-    for artifact in remove_artifacts:
-        cleaned_text = cleaned_text.replace(artifact, '')
-    
-    # Second pass: use regex for more aggressive cleaning
-    import re
-    
-    # Remove Perplexity UI artifacts with regex
-    cleaned_text = re.sub(r'\s*Ask\s+anything\.\.\.\s*', ' ', cleaned_text, flags=re.IGNORECASE)
-    cleaned_text = re.sub(r'\s*Pro\s+Search\s*', ' ', cleaned_text, flags=re.IGNORECASE)
-    cleaned_text = re.sub(r'\s*Ask\s+a\s+follow-up\s*', ' ', cleaned_text, flags=re.IGNORECASE)
-    cleaned_text = re.sub(r'\s*American\s+English\s*', ' ', cleaned_text, flags=re.IGNORECASE)
-    
-    # Remove source indicators and references
-    cleaned_text = re.sub(r'Sources\s*·\s*', '', cleaned_text, flags=re.IGNORECASE)
-    cleaned_text = re.sub(r'·\s*[^\n]*\.(org|com|gov|edu|uk)\s*', '', cleaned_text, flags=re.IGNORECASE)
-    
-    # Remove multiple consecutive spaces and newlines
-    cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)  # Replace 3+ newlines with 2
-    cleaned_text = re.sub(r' {2,}', ' ', cleaned_text)  # Replace multiple spaces with single space
-    
-    # Remove leading/trailing whitespace from each line
-    lines = cleaned_text.split('\n')
-    cleaned_lines = [line.strip() for line in lines]
-    cleaned_text = '\n'.join(cleaned_lines)
-    
-    return cleaned_text.strip()
+    """Return text as-is without any filtering or cleaning"""
+    return text if text else text
 
-def log_qa_pair(question: str, webui_answer: str = None, webui_question: str = None):
-    """Log question/answer pair to individual chat session history file"""
+def log_qa_pair(question: str, webui_answer: str = None, api_answer: str = None, webui_question: str = None, api_question: str = None):
+    """Log question/answer pair to individual chat session history file with both Web UI and API responses"""
     try:
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -99,13 +41,17 @@ def log_qa_pair(question: str, webui_answer: str = None, webui_question: str = N
             "model": "perplexity"
         }
         
-        # Add raw question sent to service if available
+        # Add raw questions sent to each service if available
         if webui_question:
             log_entry["webui_question"] = webui_question
+        if api_question:
+            log_entry["api_question"] = api_question
         
-        # Add response if available - clean it before logging
+        # Add responses if available - clean Web UI response before logging
         if webui_answer:
             log_entry["webui_answer"] = clean_perplexity_response(webui_answer)
+        if api_answer:
+            log_entry["api_answer"] = api_answer  # API responses are usually cleaner
         
         # Create individual log file for this specific conversation
         conversation_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Include milliseconds
@@ -130,28 +76,42 @@ def log_qa_pair(question: str, webui_answer: str = None, webui_question: str = N
             print(f"Failed to log Perplexity Q&A pair: {str(e)}")
 
 def start_concurrent_streaming(question):
-    """Start Web UI streaming"""
+    """Start Web UI and/or API streaming based on enabled checkboxes"""
     webui_enabled = st.session_state.get("enable_perplexity_webui", False)
+    api_enabled = st.session_state.get("enable_perplexity_api", False)
     
-    # Debug: Print checkbox state
-    print(f"DEBUG: Perplexity WebUI enabled: {webui_enabled}")
+    # Debug: Print checkbox states
+    print(f"DEBUG: Perplexity WebUI enabled: {webui_enabled}, API enabled: {api_enabled}")
     
-    if not webui_enabled:
-        print("DEBUG: Perplexity WebUI not enabled, returning early")
+    if not webui_enabled and not api_enabled:
+        print("DEBUG: Neither WebUI nor API enabled, returning early")
         return  # Nothing to start
     
     st.session_state.perplexity_concurrent_streaming_active = True
     st.session_state.perplexity_webui_streaming_text = ""
-    st.session_state.perplexity_webui_stream_complete = False
-    st.session_state.perplexity_generating_response = True
+    st.session_state.perplexity_api_streaming_text = ""
+    st.session_state.perplexity_webui_stream_complete = not webui_enabled  # Mark as complete if not enabled
+    st.session_state.perplexity_api_stream_complete = not api_enabled     # Mark as complete if not enabled
+    st.session_state.perplexity_generating_response = webui_enabled
+    st.session_state.perplexity_generating_api_response = api_enabled
     st.session_state.stop_streaming = False
     
-    # Store question for logging when response completes
+    # Store question for logging when responses complete
     st.session_state.perplexity_pending_log_question = question.strip()
     
-    # Start Web UI streaming thread
-    print("DEBUG: Starting Perplexity WebUI streaming worker")
-    start_thread(webui_streaming_worker, question)
+    # Start Web UI streaming thread only if enabled
+    if webui_enabled:
+        print("DEBUG: Starting Perplexity WebUI streaming worker")
+        start_thread(webui_streaming_worker, question)
+    else:
+        print("DEBUG: Perplexity WebUI disabled, not starting WebUI worker")
+    
+    # Start API streaming thread only if enabled
+    if api_enabled:
+        print("DEBUG: Starting Perplexity API streaming worker")
+        start_thread(api_streaming_worker, question)
+    else:
+        print("DEBUG: Perplexity API disabled, not starting API worker")
 
 def webui_streaming_worker(question):
     """Worker thread for Web UI streaming using direct streaming_chat - updates session state incrementally"""
@@ -164,7 +124,7 @@ def webui_streaming_worker(question):
         
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' + original_prompt + ". Wrap the entire response in a markdown code block to show the actual syntax"
+        cleaned_prompt = 'Answer this question in clean raw markdown language : ' +original_prompt + ".  Wrapp the entire response in a markdown code block to show the actual syntax"
         
         # Store the Web UI question for logging
         st.session_state.perplexity_pending_log_webui_question = cleaned_prompt
@@ -191,12 +151,8 @@ def webui_streaming_worker(question):
                     # Add the new chunk to our response
                     full_response += chunk
                     
-                    # Clean the response more aggressively during streaming
-                    # Apply cleaning to the full response to catch artifacts that span chunks
-                    cleaned_full_response = clean_perplexity_response(full_response)
-                    
-                    # Update session state for UI display with cursor
-                    st.session_state.perplexity_webui_streaming_text = cleaned_full_response + "▌"
+                    # Update session state for UI display with cursor - no cleaning
+                    st.session_state.perplexity_webui_streaming_text = full_response + "▌"
                     
         except Exception as e:
             st.session_state.perplexity_webui_streaming_text = f"Perplexity streaming error: {str(e)}"
@@ -204,13 +160,12 @@ def webui_streaming_worker(question):
             st.session_state.perplexity_generating_response = False
             return
         
-        # Store final response - clean it before storing and remove cursor
+        # Store final response without cleaning - remove cursor
         if full_response:
-            cleaned_final_response = clean_perplexity_response(full_response)
-            st.session_state.perplexity_conversation_history.append({"role": "assistant", "content": cleaned_final_response})
-            st.session_state.perplexity_response = cleaned_final_response
-            # Update the streaming text to the final cleaned version without cursor
-            st.session_state.perplexity_webui_streaming_text = cleaned_final_response
+            st.session_state.perplexity_conversation_history.append({"role": "assistant", "content": full_response})
+            st.session_state.perplexity_response = full_response
+            # Update the streaming text to the final version without cursor
+            st.session_state.perplexity_webui_streaming_text = full_response
         
         st.session_state.perplexity_webui_stream_complete = True
         st.session_state.perplexity_generating_response = False
@@ -220,17 +175,113 @@ def webui_streaming_worker(question):
         st.session_state.perplexity_webui_stream_complete = True
         st.session_state.perplexity_generating_response = False
 
+def api_streaming_worker(question):
+    """Worker thread for API streaming - updates session state incrementally"""
+    try:
+        # Double-check that API is enabled before proceeding
+        if not st.session_state.get("enable_perplexity_api", False):
+            st.session_state.perplexity_api_stream_complete = True
+            st.session_state.perplexity_generating_api_response = False
+            return
+        
+        # Store the API question for logging
+        st.session_state.perplexity_pending_log_api_question = question
+        
+        # Add to separate API conversation history
+        st.session_state.perplexity_api_conversation_history.append({"role": "user", "content": question})
+        
+        # Use separate API conversation history
+        messages = st.session_state.perplexity_api_conversation_history
+        
+        full_response = ""
+        
+        # Get API key from environment - let it fail naturally if missing
+        api_key = os.getenv("PERPLEXITY_API_KEY")
+        
+        # Perplexity API endpoint
+        url = "https://api.perplexity.ai/chat/completions"
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": "llama-3.1-sonar-small-128k-online",  # Perplexity's online model
+            "messages": messages,
+            "stream": True,
+            "max_tokens": 4000,
+            "temperature": 0.2
+        }
+        
+        st.session_state.perplexity_api_streaming_text = "🔍 Perplexity API started typing..."
+        
+        try:
+            # Make streaming request
+            response = requests.post(url, headers=headers, json=payload, stream=True)
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if st.session_state.stop_streaming:
+                    break
+                
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        data = line[6:]  # Remove 'data: ' prefix
+                        if data.strip() == '[DONE]':
+                            break
+                        
+                        try:
+                            chunk_data = json.loads(data)
+                            if 'choices' in chunk_data and len(chunk_data['choices']) > 0:
+                                delta = chunk_data['choices'][0].get('delta', {})
+                                content = delta.get('content', '')
+                                if content:
+                                    full_response += content
+                                    # Update session state with cursor
+                                    st.session_state.perplexity_api_streaming_text = full_response + "▌"
+                        except json.JSONDecodeError:
+                            continue  # Skip malformed JSON
+            
+            # Final update without cursor
+            st.session_state.perplexity_api_streaming_text = full_response
+            st.session_state.perplexity_api_response = full_response
+            
+            # Add response to separate API conversation history
+            if full_response:
+                st.session_state.perplexity_api_conversation_history.append({"role": "assistant", "content": full_response})
+            
+        except requests.exceptions.RequestException as e:
+            import traceback
+            error_msg = traceback.format_exc()
+            st.session_state.perplexity_api_streaming_text = error_msg
+            print(f"DEBUG: {error_msg}")
+        except Exception as e:
+            import traceback
+            error_msg = traceback.format_exc()
+            st.session_state.perplexity_api_streaming_text = error_msg
+            print(f"DEBUG: {error_msg}")
+        
+        st.session_state.perplexity_api_stream_complete = True
+        st.session_state.perplexity_generating_api_response = False
+        
+    except Exception as e:
+        st.session_state.perplexity_api_streaming_text = f"Perplexity API Error: {str(e)}"
+        st.session_state.perplexity_api_stream_complete = True
+        st.session_state.perplexity_generating_api_response = False
+
 def render_perplexity_responses():
-    """Render the Perplexity response UI"""
+    """Render the Perplexity response UI with two-column layout"""
     if not (st.session_state.transcription and not st.session_state.recording):
         return
 
     # Show generating status
-    if st.session_state.perplexity_generating_response:
+    if st.session_state.perplexity_generating_response or st.session_state.perplexity_generating_api_response:
         st.info("🔄 Generating Perplexity response...")
 
     # Control buttons row
-    button_col1, button_col2, button_col3 = st.columns([1, 1, 2])
+    button_col1, button_col2 = st.columns([1, 1])
     
     # Stop button for streaming
     with button_col1:
@@ -239,6 +290,7 @@ def render_perplexity_responses():
                 st.session_state.stop_streaming = True
                 st.session_state.perplexity_concurrent_streaming_active = False
                 st.session_state.perplexity_generating_response = False
+                st.session_state.perplexity_generating_api_response = False
                 st.rerun()
     
     # Session History button
@@ -252,29 +304,138 @@ def render_perplexity_responses():
         with st.expander("📚 Perplexity Session History", expanded=True):
             show_perplexity_session_history()
 
-    # Determine if WebUI is enabled
+    # Dynamic layout based on enabled checkboxes
     webui_enabled = st.session_state.get("enable_perplexity_webui", False)
+    api_enabled = st.session_state.get("enable_perplexity_api", False)
     
-    if webui_enabled:
-        # Show Web UI response
-        st.markdown('<div class="box-header">🔍 Perplexity</div>', unsafe_allow_html=True)
-        
-        if st.session_state.perplexity_concurrent_streaming_active:
-            # Show live streaming updates - text is already cleaned in the worker
-            if st.session_state.perplexity_webui_streaming_text:
-                st.markdown(st.session_state.perplexity_webui_streaming_text)
+    if webui_enabled or api_enabled:
+        # If only API is enabled, show single column for API
+        if api_enabled and not webui_enabled:
+            st.markdown('<div class="box-header">API</div>', unsafe_allow_html=True)
+            
+            # Check if we have any API response content to display
+            has_api_streaming_content = st.session_state.perplexity_api_streaming_text and st.session_state.perplexity_api_streaming_text.strip()
+            has_api_final_response = st.session_state.perplexity_api_response and st.session_state.perplexity_api_response.strip()
+            
+            # Debug: Print API streaming states
+            print(f"DEBUG API: concurrent_active={st.session_state.perplexity_concurrent_streaming_active}, generating_api={st.session_state.perplexity_generating_api_response}")
+            print(f"DEBUG API: has_streaming_content={bool(has_api_streaming_content)}, has_final_response={bool(has_api_final_response)}")
+            
+            if st.session_state.perplexity_generating_api_response:
+                # Show live API streaming updates
+                if has_api_streaming_content:
+                    with st.container():
+                        st.markdown(st.session_state.perplexity_api_streaming_text)
+                else:
+                    st.info("🔄 Starting API response...")
+            elif has_api_streaming_content:
+                # Show API content (including errors) when not actively generating
+                # Check if it's an error message
+                if ("error" in st.session_state.perplexity_api_streaming_text.lower() or 
+                    "❌" in st.session_state.perplexity_api_streaming_text):
+                    st.error(st.session_state.perplexity_api_streaming_text)
+                else:
+                    with st.container():
+                        st.markdown(st.session_state.perplexity_api_streaming_text)
+            elif has_api_final_response:
+                # Show final API response when not streaming
+                with st.container():
+                    st.markdown(st.session_state.perplexity_api_response)
             else:
-                st.info("Perplexity response will appear here…")
-        elif st.session_state.perplexity_response and not st.session_state.perplexity_concurrent_streaming_active:
-            # Show final response when not streaming - text is already cleaned in the worker
-            st.markdown(st.session_state.perplexity_response)
-        elif st.session_state.perplexity_generating_response:
-            st.info("Perplexity response will appear here…")
+                st.info("🔄 Waiting for API response...")
+        
+        # If only WebUI is enabled, show single column for WebUI
+        elif webui_enabled and not api_enabled:
+            st.markdown('<div class="box-header">Web UI</div>', unsafe_allow_html=True)
+            
+            # Check if we have any response content to display
+            has_streaming_content = st.session_state.perplexity_webui_streaming_text and st.session_state.perplexity_webui_streaming_text.strip()
+            has_final_response = st.session_state.perplexity_response and st.session_state.perplexity_response.strip()
+            
+            if st.session_state.perplexity_concurrent_streaming_active and st.session_state.perplexity_generating_response:
+                # Show live streaming updates - text is already cleaned in the worker
+                if has_streaming_content:
+                    # Use a container with proper styling for better markdown rendering
+                    with st.container():
+                        st.markdown(st.session_state.perplexity_webui_streaming_text)
+                else:
+                    st.info("🔄 Starting Web UI response...")
+            elif has_final_response:
+                # Show final response when not streaming - text is already cleaned in the worker
+                with st.container():
+                    st.markdown(st.session_state.perplexity_response)
+            else:
+                st.info("Click **Get AI Response** to generate Web UI response")
+        
+        # If both are enabled, show two-column layout
         else:
-            st.info("Click **Get AI Response** to generate responses")
+            col1, col2 = st.columns(2)
+            
+            # Web UI Column
+            with col1:
+                st.markdown('<div class="box-header">Web UI</div>', unsafe_allow_html=True)
+                
+                if webui_enabled:
+                    # Check if we have any response content to display
+                    has_streaming_content = st.session_state.perplexity_webui_streaming_text and st.session_state.perplexity_webui_streaming_text.strip()
+                    has_final_response = st.session_state.perplexity_response and st.session_state.perplexity_response.strip()
+                    
+                    if st.session_state.perplexity_concurrent_streaming_active and st.session_state.perplexity_generating_response:
+                        # Show live streaming updates - text is already cleaned in the worker
+                        if has_streaming_content:
+                            with st.container():
+                                st.markdown(st.session_state.perplexity_webui_streaming_text)
+                        else:
+                            st.info("🔄 Starting Web UI response...")
+                    elif has_final_response:
+                        # Show final response when not streaming - text is already cleaned in the worker
+                        with st.container():
+                            st.markdown(st.session_state.perplexity_response)
+                    else:
+                        st.info("Click **Get AI Response** to generate Web UI response")
+                else:
+                    st.info("Web UI disabled")
+            
+            # API Column
+            with col2:
+                st.markdown('<div class="box-header">API</div>', unsafe_allow_html=True)
+                
+                if api_enabled:
+                    # Check if we have any API response content to display
+                    has_api_streaming_content = st.session_state.perplexity_api_streaming_text and st.session_state.perplexity_api_streaming_text.strip()
+                    has_api_final_response = st.session_state.perplexity_api_response and st.session_state.perplexity_api_response.strip()
+                    
+                    # Debug: Print API streaming states
+                    print(f"DEBUG API: concurrent_active={st.session_state.perplexity_concurrent_streaming_active}, generating_api={st.session_state.perplexity_generating_api_response}")
+                    print(f"DEBUG API: has_streaming_content={bool(has_api_streaming_content)}, has_final_response={bool(has_api_final_response)}")
+                    
+                    if st.session_state.perplexity_generating_api_response:
+                        # Show live API streaming updates
+                        if has_api_streaming_content:
+                            with st.container():
+                                st.markdown(st.session_state.perplexity_api_streaming_text)
+                        else:
+                            st.info("🔄 Starting API response...")
+                    elif has_api_streaming_content:
+                        # Show API content (including errors) when not actively generating
+                        # Check if it's an error message
+                        if ("error" in st.session_state.perplexity_api_streaming_text.lower() or 
+                            "❌" in st.session_state.perplexity_api_streaming_text):
+                            st.error(st.session_state.perplexity_api_streaming_text)
+                        else:
+                            with st.container():
+                                st.markdown(st.session_state.perplexity_api_streaming_text)
+                    elif has_api_final_response:
+                        # Show final API response when not streaming
+                        with st.container():
+                            st.markdown(st.session_state.perplexity_api_response)
+                    else:
+                        st.info("🔄 Waiting for API response...")
+                else:
+                    st.info("API disabled")
     else:
-        # WebUI not enabled
-        st.info("Enable Perplexity WebUI checkbox above to see responses")
+        # Neither WebUI nor API enabled
+        st.info("Enable Perplexity Web UI or API checkbox above to see responses")
 
 def handle_concurrent_streaming():
     """Handle auto-refresh and completion logic for concurrent streaming - now handled centrally in main app"""
@@ -418,11 +579,12 @@ def standalone_perplexity_test(question, timeout=120):
         
         # Store original prompt for logging
         original_prompt = question.strip()
+        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ".  Wrapp the entire response in a markdown code block to show the actual syntax"
         
-        print(f"📤 Sending prompt: {original_prompt}")
+        print(f"📤 Sending prompt: {cleaned_prompt}")
         
         # Add to conversation history
-        st.session_state.perplexity_conversation_history.append({"role": "user", "content": original_prompt})
+        st.session_state.perplexity_conversation_history.append({"role": "user", "content": cleaned_prompt})
         
         full_response = ""
         response_started = False
@@ -432,7 +594,7 @@ def standalone_perplexity_test(question, timeout=120):
             print("\n🔄 Streaming response:")
             print("-" * 50)
             
-            for chunk in send_message_with_streaming(original_prompt, timeout):
+            for chunk in send_message_with_streaming(cleaned_prompt, timeout):
                 if chunk:
                     response_started = True
                     if not full_response:

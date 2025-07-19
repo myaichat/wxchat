@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for tab-like headers with much smaller styling
+# Custom CSS for tab-like headers with much smaller styling and fix transparency issues
 st.markdown("""
 <style>
 .box-header {
@@ -20,6 +20,123 @@ st.markdown("""
     margin-left: 0px;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+/* Fix tab transparency and duplication issues */
+.stTabs [data-baseweb="tab-list"] {
+    background-color: transparent !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: transparent !important;
+    opacity: 1 !important;
+}
+
+.stTabs [data-baseweb="tab-panel"] {
+    background-color: transparent !important;
+    opacity: 1 !important;
+    padding-top: 1rem;
+}
+
+/* Ensure proper z-index for tabs */
+.stTabs {
+    z-index: 1 !important;
+}
+
+/* Fix any potential overlay issues */
+.stTabs > div {
+    background-color: transparent !important;
+}
+
+/* Fix text wrapping and overflow issues in columns */
+.stColumn > div {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+}
+
+/* Ensure markdown content wraps properly and maintains formatting */
+.stMarkdown {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    line-height: 1.6 !important;
+    font-size: 14px !important;
+}
+
+/* Preserve markdown structure while allowing wrapping */
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
+    margin-top: 1.5em !important;
+    margin-bottom: 0.5em !important;
+    line-height: 1.3 !important;
+    word-wrap: break-word !important;
+}
+
+.stMarkdown p {
+    margin-bottom: 1em !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+.stMarkdown ul, .stMarkdown ol {
+    margin-bottom: 1em !important;
+    padding-left: 1.5em !important;
+}
+
+.stMarkdown li {
+    margin-bottom: 0.5em !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+.stMarkdown table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 1em !important;
+    font-size: 12px !important;
+}
+
+.stMarkdown th, .stMarkdown td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: left !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+.stMarkdown th {
+    background-color: #f5f5f5 !important;
+    font-weight: bold !important;
+}
+
+/* Fix column content overflow */
+[data-testid="column"] {
+    overflow-x: hidden !important;
+    padding-right: 10px !important;
+}
+
+[data-testid="column"] > div {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+}
+
+/* Ensure code blocks wrap properly */
+.stMarkdown pre, .stMarkdown code {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    white-space: pre-wrap !important;
+    max-width: 100% !important;
+}
+
+/* Fix blockquotes */
+.stMarkdown blockquote {
+    border-left: 4px solid #ddd !important;
+    padding-left: 1em !important;
+    margin-left: 0 !important;
+    margin-bottom: 1em !important;
+    font-style: italic !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -251,6 +368,11 @@ if "perplexity_pending_log_webui_question" not in st.session_state:
     st.session_state.perplexity_pending_log_webui_question = None
 if "perplexity_pending_log_api_question" not in st.session_state:
     st.session_state.perplexity_pending_log_api_question = None
+# Additional Perplexity session state variables that were missing
+if "show_perplexity_history" not in st.session_state:
+    st.session_state.show_perplexity_history = False
+if "perplexity_processed_transcription" not in st.session_state:
+    st.session_state.perplexity_processed_transcription = None  # Track which transcription was last processed
 
 # ───────────────────── helper functions ─────────────────────
 def start_thread(fn, *args, **kwargs):
@@ -395,9 +517,25 @@ with ai_col4:
                                                               value=st.session_state.enable_perplexity_webui,
                                                               key="perplexity_webui")
     with perplexity_col2:
+        # Store previous API state to detect changes
+        prev_api_state = st.session_state.get("prev_perplexity_api_state", False)
         st.session_state.enable_perplexity_api = st.checkbox("API", 
                                                             value=st.session_state.enable_perplexity_api,
                                                             key="perplexity_api")
+        
+        # If API was just enabled and we have a transcription, start streaming immediately
+        if (st.session_state.enable_perplexity_api and 
+            not prev_api_state and 
+            st.session_state.transcription and 
+            not st.session_state.recording and
+            not st.session_state.perplexity_concurrent_streaming_active):
+            question = current_transcription()
+            if question:
+                perplexity_start_concurrent_streaming(question)
+                st.rerun()
+        
+        # Update previous state
+        st.session_state.prev_perplexity_api_state = st.session_state.enable_perplexity_api
 
 
 # ---------- Settings ----------
@@ -468,6 +606,7 @@ if st.button(label, key="rec_toggle"):
         st.session_state.perplexity_concurrent_streaming_active = False
         st.session_state.perplexity_generating_response = False
         st.session_state.perplexity_generating_api_response = False
+        st.session_state.perplexity_processed_transcription = None  # Reset processed transcription
 
         audio_q  = queue.Queue()
         frames   = []
@@ -666,8 +805,8 @@ if (st.session_state.transcribing and
             not st.session_state.grok_concurrent_streaming_active):
             grok_start_concurrent_streaming(question)
         
-        # Start Perplexity streaming if auto_perplexity is enabled
-        if (st.session_state.auto_perplexity and 
+        # Start Perplexity streaming if auto_perplexity is enabled OR if API is enabled (immediate start)
+        if ((st.session_state.auto_perplexity or st.session_state.enable_perplexity_api) and 
             (st.session_state.enable_perplexity_webui or st.session_state.enable_perplexity_api) and 
             not st.session_state.perplexity_concurrent_streaming_active):
             perplexity_start_concurrent_streaming(question)
@@ -789,6 +928,28 @@ chatgpt_handle_stopped_streaming()
 claude_handle_stopped_streaming()
 grok_handle_stopped_streaming()
 perplexity_handle_stopped_streaming()
+
+# Smart Auto-start Perplexity API if enabled and transcription is available
+if (st.session_state.enable_perplexity_api and 
+    st.session_state.transcription and 
+    not st.session_state.recording):
+    
+    question = current_transcription()
+    if question and question.strip():
+        # Only start if we haven't processed this transcription yet and we're not already streaming
+        if (not st.session_state.perplexity_concurrent_streaming_active and
+            not st.session_state.perplexity_generating_api_response and
+            st.session_state.perplexity_processed_transcription != question):
+            
+            print(f"DEBUG: Smart Auto-starting Perplexity API for new question: {question[:50]}...")
+            print(f"DEBUG: concurrent_active={st.session_state.perplexity_concurrent_streaming_active}")
+            print(f"DEBUG: generating_api={st.session_state.perplexity_generating_api_response}")
+            print(f"DEBUG: processed_transcription={st.session_state.perplexity_processed_transcription}")
+            
+            # Mark this transcription as processed to prevent re-triggering
+            st.session_state.perplexity_processed_transcription = question
+            perplexity_start_concurrent_streaming(question)
+            st.rerun()
 
 # live status
 if st.session_state.recording:

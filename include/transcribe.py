@@ -42,12 +42,13 @@ class Transcribe:
             
         return file_path
 
-    def transcribe_audio(self, audio_file_path):
+    def transcribe_audio(self, audio_file_path, language="en"):
         with open(audio_file_path, "rb") as audio_file:
             transcript = self.client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
-                response_format="text"
+                response_format="text",
+                language=language
             )
         return transcript
     

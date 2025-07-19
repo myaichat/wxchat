@@ -285,7 +285,11 @@ try:
         response = wait_for_response(120)
         
         if response:
-            print(f"\n✅ SUCCESS! Perplexity responded: '{response}'")
+            print(f"\n✅ SUCCESS! Perplexity Response Received!")
+            print("=" * 60)
+            print(response)
+            print("=" * 60)
+            print(f"📊 Response length: {len(response)} characters")
         else:
             print("\n❌ No response received within timeout period")
             

@@ -6,9 +6,17 @@ import re
 import pychrome
 from pprint import pprint
 
-# Default WebSocket URL and tab ID from the provided JSON
-DEFAULT_WS_URL = "ws://localhost:9222/devtools/page/E8CF09D134FAEB497BC8E90CBB705C86"
-DEFAULT_TAB_ID = "E8CF09D134FAEB497BC8E90CBB705C86"
+# Check if question was provided as argument
+if len(sys.argv) < 2:
+    print("❌ Usage: python grok_cdp_pychrome_hybrid_generator.py \"Your question here\"")
+    print("📝 Example: python grok_cdp_pychrome_hybrid_generator.py \"What is the weather like today?\"")
+    sys.exit(1)
+
+question = sys.argv[1]
+
+# WebSocket URL and tab ID from the provided JSON
+ws_url = "ws://localhost:9222/devtools/page/E8CF09D134FAEB497BC8E90CBB705C86"
+tab_id = "E8CF09D134FAEB497BC8E90CBB705C86"
 
 def connect_websocket(ws_url):
     """Connect to CDP WebSocket for sending messages"""
@@ -23,7 +31,7 @@ def connect_websocket(ws_url):
             time.sleep(2)
     raise Exception("Failed to connect to CDP WebSocket after retries")
 
-def connect_pychrome(tab_id=DEFAULT_TAB_ID):
+def connect_pychrome():
     """Connect to browser using pychrome for reading responses"""
     try:
         browser = pychrome.Browser(url="http://localhost:9222")
@@ -45,49 +53,34 @@ def connect_pychrome(tab_id=DEFAULT_TAB_ID):
         print(f"❌ PyChrome connection failed: {e}")
         raise
 
-# Global connection variables (will be initialized when needed)
-_ws = None
-_browser = None
-_pychrome_tab = None
+# Initialize connections
+ws = connect_websocket(ws_url)
+browser, pychrome_tab = connect_pychrome()
 
-def _ensure_connections(ws_url=DEFAULT_WS_URL, tab_id=DEFAULT_TAB_ID):
-    """Ensure connections are established"""
-    global _ws, _browser, _pychrome_tab
-    
-    if _ws is None:
-        _ws = connect_websocket(ws_url)
-    
-    if _browser is None or _pychrome_tab is None:
-        _browser, _pychrome_tab = connect_pychrome(tab_id)
-
-def send_cdp_command(method, params, command_id, ws_url=DEFAULT_WS_URL, tab_id=DEFAULT_TAB_ID):
+def send_cdp_command(method, params, command_id):
     """Send CDP command via WebSocket"""
-    _ensure_connections(ws_url, tab_id)
-    
     command = {"id": command_id, "method": method, "params": params}
-    _ws.send(json.dumps(command))
+    ws.send(json.dumps(command))
     
     while True:
-        response = json.loads(_ws.recv())
+        response = json.loads(ws.recv())
         if 'id' in response and response['id'] == command_id:
             return response
         elif 'method' in response:
             continue
 
-def send_message_to_grok_cdp(message, timeout, ws_url=DEFAULT_WS_URL, tab_id=DEFAULT_TAB_ID):
+def send_message_to_grok_cdp(message):
     """Send a message to Grok via CDP (from original g_ask_grok.py)"""
-    _ensure_connections(ws_url, tab_id)
-    
     print(f"📤 Sending message via CDP: '{message}'")
     
     # Get document
-    send_cdp_command("DOM.getDocument", {}, 1, ws_url, tab_id)
+    send_cdp_command("DOM.getDocument", {}, 1)
     
     # Find textarea
     textarea_response = send_cdp_command(
         "DOM.querySelector",
         {"nodeId": 1, "selector": "textarea"},
-        2, ws_url, tab_id
+        2
     )
     
     if not textarea_response.get('result', {}).get('nodeId'):
@@ -97,45 +90,31 @@ def send_message_to_grok_cdp(message, timeout, ws_url=DEFAULT_WS_URL, tab_id=DEF
     textarea_node_id = textarea_response['result']['nodeId']
     
     # Focus on textarea
-    send_cdp_command("DOM.focus", {"nodeId": textarea_node_id}, 3, ws_url, tab_id)
+    send_cdp_command("DOM.focus", {"nodeId": textarea_node_id}, 3)
     
     # Clear existing text
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Control"}, 4, ws_url, tab_id)
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "KeyA"}, 5, ws_url, tab_id)
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "KeyA"}, 6, ws_url, tab_id)
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Control"}, 7, ws_url, tab_id)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Control"}, 4)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "KeyA"}, 5)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "KeyA"}, 6)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Control"}, 7)
     
     # Type the message
     command_id = 8
     for char in message:
-        send_cdp_command("Input.dispatchKeyEvent", {"type": "char", "text": char}, command_id, ws_url, tab_id)
+        send_cdp_command("Input.dispatchKeyEvent", {"type": "char", "text": char}, command_id)
         command_id += 1
         time.sleep(0.02)
     
     # Press Enter to send
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Enter"}, command_id, ws_url, tab_id)
-    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Enter"}, command_id + 1, ws_url, tab_id)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Enter"}, command_id)
+    send_cdp_command("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Enter"}, command_id + 1)
     
     print("✅ Message sent via CDP!")
     return True
 
-def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, tab_id=DEFAULT_TAB_ID):
+def stream_grok_chunks_with_baseline(baseline_response, timeout=180):
     """Generator function that yields full response first, then incremental chunks"""
-    _ensure_connections(ws_url, tab_id)
-    
     print(f"⏳ Starting chunk streaming via PyChrome (timeout: {timeout}s)...")
-    
-    # Enable CDP domains
-    send_cdp_command("Runtime.enable", {}, 1, ws_url, tab_id)
-    send_cdp_command("DOM.enable", {}, 2, ws_url, tab_id)
-    
-    # Send the message using CDP
-    if not send_message_to_grok_cdp(question, timeout, ws_url, tab_id):
-        print("❌ Failed to send message via CDP")
-        return
-    
-    print("\n🔄 Starting chunk streaming...")
-    print("=" * 50)
     
     # Wait a bit for the message to be processed and response to start
     time.sleep(3)
@@ -153,7 +132,7 @@ def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, ta
         time.sleep(0.5)  # Check every 0.5 seconds for better responsiveness
         
         # Get current full response
-        current_response = get_full_response(question) or ""
+        current_response = get_full_response() or ""
         current_length = len(current_response)
         
         # Check for reasoning/thinking indicators
@@ -251,15 +230,10 @@ def filter_chunk_content(chunk):
     
     return '\n'.join(filtered_lines)
 
-def get_full_response(question):
+def get_full_response():
     """Get the complete response after streaming is done"""
-    global _pychrome_tab
-    
-    if _pychrome_tab is None:
-        return None
-        
     content_expr = "document.body.innerText"
-    result = _pychrome_tab.call_method("Runtime.evaluate", expression=content_expr, returnByValue=True)
+    result = pychrome_tab.call_method("Runtime.evaluate", expression=content_expr, returnByValue=True)
     
     if 'result' not in result or 'value' not in result['result']:
         return None
@@ -289,93 +263,86 @@ def get_full_response(question):
     
     return full_content
 
-def cleanup_connections():
-    """Clean up connections without closing the tab"""
-    global _ws, _browser, _pychrome_tab
-    
-    try:
-        if _ws:
-            _ws.close()
-            print("✅ CDP WebSocket closed")
-    except:
-        pass
-    
-    try:
-        if _pychrome_tab:
-            _pychrome_tab.stop()
-            print("✅ PyChrome connection stopped (tab remains open)")
-    except:
-        pass
-    
-    # Reset global variables
-    _ws = None
-    _browser = None
-    _pychrome_tab = None
-
 def main():
     """Main function to run the Grok CDP + PyChrome hybrid generator"""
-    # Check if question was provided as argument
-    if len(sys.argv) < 2:
-        print("❌ Usage: python grok_cdp_pychrome_hybrid_generator.py \"Your question here\"")
-        print("📝 Example: python grok_cdp_pychrome_hybrid_generator.py \"What is the weather like today?\"")
-        sys.exit(1)
-
-    question = sys.argv[1]
-    
     print("🤖 GROK CDP + PYCHROME HYBRID GENERATOR")
     print("=" * 50)
     print(f"❓ Question: {question}")
     print("=" * 50)
 
     try:
-        # Stream chunks using generator
-        total_chunks = 0
-        total_chars = 0
-        for chunk_info in send_message_with_streaming(question, 180):
-            total_chunks += 1
-            total_chars += chunk_info['chunk_size']
+        # Enable CDP domains
+        send_cdp_command("Runtime.enable", {}, 1)
+        send_cdp_command("DOM.enable", {}, 2)
+        
+        # Get baseline BEFORE sending message
+        print("\n📊 Getting baseline before sending message...")
+        baseline_response = get_full_response() or ""
+        baseline_length = len(baseline_response)
+        print(f"📊 Baseline response length: {baseline_length}")
+        
+        # Send the message using CDP
+        if send_message_to_grok_cdp(question):
+            print("\n🔄 Starting chunk streaming...")
+            print("=" * 50)
             
-            chunk_type = "FIRST" if chunk_info.get('is_first') else "FINAL" if chunk_info.get('is_final') else "INCREMENTAL"
-            filtered_out = " [FILTERED OUT]" if chunk_info.get('is_filtered_out') else ""
-            print(f"📦 Chunk #{total_chunks} [{chunk_type}]{filtered_out} ({chunk_info['chunk_size']} chars, {chunk_info['timestamp']:.1f}s):")
-            print("─" * 60)
-            
-            # Show chunk content
-            if chunk_info['chunk_size'] > 0:
-                if chunk_info.get('is_first'):
-                    # Show full content for first chunk
-                    print(chunk_info['chunk'])
-                else:
-                    # Truncate incremental chunks for readability
+            # Stream chunks using generator with baseline
+            total_chunks = 0
+            total_chars = 0
+            for chunk_info in stream_grok_chunks_with_baseline(baseline_response, 180):
+                total_chunks += 1
+                total_chars += chunk_info['chunk_size']
+                
+                chunk_type = "FIRST" if chunk_info.get('is_first') else "FINAL" if chunk_info.get('is_final') else "INCREMENTAL"
+                filtered_out = " [FILTERED OUT]" if chunk_info.get('is_filtered_out') else ""
+                print(f"📦 Chunk #{total_chunks} [{chunk_type}]{filtered_out} ({chunk_info['chunk_size']} chars, {chunk_info['timestamp']:.1f}s):")
+                print("─" * 60)
+                
+                # Show chunk content
+                if chunk_info['chunk_size'] > 0:
                     content_to_show = chunk_info['chunk'][:500] + ("..." if len(chunk_info['chunk']) > 500 else "")
                     print(content_to_show)
-            print("─" * 60)
+                print("─" * 60)
+                
+                if chunk_info.get('is_final'):
+                    print("🏁 Final chunk received!")
             
-            if chunk_info.get('is_final'):
-                print("🏁 Final chunk received!")
-        
-        print(f"\n📊 Streaming complete: {total_chunks} chunks, {total_chars} characters")
-        
-        # Get full response
-        print("\n🔍 Extracting full response...")
-        full_response = get_full_response(question)
-        
-        if 0 and full_response:
-            print("\n🎉 SUCCESS! Full response extracted!")
-            print("=" * 50)
-            print("🤖 COMPLETE GROK RESPONSE:")
-            print("=" * 50)
-            print(full_response)
-            print("=" * 50)
+            print(f"\n📊 Streaming complete: {total_chunks} chunks, {total_chars} characters")
+            
+            # Get full response
+            print("\n🔍 Extracting full response...")
+            full_response = get_full_response()
+            
+            if 0 and full_response:
+                print("\n🎉 SUCCESS! Full response extracted!")
+                print("=" * 50)
+                print("🤖 COMPLETE GROK RESPONSE:")
+                print("=" * 50)
+                print(full_response)
+                print("=" * 50)
+            else:
+                print("\n❌ Failed to extract full response")
         else:
-            print("\n❌ Failed to extract full response")
+            print("❌ Failed to send message via CDP")
 
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        cleanup_connections()
+        # Clean up connections without closing the tab
+        try:
+            ws.close()
+            print("✅ CDP WebSocket closed")
+        except:
+            pass
+        
+        try:
+            pychrome_tab.stop()
+            print("✅ PyChrome connection stopped (tab remains open)")
+        except:
+            pass
+        
         print("\n✅ Hybrid generator test completed!")
 
 

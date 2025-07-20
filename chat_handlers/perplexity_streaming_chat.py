@@ -6,7 +6,7 @@ import re
 
 
 # WebSocket URL from the provided JSON
-ws_url = "ws://localhost:9222/devtools/page/29B3BE6316EBE92AEE30FACE6A319AF0"
+ws_url = "ws://localhost:9222/devtools/page/F583A4254DC132512B2654E4517790F0"
 
 def connect_websocket(ws_url):
     max_retries = 3

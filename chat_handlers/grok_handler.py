@@ -149,8 +149,11 @@ def start_concurrent_streaming(question):
         return  # Nothing to start
     
     st.session_state.grok_concurrent_streaming_active = True
-    st.session_state.grok_webui_streaming_text = ""
-    st.session_state.grok_api_streaming_text = ""
+    # Only clear streaming text if we're starting new streams, not if we already have responses
+    if webui_enabled and not st.session_state.get("grok_response"):
+        st.session_state.grok_webui_streaming_text = ""
+    if api_enabled and not st.session_state.get("grok_api_response"):
+        st.session_state.grok_api_streaming_text = ""
     st.session_state.grok_webui_stream_complete = not webui_enabled  # Mark as complete if not enabled
     st.session_state.grok_api_stream_complete = not api_enabled     # Mark as complete if not enabled
     st.session_state.grok_generating_response = webui_enabled
@@ -175,7 +178,7 @@ def start_concurrent_streaming(question):
         print("DEBUG: Grok API disabled, not starting API worker")
 
 def webui_streaming_worker(question):
-    """Worker thread for Web UI streaming using direct streaming_chat - updates session state incrementally"""
+    """Worker thread for Web UI streaming using new chunk-based streaming - updates session state incrementally"""
     try:
         # Double-check that WebUI is enabled before proceeding
         if not st.session_state.get("enable_grok_webui", False):
@@ -196,28 +199,56 @@ def webui_streaming_worker(question):
         full_response = ""
         response_started = False
         
-        # Use the direct streaming function (synchronous generator)
+        # Use the new chunk-based streaming function
         try:
-            for chunk in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
+            for chunk_info in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
                 if st.session_state.stop_streaming:
+                    # When stopped, preserve the current response and clean it
+                    if full_response:
+                        cleaned_partial_response = clean_grok_response(full_response)
+                        st.session_state.grok_conversation_history.append({"role": "assistant", "content": cleaned_partial_response})
+                        st.session_state.grok_response = cleaned_partial_response
+                        # Update the streaming text to the cleaned version without cursor
+                        st.session_state.grok_webui_streaming_text = cleaned_partial_response
+                    
+                    # Clean up connections when stopped to prevent stale connection issues
+                    try:
+                        from chat_handlers.grok_streaming_chat import cleanup_connections
+                        cleanup_connections()
+                    except Exception as e:
+                        print(f"Warning: Failed to cleanup connections: {e}")
                     break
                 
-                # The chunk is raw text content from the streaming function
-                if chunk:
+                # Extract chunk content from the chunk_info dictionary
+                chunk_content = chunk_info.get('chunk', '')
+                is_first = chunk_info.get('is_first', False)
+                is_final = chunk_info.get('is_final', False)
+                is_filtered_out = chunk_info.get('is_filtered_out', False)
+                
+                # Skip filtered out chunks
+                if is_filtered_out:
+                    continue
+                
+                if chunk_content or is_final:
                     response_started = True
-                    if not full_response:
+                    
+                    if is_first:
+                        # First chunk contains the full response so far
+                        full_response = chunk_content
                         st.session_state.grok_webui_streaming_text = "🚀 Grok started typing..."
+                    elif not is_final:
+                        # Incremental chunk - add to full response
+                        full_response += chunk_content
                     
-                    # The chunk from send_message_with_streaming is actually a delta (new content only)
-                    # Add the new chunk to our response
-                    full_response += chunk
+                    # Clean the response and update UI (unless it's the final marker)
+                    if not is_final:
+                        cleaned_full_response = clean_grok_response(full_response)
+                        # Update session state for UI display with cursor
+                        st.session_state.grok_webui_streaming_text = cleaned_full_response + "▌"
                     
-                    # Clean the response more aggressively during streaming
-                    # Apply cleaning to the full response to catch artifacts that span chunks
-                    cleaned_full_response = clean_grok_response(full_response)
-                    
-                    # Update session state for UI display with cursor
-                    st.session_state.grok_webui_streaming_text = cleaned_full_response + "▌"
+                    # Handle final chunk
+                    if is_final:
+                        break
                     
         except Exception as e:
             st.session_state.grok_webui_streaming_text = f"Grok streaming error: {str(e)}"
@@ -294,6 +325,12 @@ def api_streaming_worker(question):
             
             for chunk in stream:
                 if st.session_state.stop_streaming:
+                    # When stopped, preserve the current response without cursor
+                    if full_response:
+                        st.session_state.grok_api_streaming_text = full_response
+                        st.session_state.grok_api_response = full_response
+                        # Add response to separate API conversation history
+                        st.session_state.grok_api_conversation_history.append({"role": "assistant", "content": full_response})
                     break
                     
                 if chunk.choices[0].delta.content is not None:
@@ -340,17 +377,6 @@ def render_grok_responses():
     """Render the Grok response UI with tabs containing Web UI and API columns"""
     if not (st.session_state.transcription and not st.session_state.recording):
         return
-        
-    st.subheader("🚀 Grok Response")
-
-    # Show generating status
-    if st.session_state.grok_generating_response or st.session_state.grok_generating_api_response:
-        active_streams = []
-        if st.session_state.grok_generating_response:
-            active_streams.append("Web UI")
-        if st.session_state.grok_generating_api_response:
-            active_streams.append("API")
-        st.info(f"🔄 Generating Grok responses: {', '.join(active_streams)}")
 
     # Control buttons row
     button_col1, button_col2, button_col3 = st.columns([1, 1, 2])
@@ -388,11 +414,12 @@ def render_grok_responses():
         with col_web:
             st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
             
-            if st.session_state.grok_concurrent_streaming_active and st.session_state.grok_webui_streaming_text:
-                # Show live streaming updates - text is already cleaned in the worker
+            # Always prioritize showing existing content, whether streaming or not
+            if st.session_state.grok_webui_streaming_text:
+                # Show streaming text (live or preserved after stop)
                 st.markdown(st.session_state.grok_webui_streaming_text)
-            elif st.session_state.grok_response and not st.session_state.grok_concurrent_streaming_active:
-                # Show final response when not streaming - text is already cleaned in the worker
+            elif st.session_state.grok_response:
+                # Show final response - text is already cleaned in the worker
                 st.markdown(st.session_state.grok_response)
             elif st.session_state.grok_generating_response:
                 st.info("Grok response will appear here…")
@@ -403,10 +430,11 @@ def render_grok_responses():
         with col_api:
             st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
             
+            # Always prioritize showing existing content, whether streaming or not
             if st.session_state.grok_api_streaming_text:
-                # Show live streaming updates
+                # Show streaming text (live or preserved after stop)
                 st.markdown(st.session_state.grok_api_streaming_text)
-            elif st.session_state.grok_api_response and not st.session_state.grok_concurrent_streaming_active:
+            elif st.session_state.grok_api_response:
                 # Show final response when not streaming
                 st.markdown(st.session_state.grok_api_response)
             elif st.session_state.grok_generating_api_response:
@@ -418,12 +446,12 @@ def render_grok_responses():
         # Show only Web UI column (full width)
         st.markdown('<div class="box-header">🌐 Web UI</div>', unsafe_allow_html=True)
         
-        remove='markdown\nCopy\nEdit\n'
-        if st.session_state.grok_concurrent_streaming_active and st.session_state.grok_webui_streaming_text:
-            # Show live streaming updates - text is already cleaned in the worker
+        # Always prioritize showing existing content, whether streaming or not
+        if st.session_state.grok_webui_streaming_text:
+            # Show streaming text (live or preserved after stop)
             st.markdown(st.session_state.grok_webui_streaming_text)
-        elif st.session_state.grok_response and not st.session_state.grok_concurrent_streaming_active:
-            # Show final response when not streaming - text is already cleaned in the worker
+        elif st.session_state.grok_response:
+            # Show final response - text is already cleaned in the worker
             st.markdown(st.session_state.grok_response)
         elif st.session_state.grok_generating_response:
             st.info("Grok response will appear here…")
@@ -434,10 +462,11 @@ def render_grok_responses():
         # Show only API column (full width)
         st.markdown('<div class="box-header">⚡ API</div>', unsafe_allow_html=True)
         
+        # Always prioritize showing existing content, whether streaming or not
         if st.session_state.grok_api_streaming_text:
-            # Show live streaming updates
+            # Show streaming text (live or preserved after stop)
             st.markdown(st.session_state.grok_api_streaming_text)
-        elif st.session_state.grok_api_response and not st.session_state.grok_concurrent_streaming_active:
+        elif st.session_state.grok_api_response:
             # Show final response when not streaming
             st.markdown(st.session_state.grok_api_response)
         elif st.session_state.grok_generating_api_response:
@@ -602,22 +631,39 @@ def standalone_grok_test(question, timeout=120):
         full_response = ""
         response_started = False
         
-        # Use the direct streaming function (synchronous generator)
+        # Use the new chunk-based streaming function
         try:
             print("\n🔄 Streaming response:")
             print("-" * 50)
             
-            for chunk in send_message_with_streaming(cleaned_prompt, timeout):
-                if chunk:
+            for chunk_info in send_message_with_streaming(cleaned_prompt, timeout):
+                # Extract chunk content from the chunk_info dictionary
+                chunk_content = chunk_info.get('chunk', '')
+                is_first = chunk_info.get('is_first', False)
+                is_final = chunk_info.get('is_final', False)
+                is_filtered_out = chunk_info.get('is_filtered_out', False)
+                
+                # Skip filtered out chunks
+                if is_filtered_out:
+                    continue
+                
+                if chunk_content or is_final:
                     response_started = True
-                    if not full_response:
+                    
+                    if is_first:
+                        # First chunk contains the full response so far
+                        full_response = chunk_content
                         print("🚀 Grok started typing...")
+                        print(chunk_content, end='', flush=True)
+                    elif not is_final:
+                        # Incremental chunk - add to full response
+                        full_response += chunk_content
+                        # Print the incremental chunk for real-time feedback
+                        print(chunk_content, end='', flush=True)
                     
-                    # Add the new chunk to our response
-                    full_response += chunk
-                    
-                    # Print the chunk for real-time feedback
-                    print(chunk, end='', flush=True)
+                    # Handle final chunk
+                    if is_final:
+                        break
                     
         except Exception as e:
             print(f"\n❌ Grok streaming error: {str(e)}")

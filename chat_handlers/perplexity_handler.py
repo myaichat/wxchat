@@ -13,11 +13,11 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # Handle imports for both standalone and module usage
 try:
-    from chat_handlers.perplexity_streaming_chat import send_message_with_streaming
+    from chat_handlers.perplexity_streaming_chat import send_message_with_streaming, cleanup_connections
 except ImportError:
     # When running standalone, add parent directory to path
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from chat_handlers.perplexity_streaming_chat import send_message_with_streaming
+    from chat_handlers.perplexity_streaming_chat import send_message_with_streaming, cleanup_connections
 
 TIMEOUT_SEC = 120
 
@@ -137,24 +137,38 @@ def webui_streaming_worker(question):
         
         # Use the direct streaming function (synchronous generator)
         try:
-            for chunk in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
+            for chunk_info in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
                 if st.session_state.stop_streaming:
+                    print("🛑 Streaming stopped by user, cleaning up connections...")
+                    cleanup_connections()
                     break
                 
-                # The chunk is raw text content from the streaming function
-                if chunk:
+                # Extract chunk content from the chunk info dictionary
+                chunk_content = chunk_info.get('chunk', '') if isinstance(chunk_info, dict) else str(chunk_info)
+                
+                if chunk_content:
                     response_started = True
                     if not full_response:
                         st.session_state.perplexity_webui_streaming_text = "🔍 Perplexity started typing..."
                     
-                    # The chunk from send_message_with_streaming is actually a delta (new content only)
-                    # Add the new chunk to our response
-                    full_response += chunk
+                    # Handle first chunk (full response) vs incremental chunks
+                    if chunk_info.get('is_first', False):
+                        # First chunk contains the full response so far
+                        full_response = chunk_content
+                    else:
+                        # Incremental chunks are added to the response
+                        full_response += chunk_content
                     
                     # Update session state for UI display with cursor - no cleaning
                     st.session_state.perplexity_webui_streaming_text = full_response + "▌"
                     
+                    # Check if this is the final chunk
+                    if chunk_info.get('is_final', False):
+                        break
+                    
         except Exception as e:
+            print(f"❌ Perplexity streaming error: {str(e)}, cleaning up connections...")
+            cleanup_connections()
             st.session_state.perplexity_webui_streaming_text = f"Perplexity streaming error: {str(e)}"
             st.session_state.perplexity_webui_stream_complete = True
             st.session_state.perplexity_generating_response = False
@@ -594,17 +608,31 @@ def standalone_perplexity_test(question, timeout=120):
             print("\n🔄 Streaming response:")
             print("-" * 50)
             
-            for chunk in send_message_with_streaming(cleaned_prompt, timeout):
-                if chunk:
+            for chunk_info in send_message_with_streaming(cleaned_prompt, timeout):
+                # Extract chunk content from the chunk info dictionary
+                chunk_content = chunk_info.get('chunk', '') if isinstance(chunk_info, dict) else str(chunk_info)
+                
+                if chunk_content:
                     response_started = True
                     if not full_response:
                         print("🔍 Perplexity started typing...")
                     
-                    # Add the new chunk to our response
-                    full_response += chunk
+                    # Handle first chunk (full response) vs incremental chunks
+                    if chunk_info.get('is_first', False):
+                        # First chunk contains the full response so far
+                        full_response = chunk_content
+                        print(f"\n📦 First chunk received ({len(chunk_content)} chars)")
+                        print(chunk_content, end='', flush=True)
+                    else:
+                        # Incremental chunks are added to the response
+                        full_response += chunk_content
+                        # Print the incremental chunk for real-time feedback
+                        print(chunk_content, end='', flush=True)
                     
-                    # Print the chunk for real-time feedback
-                    print(chunk, end='', flush=True)
+                    # Check if this is the final chunk
+                    if chunk_info.get('is_final', False):
+                        print(f"\n📦 Final chunk received - streaming complete")
+                        break
                     
         except Exception as e:
             print(f"\n❌ Perplexity streaming error: {str(e)}")

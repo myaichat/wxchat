@@ -199,15 +199,13 @@ def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, ta
         # If response has grown, yield incremental content
         if current_length > previous_len:
             increment = current_response[previous_len:]
-            # Clean the increment before yielding
-            cleaned_increment = clean_perplexity_content(increment)
-            print(f"📦 Increment: {len(cleaned_increment)} chars (total: {current_length})")
+            print(f"📦 Increment: {len(increment)} chars (total: {current_length})")
             chunk_info = {
-                'chunk': cleaned_increment,
-                'chunk_size': len(cleaned_increment),
+                'chunk': increment,
+                'chunk_size': len(increment),
                 'total_size': current_length,
                 'timestamp': time.time() - start_time,
-                'is_filtered_out': len(cleaned_increment.strip()) == 0
+                'is_filtered_out': len(increment.strip()) == 0
             }
             yield chunk_info
             previous_len = current_length
@@ -275,60 +273,6 @@ def filter_chunk_content(chunk):
     
     return '\n'.join(filtered_lines)
 
-def clean_perplexity_content(text):
-    """Clean Perplexity UI elements from text content"""
-    if not text:
-        return text
-    
-    # Perplexity-specific UI elements to remove
-    ui_elements_to_remove = [
-        'Ask a follow-up…',
-        'Ask anything...',
-        'American English',
-        'Search',
-        'Pro',
-        'Sources',
-        'Related',
-        'Follow-up',
-        'Share',
-        'Copy',
-        'Regenerate',
-        'Ask follow-up',
-        'View sources',
-        'Pro Search',
-        'Focus',
-        'All',
-        'Academic',
-        'Writing',
-        'Wolfram|Alpha',
-        'YouTube',
-        'Reddit',
-        'News',
-        'Wrap',
-        'Collapse'
-    ]
-    
-    # Remove UI elements
-    cleaned_text = text
-    for element in ui_elements_to_remove:
-        cleaned_text = cleaned_text.replace(element, '')
-    
-    # Remove source indicators like [1], [2], etc. at the end of lines
-    cleaned_text = re.sub(r'\[\d+\](?=\s|$)', '', cleaned_text)
-    
-    # Remove time indicators like "2m", "5s", "1h"
-    cleaned_text = re.sub(r'\b\d+[smh]\b', '', cleaned_text)
-    
-    # Clean up extra whitespace and newlines
-    lines = cleaned_text.split('\n')
-    cleaned_lines = []
-    for line in lines:
-        line = line.strip()
-        if line and len(line) > 2:  # Keep lines with meaningful content
-            cleaned_lines.append(line)
-    
-    return '\n\n'.join(cleaned_lines)
-
 def get_full_response(question):
     """Get the complete response after streaming is done"""
     global _pychrome_tab
@@ -349,14 +293,31 @@ def get_full_response(question):
         question_pos = full_content.rfind(question)
         text_after_question = full_content[question_pos + len(question):]
         
-        # Clean the extracted content
-        cleaned_content = clean_perplexity_content(text_after_question)
+        lines = text_after_question.split('\n')
+        meaningful_lines = []
         
-        if cleaned_content and len(cleaned_content.strip()) > 10:
-            return cleaned_content
+        # Perplexity-specific UI elements to skip
+        perplexity_ui_elements = [
+            'Ask anything...', 'Search', 'Pro', 'Sources', 'Related', 
+            'Follow-up', 'Share', 'Copy', 'Regenerate', 'Ask follow-up',
+            'View sources', 'Pro Search', 'Focus', 'All', 'Academic',
+            'Writing', 'Wolfram|Alpha', 'YouTube', 'Reddit', 'News'
+        ]
+        
+        for line in lines:
+            line = line.strip()
+            if (len(line) > 5 and 
+                not line in perplexity_ui_elements and
+                not re.match(r'^\d+\.?\d*[smh]$', line) and
+                not line.isdigit() and
+                not re.match(r'^\[\d+\]$', line) and  # Skip source indicators
+                not line in ['Copy', 'Wrap', 'Collapse']):
+                meaningful_lines.append(line)
+        
+        if meaningful_lines:
+            return '\n\n'.join(meaningful_lines)
     
-    # Fallback: clean the full content
-    return clean_perplexity_content(full_content)
+    return full_content
 
 def cleanup_connections():
     """Clean up connections without closing the tab"""

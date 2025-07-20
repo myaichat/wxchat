@@ -105,7 +105,7 @@ def webui_streaming_worker(question):
         
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' +original_prompt + ". Answer in clean raw markdown language without citations or or contentReference.  Wrapp the entire response in a markdown code block to show the actual syntax"
+        cleaned_prompt = 'Answer in clean raw markdown language without contentReference. ' +original_prompt + ". Answer in clean raw markdown language without citations or contentReference.  Wrapp the entire response in a markdown code block to show the actual syntax"
         
         # Store the Web UI question for logging
         st.session_state.pending_log_webui_question = cleaned_prompt

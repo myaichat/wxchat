@@ -13,11 +13,11 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 # Handle imports for both standalone and module usage
 try:
-    from chat_handlers.grok_streaming_chat import send_message_with_streaming
+    from chat_handlers.grok_streaming_chat import send_message_with_streaming, cleanup_connections, get_full_response
 except ImportError:
     # When running standalone, add parent directory to path
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from chat_handlers.grok_streaming_chat import send_message_with_streaming
+    from chat_handlers.grok_streaming_chat import send_message_with_streaming, cleanup_connections, get_full_response
 
 TIMEOUT_SEC = 120
 
@@ -38,6 +38,7 @@ def clean_grok_response(text):
         'How can Grok help?',
         'DeepSearch',
         'Think Grok 3',
+        'Grok 4',
         'Upgrade to SuperGrok',
         'How can Grok help? DeepSearch Think Grok 3 Upgrade to SuperGrok',
         'markdown\nCopy\nEdit\n',
@@ -63,8 +64,9 @@ def clean_grok_response(text):
     # Second pass: use regex for more aggressive cleaning
     import re
     
-    # Remove "Think Grok 3" with various spacing and formatting
+    # Remove "Think Grok 3" and "Grok 4" with various spacing and formatting
     cleaned_text = re.sub(r'\s*Think\s+Grok\s+3\s*', ' ', cleaned_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r'\s*Grok\s+4\s*', ' ', cleaned_text, flags=re.IGNORECASE)
     
     # Remove other Grok UI artifacts with regex
     cleaned_text = re.sub(r'\s*How\s+can\s+Grok\s+help\?\s*', ' ', cleaned_text, flags=re.IGNORECASE)
@@ -188,8 +190,8 @@ def webui_streaming_worker(question):
         
         # Store original prompt for logging
         original_prompt = question.strip()
-        cleaned_prompt = 'Answer in clean raw markdown language. ' + original_prompt + ". Wrap the entire response in a markdown code block to show the actual syntax"
-        
+        cleaned_prompt = 'Answer in clean raw markdown language without citations. ' + original_prompt + ". Wrap the entire response in a markdown code block to show the actual syntax"
+        #cleaned_prompt = original_prompt
         # Store the Web UI question for logging
         st.session_state.grok_pending_log_webui_question = cleaned_prompt
         
@@ -203,6 +205,7 @@ def webui_streaming_worker(question):
         try:
             for chunk_info in send_message_with_streaming(cleaned_prompt, TIMEOUT_SEC):
                 if st.session_state.stop_streaming:
+                    print("🛑 Grok streaming stopped by user, cleaning up connections...")
                     # When stopped, preserve the current response and clean it
                     if full_response:
                         cleaned_partial_response = clean_grok_response(full_response)
@@ -212,57 +215,65 @@ def webui_streaming_worker(question):
                         st.session_state.grok_webui_streaming_text = cleaned_partial_response
                     
                     # Clean up connections when stopped to prevent stale connection issues
-                    try:
-                        from chat_handlers.grok_streaming_chat import cleanup_connections
-                        cleanup_connections()
-                    except Exception as e:
-                        print(f"Warning: Failed to cleanup connections: {e}")
+                    cleanup_connections()
                     break
                 
                 # Extract chunk content from the chunk_info dictionary
-                chunk_content = chunk_info.get('chunk', '')
-                is_first = chunk_info.get('is_first', False)
-                is_final = chunk_info.get('is_final', False)
-                is_filtered_out = chunk_info.get('is_filtered_out', False)
+                chunk_content = chunk_info.get('chunk', '') if isinstance(chunk_info, dict) else str(chunk_info)
                 
-                # Skip filtered out chunks
-                if is_filtered_out:
-                    continue
-                
-                if chunk_content or is_final:
+                if chunk_content:
                     response_started = True
+                    if not full_response:
+                        st.session_state.grok_webui_streaming_text = "🚀 Grok started typing..."
                     
-                    if is_first:
+                    # Handle first chunk (full response) vs incremental chunks
+                    if chunk_info.get('is_first', False):
                         # First chunk contains the full response so far
                         full_response = chunk_content
-                        st.session_state.grok_webui_streaming_text = "🚀 Grok started typing..."
-                    elif not is_final:
-                        # Incremental chunk - add to full response
+                    else:
+                        # Incremental chunks are added to the response
                         full_response += chunk_content
                     
-                    # Clean the response and update UI (unless it's the final marker)
-                    if not is_final:
-                        cleaned_full_response = clean_grok_response(full_response)
-                        # Update session state for UI display with cursor
-                        st.session_state.grok_webui_streaming_text = cleaned_full_response + "▌"
+                    # Clean the response and update UI display with cursor
+                    cleaned_full_response = clean_grok_response(full_response)
+                    st.session_state.grok_webui_streaming_text = cleaned_full_response + "▌"
                     
-                    # Handle final chunk
-                    if is_final:
+                    # Check if this is the final chunk
+                    if chunk_info.get('is_final', False):
                         break
                     
         except Exception as e:
+            print(f"❌ Grok streaming error: {str(e)}, cleaning up connections...")
+            cleanup_connections()
             st.session_state.grok_webui_streaming_text = f"Grok streaming error: {str(e)}"
             st.session_state.grok_webui_stream_complete = True
             st.session_state.grok_generating_response = False
             return
         
-        # Store final response - clean it before storing and remove cursor
-        if full_response:
-            cleaned_final_response = clean_grok_response(full_response)
-            st.session_state.grok_conversation_history.append({"role": "assistant", "content": cleaned_final_response})
-            st.session_state.grok_response = cleaned_final_response
-            # Update the streaming text to the final cleaned version without cursor
-            st.session_state.grok_webui_streaming_text = cleaned_final_response
+        # After streaming is complete, get the final clean response from the page
+        try:
+            # Get the final clean response directly from the page
+            final_clean_response = get_full_response(original_prompt)
+            if final_clean_response:
+                # Clean the final response
+                cleaned_final_response = clean_grok_response(final_clean_response)
+                st.session_state.grok_conversation_history.append({"role": "assistant", "content": cleaned_final_response})
+                st.session_state.grok_response = cleaned_final_response
+                # Replace the accumulated chunks with the final clean response
+                st.session_state.grok_webui_streaming_text = cleaned_final_response
+            elif full_response:
+                # Fallback to accumulated response if get_full_response fails
+                cleaned_final_response = clean_grok_response(full_response)
+                st.session_state.grok_conversation_history.append({"role": "assistant", "content": cleaned_final_response})
+                st.session_state.grok_response = cleaned_final_response
+                st.session_state.grok_webui_streaming_text = cleaned_final_response
+        except Exception as e:
+            print(f"⚠️ Error getting final response, using accumulated: {str(e)}")
+            if full_response:
+                cleaned_final_response = clean_grok_response(full_response)
+                st.session_state.grok_conversation_history.append({"role": "assistant", "content": cleaned_final_response})
+                st.session_state.grok_response = cleaned_final_response
+                st.session_state.grok_webui_streaming_text = cleaned_final_response
         
         st.session_state.grok_webui_stream_complete = True
         st.session_state.grok_generating_response = False
@@ -378,21 +389,11 @@ def render_grok_responses():
     if not (st.session_state.transcription and not st.session_state.recording):
         return
 
-    # Control buttons row
-    button_col1, button_col2, button_col3 = st.columns([1, 1, 2])
-    
-    # Stop button for concurrent streaming
-    with button_col1:
-        if st.session_state.grok_concurrent_streaming_active:
-            if st.button("🛑 Stop All Streaming", key="grok_stop_streaming"):
-                st.session_state.stop_streaming = True
-                st.session_state.grok_concurrent_streaming_active = False
-                st.session_state.grok_generating_response = False
-                st.session_state.grok_generating_api_response = False
-                st.rerun()
+    # Control buttons row - removed duplicate Stop All Streaming button since there's already one at the top level
+    button_col1, button_col2 = st.columns([1, 1])
     
     # Session History button
-    with button_col2:
+    with button_col1:
         if st.button("📚 Session History", key="grok_history_button"):
             st.session_state.show_grok_history = not st.session_state.get("show_grok_history", False)
             st.rerun()

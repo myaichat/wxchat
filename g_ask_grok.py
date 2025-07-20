@@ -13,7 +13,7 @@ if len(sys.argv) < 2:
 question = sys.argv[1]
 
 # WebSocket URL from the provided JSON
-ws_url = "ws://localhost:9222/devtools/page/26F411DF5B6CF6C6EA8CB688C5E84F5F"
+ws_url = "ws://localhost:9222/devtools/page/2E53C20504E50BBFD36C0AA987A63DD3"
 
 def connect_websocket(ws_url):
     max_retries = 3

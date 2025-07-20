@@ -141,7 +141,7 @@ def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, ta
     time.sleep(3)
     
     start_time = time.time()
-    previous_len = 0
+    previous_response = ""
     first_chunk = True
     stable_count = 0
     reasoning_detected = False
@@ -175,33 +175,68 @@ def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, ta
                 'is_filtered_out': len(current_response.strip()) == 0
             }
             yield chunk_info
-            previous_len = current_length
+            previous_response = current_response
             first_chunk = False
             last_chunk_time = time.time()
             stable_count = 0
             continue
         
         # If response has grown, yield incremental content
-        if current_length > previous_len:
-            increment = current_response[previous_len:]
-            print(f"📦 Increment: {len(increment)} chars (total: {current_length})")
-            chunk_info = {
-                'chunk': increment,
-                'chunk_size': len(increment),
-                'total_size': current_length,
-                'timestamp': time.time() - start_time,
-                'is_filtered_out': len(increment.strip()) == 0
-            }
-            yield chunk_info
-            previous_len = current_length
-            last_chunk_time = time.time()
-            stable_count = 0
-            continue
-        else:
+        if current_length > len(previous_response):
+            # Find the actual increment by comparing the strings
+            # This handles cases where the response text might be processed differently
+            increment = ""
+            
+            # Check if current response starts with previous response
+            if current_response.startswith(previous_response):
+                increment = current_response[len(previous_response):]
+            else:
+                # If not a simple append, find the longest common prefix
+                # and use the remainder as increment
+                common_len = 0
+                min_len = min(len(previous_response), len(current_response))
+                
+                for i in range(min_len):
+                    if previous_response[i] == current_response[i]:
+                        common_len += 1
+                    else:
+                        break
+                
+                # The increment is everything after the common part
+                increment = current_response[common_len:]
+                
+                # If there's a significant difference, it might be due to text processing
+                # In this case, we'll use a more conservative approach
+                if common_len < len(previous_response) * 0.8:  # Less than 80% match
+                    print(f"⚠️  Significant text change detected, using full diff")
+                    increment = current_response[len(previous_response):]
+            
+            if increment:
+                print(f"📦 Increment: {len(increment)} chars (total: {current_length})")
+                chunk_info = {
+                    'chunk': increment,
+                    'chunk_size': len(increment),
+                    'total_size': current_length,
+                    'timestamp': time.time() - start_time,
+                    'is_filtered_out': len(increment.strip()) == 0
+                }
+                yield chunk_info
+                previous_response = current_response
+                last_chunk_time = time.time()
+                stable_count = 0
+                continue
+        
+        # Check if response is the same (no growth)
+        if current_response == previous_response:
             # No growth, check stability
             stable_count += 1
             elapsed_stable = stable_count * 0.5
             print(f"⏸️  Response stable for {elapsed_stable:.1f} seconds ({current_length} chars)")
+        else:
+            # Response changed but didn't grow - might be text processing changes
+            # Reset stability counter but don't yield a chunk
+            stable_count = 0
+            previous_response = current_response
         
         # Determine required stability based on reasoning detection and content size
         if reasoning_detected:
@@ -226,7 +261,7 @@ def send_message_with_streaming(question, timeout=180, ws_url=DEFAULT_WS_URL, ta
     chunk_info = {
         'chunk': '',
         'chunk_size': 0,
-        'total_size': previous_len,
+        'total_size': len(previous_response),
         'timestamp': time.time() - start_time,
         'is_final': True,
         'is_filtered_out': False
@@ -271,21 +306,53 @@ def get_full_response(question):
         question_pos = full_content.rfind(question)
         text_after_question = full_content[question_pos + len(question):]
         
+        # Find the start of the actual response by looking for the first meaningful content
+        # Skip any whitespace, newlines, or UI elements immediately after the question
         lines = text_after_question.split('\n')
         meaningful_lines = []
+        response_started = False
         
-        # Remove the line limit to prevent truncation
         for line in lines:
             line = line.strip()
-            if (len(line) > 5 and 
-                not line in ['How can Grok help?', 'DeepSearch', 'Think', 'Send', 'Upload', 'Grok 3', 'Upgrade to SuperGrok', 'Think Harder'] and
-                not re.match(r'^\d+[smh]$', line) and
-                not line.isdigit() and
-                not line in ['Copy', 'Wrap', 'Collapse']):
+            
+            # Skip empty lines and UI elements
+            if (len(line) == 0 or 
+                line in ['How can Grok help?', 'DeepSearch', 'Think', 'Send', 'Upload', 'Grok 3', 'Upgrade to SuperGrok', 'Think Harder'] or
+                re.match(r'^\d+[smh]$', line) or
+                line.isdigit() or
+                line in ['Copy', 'Wrap', 'Collapse']):
+                continue
+            
+            # Once we find meaningful content, start collecting
+            if len(line) > 5:
+                response_started = True
+                meaningful_lines.append(line)
+            elif response_started:
+                # If we've started collecting and hit a short line, it might be part of formatting
                 meaningful_lines.append(line)
         
         if meaningful_lines:
-            return '\n\n'.join(meaningful_lines)
+            # Join with double newlines to preserve paragraph structure
+            response_text = '\n\n'.join(meaningful_lines)
+            
+            # Clean up any remaining artifacts at the beginning
+            response_text = response_text.strip()
+            
+            # Remove any leading fragments that might be cut-off words
+            # Look for the first complete sentence or meaningful start
+            sentences = response_text.split('. ')
+            if len(sentences) > 1:
+                # Check if the first "sentence" looks like a fragment
+                first_part = sentences[0].strip()
+                if (len(first_part) < 10 or 
+                    first_part.startswith('-') or 
+                    not first_part[0].isupper()):
+                    # Skip the first fragment and start from the second sentence
+                    response_text = '. '.join(sentences[1:])
+                    if not response_text.endswith('.'):
+                        response_text += '.'
+            
+            return response_text
     
     return full_content
 
